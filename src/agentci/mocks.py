@@ -177,8 +177,8 @@ class AnthropicMocker:
         self.turn_index += 1
         
         response = MagicMock()
-        response.usage.input_tokens = 100
-        response.usage.output_tokens = 50
+        response.usage.input_tokens = current_step.get("input_tokens", 100)
+        response.usage.output_tokens = current_step.get("output_tokens", 50)
         
         if "tool" in current_step:
             response.stop_reason = "tool_use"

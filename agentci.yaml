@@ -1,0 +1,13 @@
+name: "Agent CI Demo Suite"
+description: "A simple suite to verify Agent CI works"
+
+tests:
+  - name: "demo_test"
+    description: "Verify the mock flight search agent returns results"
+    golden_trace: "golden/demo_test.golden.json"
+    tags: ["demo"]
+    assertions:
+      - type: "tool_called"
+        tool: "search_flights"
+      - type: "cost_under"
+        threshold: 0.05
