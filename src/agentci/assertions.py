@@ -25,6 +25,7 @@ def evaluate_assertion(assertion: Assertion, trace: Trace) -> tuple[bool, str]:
         "steps_under": _assert_steps_under,
         "output_contains": _assert_output_contains,
         "output_not_contains": _assert_output_not_contains,
+        "llm_judge": _assert_llm_judge,
     }
     
     evaluator = evaluators.get(assertion.type)
@@ -88,19 +89,83 @@ def _assert_steps_under(a: Assertion, t: Trace) -> tuple[bool, str]:
     return False, f"✗ LLM calls {t.total_llm_calls} > {int(a.threshold)} limit"
 
 
+def _get_final_output(t: Any) -> str:
+    """Safely extract the final output from various Trace shapes."""
+    if hasattr(t, "spans") and t.spans:
+        return str(t.spans[-1].output_data)
+    if hasattr(t, "final_report"):
+        return str(t.final_report)
+    if hasattr(t, "output_data"):
+        return str(t.output_data)
+    return str(t)
+
+
 def _assert_output_contains(a: Assertion, t: Trace) -> tuple[bool, str]:
-    final_output = str(t.spans[-1].output_data) if t.spans else ""
+    final_output = _get_final_output(t)
     if str(a.value) in final_output:
         return True, f"✓ Output contains '{a.value}'"
     return False, f"✗ Output missing '{a.value}'"
 
 
 def _assert_output_not_contains(a: Assertion, t: Trace) -> tuple[bool, str]:
-    final_output = str(t.spans[-1].output_data) if t.spans else ""
+    final_output = _get_final_output(t)
     if str(a.value) not in final_output:
         return True, f"✓ Output correctly excludes '{a.value}'"
     return False, f"✗ Output unexpectedly contains '{a.value}'"
 
+
+def _assert_llm_judge(a: Assertion, t: Trace) -> tuple[bool, str]:
+    """
+    Use an LLM to evaluate an arbitrary qualitative rule against the trace's final output.
+    The rule is defined in a.value (e.g., "The report must explicitly state the repo uses MIT License").
+    """
+    import anthropic
+    
+    api_key = os.getenv("ANTHROPIC_API_KEY")
+    if not api_key:
+        return False, "✗ llm_judge failed: ANTHROPIC_API_KEY environment variable is not set"
+
+    client = anthropic.Anthropic(api_key=api_key)
+    
+    final_output = _get_final_output(t)
+    if not final_output:
+        return False, "✗ llm_judge failed: No final output data found in the trace to evaluate"
+
+    prompt = f"""You are an expert QA evaluator for an AI agent's outputs.
+Evaluate whether the following agent output satisfies the specified assertion rule.
+
+ASSERTION RULE TO VERIFY:
+{a.value}
+
+AGENT FINAL OUTPUT:
+{final_output}
+
+INSTRUCTIONS:
+You must output EXACTLY "PASS" or "FAIL" on the first line. 
+On the second line, provide a very brief, single-sentence justification for your grade.
+Do not output any other markdown or text.
+"""
+
+    try:
+        response = client.messages.create(
+            model=os.getenv("JUDGE_MODEL_NAME", "claude-3-haiku-20240307"),
+            max_tokens=150,
+            temperature=0.0,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        
+        result_text = response.content[0].text.strip()
+        lines = result_text.split('\n', 1)
+        status = lines[0].strip().upper()
+        explanation = lines[1].strip() if len(lines) > 1 else "(No explanation provided)"
+        
+        if "PASS" in status:
+            return True, f"✓ llm_judge passed rule '{a.value}' - {explanation}"
+        else:
+            return False, f"✗ llm_judge failed rule '{a.value}' - {explanation}"
+            
+    except Exception as e:
+        return False, f"✗ llm_judge encoutered an API error: {str(e)}"
 
 # --- Phase 1 Learnings: Streamlined Golden Trace Assertions ---
 

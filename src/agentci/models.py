@@ -39,6 +39,7 @@ class DiffType(str, Enum):
     COST_SPIKE = "cost_spike"             # Cost exceeds threshold
     LATENCY_SPIKE = "latency_spike"       # Duration exceeds threshold
     STEPS_CHANGED = "steps_changed"       # Different number of LLM calls
+    STOP_REASON_CHANGED = "stop_reason_changed" # LLM or Span exited for a different reason than golden baseline
 
 
 class TestResult(str, Enum):
@@ -69,6 +70,7 @@ class LLMCall(BaseModel):
     output_text: str = ""
     tokens_in: int = 0
     tokens_out: int = 0
+    stop_reason: str | None = None    # e.g., "end_turn", "max_tokens", "tool_use", "stop_sequence"
     cost_usd: float = 0.0             # Computed from token counts + pricing
     duration_ms: float = 0.0
     timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -89,6 +91,7 @@ class Span(BaseModel):
     # Execution data
     input_data: Any = None             # What the agent/tool received
     output_data: Any = None            # What it returned
+    stop_reason: str | None = None     # Why execution stopped ("max_tools", "complete", "error")
     graph_state: dict[str, Any] = {}   # Raw state snapshot for framework-specific parsing
     
     # Collected events

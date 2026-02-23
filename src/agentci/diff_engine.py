@@ -132,6 +132,23 @@ def diff_traces(current: Trace, golden: Trace) -> list[DiffResult]:
                     "current_steps": current.total_llm_calls,
                 }
             ))
+            
+    # 5. STOP REASON DIFF (Detecting silent failures like hitting max_tools/max_tokens)
+    if golden.spans and current.spans:
+        golden_reason = golden.spans[-1].stop_reason
+        current_reason = current.spans[-1].stop_reason
+        
+        # We only flag it if the golden run had a known stop reason, and the current one diverges.
+        if golden_reason and current_reason and golden_reason != current_reason:
+            diffs.append(DiffResult(
+                diff_type=DiffType.STOP_REASON_CHANGED,
+                severity="error",  # A changed stop mechanism is almost always a bug/regression
+                message=f"Agent stop reason changed: '{golden_reason}' → '{current_reason}' (Possible silent failure)",
+                details={
+                    "golden_reason": golden_reason,
+                    "current_reason": current_reason,
+                }
+            ))
     
     return diffs
 
