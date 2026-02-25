@@ -27,7 +27,8 @@ class SpanKind(str, Enum):
     AGENT = "agent"          # An agent's full execution
     LLM_CALL = "llm_call"   # A single LLM API call
     TOOL_CALL = "tool_call"  # A single tool invocation
-    HANDOFF = "handoff"      # Phase 2: agent-to-agent transfer
+    HANDOFF = "handoff"      # Agent-to-agent transfer
+    GUARDRAIL = "guardrail"  # Guardrail check (input/output)
 
 
 class DiffType(str, Enum):
@@ -40,6 +41,7 @@ class DiffType(str, Enum):
     LATENCY_SPIKE = "latency_spike"       # Duration exceeds threshold
     STEPS_CHANGED = "steps_changed"       # Different number of LLM calls
     STOP_REASON_CHANGED = "stop_reason_changed" # LLM or Span exited for a different reason than golden baseline
+    ROUTING_CHANGED = "routing_changed"           # Handoff target changed between runs
 
 
 class TestResult(str, Enum):
@@ -107,6 +109,14 @@ class Span(BaseModel):
     # Extensible metadata
     metadata: dict[str, Any] = {}
 
+    # Handoff data (for HANDOFF spans)
+    from_agent: str | None = None
+    to_agent: str | None = None
+
+    # Guardrail data (for GUARDRAIL spans)
+    guardrail_name: str | None = None
+    guardrail_triggered: bool = False
+
     def compute_metrics(self) -> None:
         """Roll up metrics from child LLM calls."""
         self.total_tokens_in = sum(c.tokens_in for c in self.llm_calls)
@@ -166,6 +176,24 @@ class Trace(BaseModel):
         for span in self.spans:
             calls.extend(span.tool_calls)
         return calls
+
+    def get_handoffs(self) -> list[Span]:
+        """Return all HANDOFF spans in order."""
+        return [s for s in self.spans if s.kind == SpanKind.HANDOFF]
+
+    @property
+    def guardrails_triggered(self) -> list[str]:
+        """Names of guardrails that fired."""
+        return [
+            s.guardrail_name for s in self.spans
+            if s.kind == SpanKind.GUARDRAIL and s.guardrail_triggered
+            and s.guardrail_name
+        ]
+
+    @property
+    def agents_involved(self) -> list[str]:
+        """Ordered list of agent names that executed."""
+        return [s.name for s in self.spans if s.kind == SpanKind.AGENT]
 
 
 # ── Test Definition Models ─────────────────────────────

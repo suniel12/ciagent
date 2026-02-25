@@ -1,0 +1,78 @@
+name: AgentCI Checks
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  agentci-deterministic:
+    name: Deterministic Logic Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          
+          pip install .
+          
+          # Ensure AgentCI is installed for tests
+          pip install agentci
+
+      - name: Run deterministic AgentCI tests
+        # These always run — they use mocked tools and a mocked LLM client
+        run: |
+          pytest tests/ -v -m "not live" \
+            --tb=short \
+            2>&1 | tee agentci-test-results.txt
+        env:
+          # Mocked key — tests that need a real key will auto-skip
+          ANTHROPIC_API_KEY: sk-ant-dummy-key-for-testing
+
+      - name: Upload deterministic test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentci-results-deterministic
+          path: agentci-test-results.txt
+          retention-days: 14
+
+  agentci-llm-judge:
+    name: LLM-as-Judge Evals
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          
+          pip install .
+          
+          pip install agentci
+
+      - name: Run LLM-as-judge tests
+        # Only runs when the secret is available (will skip in external PRs)
+        # Add ANTHROPIC_API_KEY to your GitHub repository secrets!
+        if: env.ANTHROPIC_API_KEY != ''
+        run: |
+          pytest tests/ -v \
+            --tb=short
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        continue-on-error: false  # Judge failures block the PR merge
