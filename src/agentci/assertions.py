@@ -26,6 +26,10 @@ def evaluate_assertion(assertion: Assertion, trace: Trace) -> tuple[bool, str]:
         "output_contains": _assert_output_contains,
         "output_not_contains": _assert_output_not_contains,
         "llm_judge": _assert_llm_judge,
+        # Handoff / routing assertions (Phase 2 learnings)
+        "handoff_target": _assert_handoff_target,
+        "handoff_targets_available": _assert_handoff_targets_available,
+        "handoff_count": _assert_handoff_count,
     }
     
     evaluator = evaluators.get(assertion.type)
@@ -87,6 +91,49 @@ def _assert_steps_under(a: Assertion, t: Trace) -> tuple[bool, str]:
     if t.total_llm_calls <= int(a.threshold):
         return True, f"✓ LLM calls {t.total_llm_calls} ≤ {int(a.threshold)}"
     return False, f"✗ LLM calls {t.total_llm_calls} > {int(a.threshold)} limit"
+
+
+# --- Phase 2 Learnings: Handoff / Routing Assertions ---
+
+def _assert_handoff_target(a: Assertion, t: Trace) -> tuple[bool, str]:
+    """Assert the final handoff routed to the expected agent."""
+    handoffs = t.get_handoffs()
+    if not handoffs:
+        return False, f"✗ No handoffs found, expected target '{a.value}'"
+    actual = handoffs[-1].to_agent
+    if actual == a.value:
+        return True, f"✓ Routed to '{actual}'"
+    return False, f"✗ Routed to '{actual}', expected '{a.value}'"
+
+
+def _assert_handoff_targets_available(a: Assertion, t: Trace) -> tuple[bool, str]:
+    """
+    Assert that the set of reachable agents matches expectations.
+    a.value should be a list of expected agent names.
+    Catches the case where an agent is silently removed from handoffs.
+    """
+    handoffs = t.get_handoffs()
+    actual_targets = set(h.to_agent for h in handoffs if h.to_agent)
+    expected = set(a.value) if isinstance(a.value, list) else {a.value}
+    missing = expected - actual_targets
+    extra = actual_targets - expected
+    if not missing and not extra:
+        return True, f"✓ All expected agents reachable: {sorted(expected)}"
+    msg = f"✗ Handoff targets mismatch."
+    if missing:
+        msg += f" Missing: {sorted(missing)}."
+    if extra:
+        msg += f" Unexpected: {sorted(extra)}."
+    return False, msg
+
+
+def _assert_handoff_count(a: Assertion, t: Trace) -> tuple[bool, str]:
+    """Assert the number of handoffs matches expected count."""
+    handoffs = t.get_handoffs()
+    expected = int(a.threshold) if a.threshold else int(a.value)
+    if len(handoffs) == expected:
+        return True, f"✓ Handoff count {len(handoffs)} == {expected}"
+    return False, f"✗ Handoff count {len(handoffs)} != expected {expected}"
 
 
 def _get_final_output(t: Any) -> str:
