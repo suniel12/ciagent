@@ -513,19 +513,37 @@ def validate(spec_path):
               default='console', show_default=True, help='Output format')
 @click.option('--baseline-dir', default=None,
               help='Override baseline directory from spec')
-def test_cmd(config, tags, fmt, baseline_dir):
+@click.option('--workers', '-w', default=4, show_default=True, type=int,
+              help='Max parallel workers for query execution')
+@click.option('--sample-ensemble', default=None, type=float,
+              help='Fraction of queries to use ensemble judging (0.0-1.0, e.g. 0.2)')
+def test_cmd(config, tags, fmt, baseline_dir, workers, sample_ensemble):
     """Run AgentCI v2 evaluation against a spec file.
 
     Loads agentci_spec.yaml, runs the agent for each query (capturing traces),
-    evaluates all three layers, and reports results.
+    evaluates all three layers (Correctness / Path / Cost), and reports results.
 
+    Requires the spec to declare a runner:
+
+    \b
+        runner: "myagent.run:run_agent"
+
+    The runner function must accept (query: str) and return an agentci.models.Trace.
+    Without a runner, agentci test prints instructions for API usage.
+
+    \b
     Exit codes:
         0 — all correctness checks pass (warnings emitted as annotations)
         1 — one or more correctness failures
         2 — runtime / infrastructure error
     """
+    import json as _json
+    from pathlib import Path
+
     from .loader import load_spec, filter_by_tags
     from .engine.reporter import report_results
+    from .engine.parallel import run_spec_parallel, resolve_runner
+    from .engine.runner import evaluate_spec
     from .exceptions import ConfigError
 
     try:
@@ -542,20 +560,83 @@ def test_cmd(config, tags, fmt, baseline_dir):
 
     effective_baseline_dir = baseline_dir or spec.baseline_dir
 
-    console.print(
-        f"[bold blue]AgentCI v2[/] evaluating [cyan]{len(spec.queries)}[/] "
-        f"queries for agent '[cyan]{spec.agent}[/]'"
-    )
+    # ── Check for runner ──────────────────────────────────────────────────────
+    if not spec.runner:
+        console.print(
+            f"[bold blue]AgentCI v2[/] spec has [cyan]{len(spec.queries)}[/] "
+            f"queries for agent '[cyan]{spec.agent}[/]'\n"
+        )
+        console.print(
+            "[yellow]ℹ[/] No [bold]runner[/] declared in spec. Add one to run live:\n\n"
+            "  [cyan]runner: \"myagent.run:run_agent\"[/]\n\n"
+            "The function must accept [bold](query: str) → Trace[/].\n\n"
+            "Or use the Python API in your test suite:\n"
+            "  [cyan]from agentci import load_spec, run_spec[/]\n"
+            "  [cyan]results = run_spec(spec, my_agent_fn)[/]"
+        )
+        sys.exit(0)
 
-    # NOTE: This command requires the user to wire their agent into the runner.
-    # For now, emit a helpful message directing to the pytest plugin / Python API.
+    # ── Resolve runner ────────────────────────────────────────────────────────
+    try:
+        runner_fn = resolve_runner(spec.runner)
+    except (ImportError, AttributeError, ValueError) as e:
+        console.print(f"[bold red]Runner error:[/] {e}", err=True)
+        sys.exit(2)
+
+    # ── Inject sample-ensemble into judge_config ──────────────────────────────
+    if sample_ensemble is not None:
+        if not (0.0 <= sample_ensemble <= 1.0):
+            console.print("[bold red]--sample-ensemble must be between 0.0 and 1.0[/]", err=True)
+            sys.exit(2)
+        spec.judge_config = spec.judge_config or {}
+        spec.judge_config["sample_ensemble"] = sample_ensemble
+
+    # ── Run queries in parallel ───────────────────────────────────────────────
     console.print(
-        "\n[yellow]ℹ[/] To run evaluations, import the Python API in your test suite:\n"
-        "  [cyan]from agentci import load_spec, evaluate_spec[/]\n\n"
-        "Or use the pytest plugin with the [cyan]agentci_trace[/] fixture.\n"
-        "Full CLI agent wiring coming in v2.1."
+        f"[bold blue]AgentCI v2[/] │ agent: [cyan]{spec.agent}[/] │ "
+        f"queries: [cyan]{len(spec.queries)}[/] │ workers: [cyan]{workers}[/]"
     )
-    sys.exit(0)
+    if fmt in ("console", "github"):
+        console.print("")
+
+    try:
+        traces = run_spec_parallel(spec, runner_fn, max_workers=workers)
+    except Exception as e:  # noqa: BLE001
+        console.print(f"[bold red]Infrastructure error:[/] {e}", err=True)
+        sys.exit(2)
+
+    if not traces:
+        console.print("[bold red]Error:[/] No traces captured — runner may have failed for all queries.", err=True)
+        sys.exit(2)
+
+    # ── Load baselines (optional) ─────────────────────────────────────────────
+    baselines: dict = {}
+    baseline_path = Path(effective_baseline_dir)
+    if baseline_path.exists() and baseline_path.is_dir():
+        import glob
+        from .baselines import load_baseline
+        for f in glob.glob(str(baseline_path / "*.json")):
+            try:
+                b = load_baseline(f)
+                if "trace" in b and "query" in b.get("trace", {}):
+                    q = b["trace"]["query"]
+                    from .models import Trace
+                    baselines[q] = Trace.from_dict(b["trace"])
+            except Exception:  # noqa: BLE001
+                pass  # Skip malformed baseline files
+
+    # ── Evaluate ──────────────────────────────────────────────────────────────
+    try:
+        results = evaluate_spec(spec, traces, baselines or None)
+    except Exception as e:  # noqa: BLE001
+        console.print(f"[bold red]Evaluation error:[/] {e}", err=True)
+        sys.exit(2)
+
+    # ── Report + exit ─────────────────────────────────────────────────────────
+    exit_code = report_results(results, format=fmt, spec_file=config)
+    sys.exit(exit_code)
+
+
 
 
 @cli.command(name="save")

@@ -80,3 +80,73 @@ jobs:
         env:
           ANTHROPIC_API_KEY: {% raw %}${{ secrets.ANTHROPIC_API_KEY }}{% endraw %}
         continue-on-error: false  # Judge failures block the PR merge
+
+  agentci-spec-evaluation:
+    name: AgentCI v2 Spec Evaluation
+    runs-on: ubuntu-latest
+    # Requires spec to declare: runner: "myagent.run:run_agent"
+    # If no runner is declared, this step exits 0 with instructions.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python {{ python_version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: '{{ python_version }}'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          {% if dependency_file == 'requirements.txt' %}
+          pip install -r requirements.txt
+          {% elif dependency_file == 'pyproject.toml' %}
+          pip install .
+          {% endif %}
+          pip install agentci
+
+      - name: Validate spec
+        run: agentci validate agentci_spec.yaml
+
+      - name: Run AgentCI evaluation
+        # Annotations appear in PR "Files Changed" tab automatically
+        run: |
+          agentci test \
+            --config agentci_spec.yaml \
+            --format github \
+            --workers 4
+        env:
+          ANTHROPIC_API_KEY: {% raw %}${{ secrets.ANTHROPIC_API_KEY }}{% endraw %}
+          OPENAI_API_KEY: {% raw %}${{ secrets.OPENAI_API_KEY }}{% endraw %}
+
+      - name: Export results JSON
+        if: always()
+        run: |
+          agentci test \
+            --config agentci_spec.yaml \
+            --format json \
+            --workers 4 > agentci-eval-results.json || true
+        env:
+          ANTHROPIC_API_KEY: {% raw %}${{ secrets.ANTHROPIC_API_KEY }}{% endraw %}
+          OPENAI_API_KEY: {% raw %}${{ secrets.OPENAI_API_KEY }}{% endraw %}
+
+      - name: Upload results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentci-eval-results
+          path: agentci-eval-results.json
+          retention-days: 30
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Multi-agent matrix strategy (uncomment to test multiple agents in parallel):
+#
+# jobs:
+#   agentci-eval:
+#     strategy:
+#       matrix:
+#         agent: [rag-agent, support-router, dev-agent]
+#       fail-fast: false
+#     steps:
+#       - run: agentci test --config demos/${{ matrix.agent }}/agentci_spec.yaml --format github
+# ──────────────────────────────────────────────────────────────────────────────

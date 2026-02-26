@@ -214,6 +214,14 @@ class AgentCISpec(BaseModel):
         "./baselines",
         description="Directory containing versioned golden baseline trace files",
     )
+    runner: Optional[str] = Field(
+        None,
+        description=(
+            "Python dotted path to the agent runner callable, e.g. 'myagent.run:run_agent'. "
+            "The function must accept (query: str) and return an agentci.models.Trace. "
+            "When set, 'agentci test' can invoke the agent directly without pytest."
+        ),
+    )
     defaults: Optional[dict[str, Any]] = Field(
         None,
         description=(

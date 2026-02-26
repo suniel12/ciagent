@@ -53,6 +53,8 @@ __all__ = [
     "list_baselines",
     "diff_baselines",
     "DiffReport",
+    "run_spec",
+    "resolve_runner",
 ]
 
 
@@ -67,4 +69,10 @@ def __getattr__(name: str):
     if name in ("diff_baselines", "DiffReport", "MetricDelta"):
         from .engine.diff import diff_baselines, DiffReport, MetricDelta  # noqa: F401
         return locals()[name]
+    if name == "run_spec":
+        from .engine.parallel import run_spec
+        return run_spec
+    if name == "resolve_runner":
+        from .engine.parallel import resolve_runner
+        return resolve_runner
     raise AttributeError(f"module 'agentci' has no attribute {name!r}")
