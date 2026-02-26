@@ -47,7 +47,7 @@ def save_baseline(
     version: str,
     spec: "AgentCISpec",
     query_text: str = "",
-    baseline_dir: str = "./baselines",
+    baseline_dir: str = "./golden",
     force: bool = False,
 ) -> Path:
     """Save a trace as a versioned golden baseline.
@@ -113,7 +113,7 @@ def save_baseline(
 def load_baseline(
     agent: str,
     version: str,
-    baseline_dir: str = "./baselines",
+    baseline_dir: str = "./golden",
 ) -> dict[str, Any]:
     """Load a versioned baseline JSON file.
 
@@ -139,7 +139,7 @@ def load_baseline(
 
 def list_baselines(
     agent: str,
-    baseline_dir: str = "./baselines",
+    baseline_dir: str = "./golden",
 ) -> list[dict[str, Any]]:
     """List all available baseline versions for an agent.
 

@@ -515,10 +515,10 @@
       "type": "string"
     },
     "baseline_dir": {
-      "default": "./baselines",
-      "description": "Directory containing versioned golden baseline trace files",
-      "title": "Baseline Dir",
-      "type": "string"
+      "type": "string",
+      "default": "./golden",
+      "description": "Path to the directory where versioned baseline JSON files are stored.",
+      "title": "Baseline Dir"
     },
     "defaults": {
       "anyOf": [

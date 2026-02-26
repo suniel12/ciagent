@@ -66,7 +66,7 @@ class TestLoadSpec:
     def test_default_baseline_dir(self, tmp_path):
         p = write_spec(tmp_path, minimal_spec_data())
         spec = load_spec(p)
-        assert spec.baseline_dir == "./baselines"
+        assert spec.baseline_dir == "./golden"
 
     def test_custom_baseline_dir(self, tmp_path):
         p = write_spec(tmp_path, minimal_spec_data(baseline_dir="./custom/dir"))

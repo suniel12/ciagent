@@ -211,8 +211,8 @@ class AgentCISpec(BaseModel):
     version: int = Field(1, description="Schema version for forward compatibility")
     agent: str = Field(..., description="Agent identifier (e.g. 'rag-agent', 'support-router')")
     baseline_dir: str = Field(
-        "./baselines",
-        description="Directory containing versioned golden baseline trace files",
+        default="./golden",
+        description="Path to the directory where versioned baseline JSON files are stored.",
     )
     runner: Optional[str] = Field(
         None,

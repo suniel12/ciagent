@@ -13,7 +13,7 @@ agent: rag-agent
 
 # Directory for versioned golden baseline traces
 # Each baseline lives at: <baseline_dir>/<agent>/<version>.json
-baseline_dir: ./baselines
+baseline_dir: ./golden
 
 # ─── Global Defaults ────────────────────────────────────────────────────────
 # Applied to every query unless the query overrides them.

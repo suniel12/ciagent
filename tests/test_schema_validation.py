@@ -42,7 +42,7 @@ def test_minimal_spec_is_valid():
     assert spec.agent == "test-agent"
     assert len(spec.queries) == 1
     assert spec.version == 1
-    assert spec.baseline_dir == "./baselines"
+    assert spec.baseline_dir == "./golden"
 
 
 def test_full_spec_with_all_fields():
