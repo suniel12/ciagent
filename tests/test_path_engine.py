@@ -263,7 +263,7 @@ class TestEmptySpec:
         trace = make_trace("a", "b")
         result = evaluate_path(trace, path())
         assert result.status == LayerStatus.PASS
-        assert result.messages == ["Path OK"]
+        assert "No loops detected" in result.messages
 
 
 # ── max_loops default (1.1) ───────────────────────────────────────────────────
@@ -305,3 +305,38 @@ class TestMaxLoopsDefault:
         result = evaluate_path(trace, path())
         assert "loops_detected" in result.details
         assert result.details["loops_detected"] == 0
+
+
+# ── descriptive PASS messages ────────────────────────────────────────────────
+
+
+class TestDescriptivePassMessages:
+    def test_max_tool_calls_describes_count(self):
+        trace = make_trace("a", "b")
+        result = evaluate_path(trace, path(max_tool_calls=5))
+        assert result.status == LayerStatus.PASS
+        assert any("Tool calls: 2 ≤ max 5" in m for m in result.messages)
+
+    def test_forbidden_tools_describes_clean(self):
+        trace = make_trace("a", "b")
+        result = evaluate_path(trace, path(forbidden_tools=["evil_tool"]))
+        assert result.status == LayerStatus.PASS
+        assert any("No forbidden tools used" in m for m in result.messages)
+
+    def test_tool_recall_describes_expected(self):
+        trace = make_trace("retrieve_docs", "grade_artifacts")
+        result = evaluate_path(trace, path(expected_tools=["retrieve_docs"]))
+        assert result.status == LayerStatus.PASS
+        assert any("Tool recall" in m and "retrieve_docs" in m for m in result.messages)
+
+    def test_no_loops_described(self):
+        trace = make_trace("a", "b", "c")
+        result = evaluate_path(trace, path())
+        assert result.status == LayerStatus.PASS
+        assert any("No loops detected" in m for m in result.messages)
+
+    def test_loops_within_limit_described(self):
+        trace = make_trace("a", "a", "a")  # 2 loops
+        result = evaluate_path(trace, path(max_loops=5))
+        assert result.status == LayerStatus.PASS
+        assert any("Loops: 2 ≤ max 5" in m for m in result.messages)

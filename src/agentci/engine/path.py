@@ -46,6 +46,7 @@ def evaluate_path(
         FAIL only when forbidden_tools are violated.
     """
     warnings: list[str] = []
+    pass_messages: list[str] = []
     details: dict[str, Any] = {}
     hard_fail = False
     used_tools = trace.tool_call_sequence  # list[str], ordered
@@ -58,6 +59,8 @@ def evaluate_path(
             warnings.append(
                 f"Tool calls: {actual} > max {spec.max_tool_calls}"
             )
+        else:
+            pass_messages.append(f"Tool calls: {actual} ≤ max {spec.max_tool_calls}")
 
     # ── 2. forbidden_tools (safety boundary → hard FAIL) ────────────────────
     if spec.forbidden_tools:
@@ -67,6 +70,8 @@ def evaluate_path(
         if violations:
             warnings.append(f"Forbidden tools used: {sorted(violations)}")
             hard_fail = True
+        else:
+            pass_messages.append("No forbidden tools used")
 
     # ── 3. tool recall ───────────────────────────────────────────────────────
     if spec.expected_tools:
@@ -78,6 +83,9 @@ def evaluate_path(
             warnings.append(
                 f"Tool recall: {recall:.3f} < min {spec.min_tool_recall}"
             )
+        else:
+            expected_str = ", ".join(spec.expected_tools)
+            pass_messages.append(f"Tool recall: {recall:.3f} (expected: [{expected_str}])")
 
     # ── 4. tool precision ────────────────────────────────────────────────────
     if spec.expected_tools and used_tools:
@@ -89,6 +97,8 @@ def evaluate_path(
             warnings.append(
                 f"Tool precision: {precision:.3f} < min {spec.min_tool_precision}"
             )
+        else:
+            pass_messages.append(f"Tool precision: {precision:.3f}")
 
     # ── 5. sequence similarity (LCS vs baseline) ─────────────────────────────
     if spec.min_sequence_similarity is not None and baseline_trace is not None:
@@ -99,6 +109,8 @@ def evaluate_path(
             warnings.append(
                 f"Sequence similarity: {similarity:.3f} < min {spec.min_sequence_similarity}"
             )
+        else:
+            pass_messages.append(f"Sequence similarity: {similarity:.3f} ≥ min {spec.min_sequence_similarity}")
 
     # ── 6. loop detection ────────────────────────────────────────────────────
     # max_loops always has a value (default=3); always run loop detection
@@ -106,6 +118,10 @@ def evaluate_path(
     details["loops_detected"] = loops
     if loops > spec.max_loops:
         warnings.append(f"Loops: {loops} > max {spec.max_loops}")
+    elif loops == 0:
+        pass_messages.append("No loops detected")
+    else:
+        pass_messages.append(f"Loops: {loops} ≤ max {spec.max_loops}")
 
     # ── 7. match mode (vs baseline) ──────────────────────────────────────────
     if baseline_trace is not None:
@@ -129,6 +145,8 @@ def evaluate_path(
                 warnings.append(
                     f"Expected handoff to '{spec.expected_handoff}', got {actual_targets}"
                 )
+            else:
+                pass_messages.append(f"Handoff to '{spec.expected_handoff}' verified")
 
         if spec.expected_handoffs_available:
             available = {t for targets in trace.available_handoffs for t in targets}
@@ -147,6 +165,8 @@ def evaluate_path(
                 warnings.append(
                     f"Handoff count: {count} > max {spec.max_handoff_count}"
                 )
+            else:
+                pass_messages.append(f"Handoff count: {count} ≤ max {spec.max_handoff_count}")
 
     # ── Determine status ─────────────────────────────────────────────────────
     if hard_fail:
@@ -159,7 +179,7 @@ def evaluate_path(
     return LayerResult(
         status=status,
         details=details,
-        messages=warnings if warnings else ["Path OK"],
+        messages=warnings if warnings else (pass_messages or ["Path OK"]),
     )
 
 

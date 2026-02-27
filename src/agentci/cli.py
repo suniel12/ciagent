@@ -293,6 +293,12 @@ def record(test_name, suite, output, output_json):
         # Run the test
         result = runner.run_test(test, agent_fn)
 
+        # Attach the final output text to the trace
+        if result.trace and result.final_output:
+            result.trace.metadata["final_output"] = str(result.final_output)
+            if result.trace.spans:
+                result.trace.spans[-1].output_data = str(result.final_output)
+
         # Determine output path
         if output:
             save_path = output
@@ -580,13 +586,13 @@ def test_cmd(config, tags, fmt, baseline_dir, workers, sample_ensemble):
     try:
         runner_fn = resolve_runner(spec.runner)
     except (ImportError, AttributeError, ValueError) as e:
-        console.print(f"[bold red]Runner error:[/] {e}", err=True)
+        console.print(f"[bold red]Runner error:[/] {e}")
         sys.exit(2)
 
     # ── Inject sample-ensemble into judge_config ──────────────────────────────
     if sample_ensemble is not None:
         if not (0.0 <= sample_ensemble <= 1.0):
-            console.print("[bold red]--sample-ensemble must be between 0.0 and 1.0[/]", err=True)
+            console.print("[bold red]--sample-ensemble must be between 0.0 and 1.0[/]")
             sys.exit(2)
         spec.judge_config = spec.judge_config or {}
         spec.judge_config["sample_ensemble"] = sample_ensemble
@@ -602,12 +608,12 @@ def test_cmd(config, tags, fmt, baseline_dir, workers, sample_ensemble):
     try:
         traces = run_spec_parallel(spec, runner_fn, max_workers=workers)
     except Exception as e:  # noqa: BLE001
-        console.print(f"[bold red]Infrastructure error:[/] {e}", err=True)
+        console.print(f"[bold red]Infrastructure error:[/] {e}")
         sys.exit(2)
 
     if not traces:
-        console.print("[bold red]Error:[/] No traces captured — runner may have failed for all queries.", err=True)
-        sys.exit(2)
+        console.print("[bold red]Error:[/] No traces captured — runner may have failed for all queries.")
+        sys.exit(1)
 
     # ── Load baselines (optional) ─────────────────────────────────────────────
     baselines: dict = {}
@@ -671,7 +677,7 @@ def save_cmd(agent, version, query_text, config, baseline_dir, force_save, trace
         trace_data = json.loads(open(trace_file).read())
         trace = Trace.model_validate(trace_data)
     except Exception as e:
-        console.print(f"[bold red]Failed to load trace:[/] {e}", err=True)
+        console.print(f"[bold red]Failed to load trace:[/] {e}")
         sys.exit(2)
 
     effective_dir = baseline_dir or spec.baseline_dir
@@ -687,11 +693,16 @@ def save_cmd(agent, version, query_text, config, baseline_dir, force_save, trace
             force=force_save,
         )
         console.print(f"[green]✅ Saved baseline:[/] {out_path}")
+    except ConfigError as e:
+        console.print(f"[bold red]Config error:[/] {e}")
+        if e.recovery_hint:
+            console.print(f"  [yellow]Fix:[/] {e.recovery_hint}")
+        sys.exit(1)
     except ValueError as e:
-        console.print(f"[bold red]Precheck failed:[/] {e}", err=True)
+        console.print(f"[bold red]Precheck failed:[/] {e}")
         sys.exit(1)
     except Exception as e:
-        console.print(f"[bold red]Error:[/] {e}", err=True)
+        console.print(f"[bold red]Error:[/] {e}")
         sys.exit(2)
 
 

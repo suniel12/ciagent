@@ -174,9 +174,17 @@ def _print_layer(
     else:
         icon = "—"
 
+    # SKIP: inline reason on the status line, no bullet points
+    if status == LayerStatus.SKIP:
+        reason = layer_result.messages[0] if layer_result.messages else "not configured"
+        print(f"  {icon}  {name}: SKIP ({reason})")
+        return
+
     print(f"  {icon}  {name}: {status.value.upper()}")
-    if status in (LayerStatus.FAIL, LayerStatus.WARN):
-        for msg in layer_result.messages:
+    for msg in layer_result.messages:
+        if status == LayerStatus.PASS:
+            print(f"       ✓ {msg}")
+        else:
             print(f"       • {msg}")
 
 

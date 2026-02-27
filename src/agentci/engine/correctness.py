@@ -67,6 +67,7 @@ def evaluate_correctness(
     # inject the built-in rubric into the judge list instead.
     if spec.refutes_premise:
         details["refutes_premise"] = True
+        pass_messages: list[str] = []
         # Build the effective judge list: built-in rubric first, then user rubrics
         effective_judges: list[JudgeRubric] = [_REFUTES_PREMISE_RUBRIC]
         if spec.llm_judge:
@@ -78,20 +79,29 @@ def evaluate_correctness(
             details[key] = result
             if not result.get("passed", False):
                 failures.append(f"Judge failed: {rubric.rule[:80]}")
+            else:
+                score = result.get("score", "")
+                threshold = getattr(rubric, "threshold", "")
+                score_str = f" (score: {score} ≥ {threshold})" if score and threshold else ""
+                pass_messages.append(f"Premise correction verified by judge{score_str}")
 
         if spec.safety_check and not failures:
             result = _run_judge_safe(answer, spec.safety_check, judge_config, trace)
             details["safety"] = result
             if not result.get("passed", False):
                 failures.append(f"Safety check failed: {spec.safety_check.rule}")
+            else:
+                pass_messages.append("Safety check passed")
 
         if failures:
             return LayerResult(status=LayerStatus.FAIL, details=details, messages=failures)
         return LayerResult(
             status=LayerStatus.PASS,
             details=details,
-            messages=["All correctness checks passed (refutes_premise mode)"],
+            messages=pass_messages or ["All correctness checks passed (refutes_premise mode)"],
         )
+
+    pass_messages: list[str] = []
 
     # ── 1. expected_in_answer (case-insensitive substring) ──────────────────
     if spec.expected_in_answer:
@@ -101,8 +111,12 @@ def evaluate_correctness(
             "missing": missing,
             "all_found": not missing,
         }
-        for term in missing:
-            failures.append(f"Expected '{term}' not found in answer")
+        if missing:
+            for term in missing:
+                failures.append(f"Expected '{term}' not found in answer")
+        else:
+            found_str = ", ".join(f'"{t}"' for t in spec.expected_in_answer)
+            pass_messages.append(f"Found keywords: {found_str}")
 
     # ── 2. not_in_answer (case-insensitive exclusion) ───────────────────────
     if spec.not_in_answer:
@@ -112,8 +126,12 @@ def evaluate_correctness(
             "found": found,
             "none_found": not found,
         }
-        for term in found:
-            failures.append(f"Forbidden term '{term}' found in answer")
+        if found:
+            for term in found:
+                failures.append(f"Forbidden term '{term}' found in answer")
+        else:
+            excluded_str = ", ".join(f'"{t}"' for t in spec.not_in_answer)
+            pass_messages.append(f"Excluded keywords absent: {excluded_str}")
 
     # ── 3. exact_match ───────────────────────────────────────────────────────
     if spec.exact_match is not None:
@@ -121,6 +139,8 @@ def evaluate_correctness(
         details["exact_match"] = {"expected": spec.exact_match, "matched": matches}
         if not matches:
             failures.append("Exact match failed")
+        else:
+            pass_messages.append("Exact match verified")
 
     # ── 4. regex_match ───────────────────────────────────────────────────────
     if spec.regex_match is not None:
@@ -128,6 +148,8 @@ def evaluate_correctness(
         details["regex_match"] = {"pattern": spec.regex_match, "matched": matched}
         if not matched:
             failures.append(f"Regex '{spec.regex_match}' did not match answer")
+        else:
+            pass_messages.append(f"Regex matched: {spec.regex_match}")
 
     # ── 5. json_schema ───────────────────────────────────────────────────────
     if spec.json_schema is not None:
@@ -135,6 +157,8 @@ def evaluate_correctness(
         details["json_schema"] = json_result
         if not json_result["valid"]:
             failures.append(f"JSON schema validation failed: {json_result['error']}")
+        else:
+            pass_messages.append("JSON schema valid")
 
     # ── 6–8: LLM judge calls — only if deterministic checks all passed ───────
     if not failures:
@@ -145,25 +169,34 @@ def evaluate_correctness(
                 details[key] = result
                 if not result.get("passed", False):
                     failures.append(f"Judge failed: {rubric.rule}")
+                else:
+                    score = result.get("score", "")
+                    threshold = getattr(rubric, "threshold", "")
+                    score_str = f" (score: {score} ≥ {threshold})" if score and threshold else ""
+                    pass_messages.append(f"LLM judge passed{score_str}")
 
         if spec.safety_check and not failures:
             result = _run_judge_safe(answer, spec.safety_check, judge_config, trace)
             details["safety"] = result
             if not result.get("passed", False):
                 failures.append(f"Safety check failed: {spec.safety_check.rule}")
+            else:
+                pass_messages.append("Safety check passed")
 
         if spec.hallucination_check and not failures:
             result = _run_judge_safe(answer, spec.hallucination_check, judge_config, trace)
             details["hallucination"] = result
             if not result.get("passed", False):
                 failures.append("Hallucination check failed")
+            else:
+                pass_messages.append("Hallucination check passed")
 
     if failures:
         return LayerResult(status=LayerStatus.FAIL, details=details, messages=failures)
     return LayerResult(
         status=LayerStatus.PASS,
         details=details,
-        messages=["All correctness checks passed"],
+        messages=pass_messages or ["All correctness checks passed"],
     )
 
 

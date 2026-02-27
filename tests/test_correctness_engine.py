@@ -307,3 +307,40 @@ class TestRefutesPremise:
         ):
             result = evaluate_correctness("Correcting your premise...", s)
         assert result.details.get("refutes_premise") is True
+
+
+# ── descriptive PASS messages ────────────────────────────────────────────────
+
+
+class TestDescriptivePassMessages:
+    def test_expected_in_answer_describes_found_keywords(self):
+        result = evaluate_correctness("pip install agentci", spec(expected_in_answer=["pip install"]))
+        assert result.status == LayerStatus.PASS
+        assert any("Found keywords" in m for m in result.messages)
+        assert any("pip install" in m for m in result.messages)
+
+    def test_not_in_answer_describes_excluded_keywords(self):
+        result = evaluate_correctness("hello world", spec(not_in_answer=["forbidden"]))
+        assert result.status == LayerStatus.PASS
+        assert any("Excluded keywords absent" in m for m in result.messages)
+        assert any("forbidden" in m for m in result.messages)
+
+    def test_exact_match_describes_verification(self):
+        result = evaluate_correctness("exact", spec(exact_match="exact"))
+        assert result.status == LayerStatus.PASS
+        assert any("Exact match verified" in m for m in result.messages)
+
+    def test_regex_match_describes_pattern(self):
+        result = evaluate_correctness("version 3.10", spec(regex_match=r"version \d+\.\d+"))
+        assert result.status == LayerStatus.PASS
+        assert any("Regex matched" in m for m in result.messages)
+
+    def test_llm_judge_describes_score(self):
+        s = spec(llm_judge=[JudgeRubric(rule="Answer is helpful", threshold=0.7)])
+        with patch(
+            "agentci.engine.correctness._run_judge_safe",
+            return_value=judge_pass(),
+        ):
+            result = evaluate_correctness("helpful answer", s)
+        assert result.status == LayerStatus.PASS
+        assert any("LLM judge passed" in m for m in result.messages)

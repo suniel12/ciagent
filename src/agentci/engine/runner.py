@@ -57,7 +57,7 @@ def evaluate_query(
         correctness = LayerResult(
             status=LayerStatus.SKIP,
             details={},
-            messages=["No correctness spec defined"],
+            messages=["No assertions configured"],
         )
 
     # ── Span Assertions (sub-layer of Correctness, hard fail) ─────────────────
@@ -98,7 +98,7 @@ def evaluate_query(
         path = LayerResult(
             status=LayerStatus.SKIP,
             details={},
-            messages=["No path spec defined"],
+            messages=["No assertions configured"],
         )
 
     # ── Layer 3: Cost (soft warn) ─────────────────────────────────────────────
@@ -112,7 +112,7 @@ def evaluate_query(
         cost = LayerResult(
             status=LayerStatus.SKIP,
             details={},
-            messages=["No cost spec defined"],
+            messages=["No assertions configured"],
         )
 
     return QueryResult(

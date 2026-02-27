@@ -110,6 +110,12 @@ def run_judge(
     system_prompt = _build_judge_system_prompt(rubric)
     user_prompt = _build_judge_user_prompt(answer, rubric, effective_context)
 
+    import sys
+    print("====== LLM JUDGE PROMPT ======", file=sys.stderr)
+    print("SYSTEM:", system_prompt, file=sys.stderr)
+    print("USER:", user_prompt, file=sys.stderr)
+    print("==============================", file=sys.stderr)
+
     if ensemble_cfg.get("enabled", False):
         return _run_ensemble(system_prompt, user_prompt, ensemble_cfg, rubric)
 

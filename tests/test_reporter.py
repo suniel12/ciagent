@@ -198,6 +198,42 @@ class TestConsoleOutput:
         out = capsys.readouterr().out
         assert "Results:" in out
 
+    def test_skip_shows_inline_reason(self, capsys):
+        with patch.dict("os.environ", {}, clear=True):
+            skip = LayerResult(status=LayerStatus.SKIP, details={}, messages=["No assertions configured"])
+            results = [make_result(correctness=skip)]
+            report_results(results)
+        out = capsys.readouterr().out
+        assert "SKIP (No assertions configured)" in out
+
+    def test_pass_shows_checkmark_messages(self, capsys):
+        with patch.dict("os.environ", {}, clear=True):
+            passing = LayerResult(
+                status=LayerStatus.PASS,
+                details={},
+                messages=["Found keywords: \"pip install\""],
+            )
+            results = [make_result(correctness=passing)]
+            report_results(results)
+        out = capsys.readouterr().out
+        assert "✓" in out
+        assert "Found keywords" in out
+
+    def test_pass_does_not_use_bullet(self, capsys):
+        with patch.dict("os.environ", {}, clear=True):
+            passing = LayerResult(
+                status=LayerStatus.PASS,
+                details={},
+                messages=["Tool calls: 2 ≤ max 5"],
+            )
+            results = [make_result(path=passing)]
+            report_results(results)
+        out = capsys.readouterr().out
+        # PASS uses ✓, not bullet •
+        lines = [l for l in out.splitlines() if "Tool calls" in l]
+        assert all("✓" in l for l in lines)
+        assert all("•" not in l for l in lines)
+
 
 # ── Annotation Budget (1.2) ────────────────────────────────────────────────────
 

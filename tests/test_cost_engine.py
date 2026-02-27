@@ -181,3 +181,32 @@ class TestCombined:
         assert actual["total_tokens"] == 100
         assert actual["llm_calls"] == 1
         assert actual["latency_ms"] == 500.0
+
+
+# ── descriptive PASS messages ────────────────────────────────────────────────
+
+
+class TestDescriptivePassMessages:
+    def test_llm_calls_describes_count(self):
+        trace = make_trace(llm_calls=3)
+        result = evaluate_cost(trace, cost(max_llm_calls=5))
+        assert result.status == LayerStatus.PASS
+        assert any("LLM calls: 3 ≤ max 5" in m for m in result.messages)
+
+    def test_tokens_describes_count(self):
+        trace = make_trace(tokens=1200)
+        result = evaluate_cost(trace, cost(max_total_tokens=3000))
+        assert result.status == LayerStatus.PASS
+        assert any("Tokens: 1200 ≤ max 3000" in m for m in result.messages)
+
+    def test_cost_usd_describes_amount(self):
+        trace = make_trace(cost_usd=0.001)
+        result = evaluate_cost(trace, cost(max_cost_usd=0.01))
+        assert result.status == LayerStatus.PASS
+        assert any("Cost: $" in m and "≤ max $" in m for m in result.messages)
+
+    def test_latency_describes_ms(self):
+        trace = make_trace(duration_ms=500.0)
+        result = evaluate_cost(trace, cost(max_latency_ms=2000.0))
+        assert result.status == LayerStatus.PASS
+        assert any("Latency:" in m and "≤ max" in m for m in result.messages)

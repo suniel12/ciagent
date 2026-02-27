@@ -39,6 +39,7 @@ def evaluate_cost(
         LayerResult with PASS or WARN status (never FAIL).
     """
     warnings: list[str] = []
+    pass_messages: list[str] = []
     details: dict[str, Any] = {
         "actual": {
             "cost_usd": round(trace.total_cost_usd, 6),
@@ -59,6 +60,8 @@ def evaluate_cost(
                     f"Cost {multiplier:.2f}x baseline (max {spec.max_cost_multiplier}x): "
                     f"${trace.total_cost_usd:.6f} vs ${baseline_cost:.6f}"
                 )
+            else:
+                pass_messages.append(f"Cost multiplier: {multiplier:.2f}x ≤ max {spec.max_cost_multiplier}x")
         else:
             details["cost_multiplier"] = None
             details["cost_multiplier_skipped"] = "baseline cost is 0"
@@ -70,6 +73,8 @@ def evaluate_cost(
             warnings.append(
                 f"Tokens: {trace.total_tokens} > max {spec.max_total_tokens}"
             )
+        else:
+            pass_messages.append(f"Tokens: {trace.total_tokens} ≤ max {spec.max_total_tokens}")
 
     # ── 3. max_llm_calls ────────────────────────────────────────────────────
     if spec.max_llm_calls is not None:
@@ -78,6 +83,8 @@ def evaluate_cost(
             warnings.append(
                 f"LLM calls: {trace.total_llm_calls} > max {spec.max_llm_calls}"
             )
+        else:
+            pass_messages.append(f"LLM calls: {trace.total_llm_calls} ≤ max {spec.max_llm_calls}")
 
     # ── 4. max_latency_ms ───────────────────────────────────────────────────
     if spec.max_latency_ms is not None:
@@ -86,6 +93,8 @@ def evaluate_cost(
             warnings.append(
                 f"Latency: {trace.total_duration_ms:.0f}ms > max {spec.max_latency_ms}ms"
             )
+        else:
+            pass_messages.append(f"Latency: {trace.total_duration_ms:.0f}ms ≤ max {spec.max_latency_ms}ms")
 
     # ── 5. max_cost_usd ─────────────────────────────────────────────────────
     if spec.max_cost_usd is not None:
@@ -94,9 +103,11 @@ def evaluate_cost(
             warnings.append(
                 f"Cost: ${trace.total_cost_usd:.6f} > max ${spec.max_cost_usd:.6f}"
             )
+        else:
+            pass_messages.append(f"Cost: ${trace.total_cost_usd:.6f} ≤ max ${spec.max_cost_usd:.6f}")
 
     return LayerResult(
         status=LayerStatus.WARN if warnings else LayerStatus.PASS,
         details=details,
-        messages=warnings if warnings else ["Cost within bounds"],
+        messages=warnings if warnings else (pass_messages or ["Cost within bounds"]),
     )

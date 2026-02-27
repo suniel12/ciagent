@@ -22,7 +22,7 @@ import re
 from typing import TYPE_CHECKING, Any, Optional
 
 from agentci.engine.results import LayerResult, LayerStatus
-from agentci.models import SpanKind
+from agentci.models import SpanKind, Span
 from agentci.schema.spec_models import (
     SpanAssert,
     SpanAssertionSpec,
@@ -31,7 +31,7 @@ from agentci.schema.spec_models import (
 )
 
 if TYPE_CHECKING:
-    from agentci.models import Span, Trace
+    from agentci.models import Trace
 
 # Map SpanKindSelector → SpanKind enum values
 _KIND_MAP: dict[SpanKindSelector, SpanKind] = {
@@ -122,10 +122,29 @@ def _select_spans(trace: "Trace", selector) -> list["Span"]:
     target_kind = _KIND_MAP.get(selector.kind)
     if target_kind is None:
         return []
-    return [
+        
+    spans = [
         s for s in trace.spans
         if s.kind == target_kind and s.name == selector.name
     ]
+    
+    # Virtual fallback for Phase 1 ToolCalls (nested inside AGENT spans)
+    if target_kind == SpanKind.TOOL_CALL:
+        for agent_s in trace.spans:
+            for tc in agent_s.tool_calls:
+                if tc.tool_name == selector.name:
+                    attr = {"tool.args": tc.arguments}
+                    if isinstance(tc.arguments, dict):
+                        for k, v in tc.arguments.items():
+                            attr[f"tool.args.{k}"] = v
+                            
+                    spans.append(Span(
+                        kind=SpanKind.TOOL_CALL,
+                        name=tc.tool_name,
+                        attributes=attr
+                    ))
+                    
+    return spans
 
 
 # ── Field Extraction ───────────────────────────────────────────────────────────
