@@ -43,6 +43,12 @@ class TestExpectedInAnswer:
         assert result.status == LayerStatus.FAIL
         assert any("pip" in m for m in result.messages)
 
+    def test_failure_includes_agent_answer_preview(self):
+        result = evaluate_correctness("brew install agentci", spec(expected_in_answer=["pip"]))
+        assert result.status == LayerStatus.FAIL
+        assert any("Agent said:" in m for m in result.messages)
+        assert any("brew install agentci" in m for m in result.messages)
+
     def test_case_insensitive(self):
         result = evaluate_correctness("PIP INSTALL AGENTCI", spec(expected_in_answer=["pip install"]))
         assert result.status == LayerStatus.PASS
@@ -74,6 +80,15 @@ class TestAnyExpectedInAnswer:
         )
         assert result.status == LayerStatus.FAIL
         assert any("None of" in m for m in result.messages)
+
+    def test_none_found_includes_agent_answer_preview(self):
+        result = evaluate_correctness(
+            "Download from the website",
+            spec(any_expected_in_answer=["pip", "brew", "conda"]),
+        )
+        assert result.status == LayerStatus.FAIL
+        assert any("Agent said:" in m for m in result.messages)
+        assert any("Download from the website" in m for m in result.messages)
 
     def test_case_insensitive(self):
         result = evaluate_correctness(

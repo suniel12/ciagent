@@ -1,13 +1,13 @@
 [project]
 name = "ciagent"
-version = "0.4.2"
+version = "0.5.0"
 description = "Continuous Integration for AI Agents. Catch cost spikes and logic regressions before production."
 readme = "README.md"
 license = {text = "Apache-2.0"}
 requires-python = ">=3.10"
 keywords = ["ai", "agents", "testing", "llm", "ci-cd", "regression"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "Topic :: Software Development :: Testing",
     "Framework :: Pytest",

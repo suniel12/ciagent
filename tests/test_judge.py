@@ -151,6 +151,34 @@ class TestParseVerdict:
         verdict = _parse_verdict(raw)
         assert verdict.score == 3
 
+    def test_parses_json_with_preamble_text(self):
+        """Strategy 3: JSON object with preamble text before it."""
+        raw = 'Here is my evaluation:\n{"score": 5, "label": "pass", "rationale": "Excellent"}'
+        verdict = _parse_verdict(raw)
+        assert verdict.score == 5
+        assert verdict.label == "pass"
+
+    def test_parses_truncated_json_via_regex(self):
+        """Strategy 4: Regex extraction from truncated/malformed JSON."""
+        raw = '{"score": 4, "label": "pass", "rationale": "Good answer but'
+        verdict = _parse_verdict(raw)
+        assert verdict.score == 4
+        assert verdict.label == "pass"
+
+    def test_regex_fallback_infers_label_from_score(self):
+        """Strategy 4: When label is missing, infer from score."""
+        raw = '{"score": 2, "rationale": "Poor response'
+        verdict = _parse_verdict(raw)
+        assert verdict.score == 2
+        assert verdict.label == "fail"  # score < 3 → fail
+
+    def test_regex_fallback_infers_pass_from_high_score(self):
+        """Strategy 4: High score without label infers pass."""
+        raw = '{"score": 4, "rationale": "Solid answer'
+        verdict = _parse_verdict(raw)
+        assert verdict.score == 4
+        assert verdict.label == "pass"  # score >= 3 → pass
+
     def test_fallback_on_invalid_json(self):
         verdict = _parse_verdict("This is not JSON at all")
         assert verdict.label == "fail"
@@ -229,6 +257,30 @@ class TestRunJudge:
         with self._mock_call_judge(verdict) as mock:
             run_judge("answer", rubric)
         mock.assert_called_once()  # Only one call, no ensemble
+
+    def test_label_pass_overrides_low_score(self):
+        """Judge says 'pass' but score is below threshold — label wins."""
+        rubric = make_rubric(threshold=0.8)  # threshold score = 4
+        verdict = make_verdict(score=3, label="pass")  # score < threshold
+        with self._mock_call_judge(verdict):
+            result = run_judge("answer", rubric)
+        assert result["passed"] is True  # label "pass" overrides score
+
+    def test_label_fail_with_high_score_still_fails(self):
+        """Judge says 'fail' with high score — label fail + score below threshold = fail."""
+        rubric = make_rubric(threshold=0.8)  # threshold score = 4
+        verdict = make_verdict(score=2, label="fail")
+        with self._mock_call_judge(verdict):
+            result = run_judge("answer", rubric)
+        assert result["passed"] is False
+
+    def test_borderline_label_relies_on_score(self):
+        """Borderline label — pass/fail depends on score vs threshold."""
+        rubric = make_rubric(threshold=0.6)  # threshold score = 3
+        verdict = make_verdict(score=4, label="borderline")
+        with self._mock_call_judge(verdict):
+            result = run_judge("answer", rubric)
+        assert result["passed"] is True  # score 4 >= threshold 3
 
 
 # ── _run_ensemble ─────────────────────────────────────────────────────────────

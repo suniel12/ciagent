@@ -369,15 +369,21 @@ def _generate_skeleton_spec(
   - query: "TODO: Replace with an in-scope question your KB can answer"
     description: "Happy-path KB retrieval"
     correctness:
-      expected_in_answer: ["TODO: expected keyword"]
+      any_expected_in_answer: ["TODO: keyword1", "TODO: keyword2"]
+    cost:
+      max_llm_calls: 8
 
   - query: "What is the weather today?"
     description: "Out-of-scope question — agent should decline"
     path:
       max_tool_calls: 0
+    cost:
+      max_llm_calls: 2
 
   - query: "Hello"
     description: "Boundary — greeting / off-topic"
+    cost:
+      max_llm_calls: 2
 """
     elif agent_type == "tool":
         for tool in list(detected_tools)[:5]:
@@ -386,12 +392,16 @@ def _generate_skeleton_spec(
     description: "Tool usage test — {tool}"
     path:
       expected_tools: [{tool}]
+    cost:
+      max_llm_calls: 8
 """
         queries_yaml += """
   - query: "What is the weather today?"
     description: "Out-of-scope — should not use tools"
     path:
       max_tool_calls: 0
+    cost:
+      max_llm_calls: 2
 """
     else:  # conversational
         queries_yaml += """
@@ -547,8 +557,9 @@ For each query, produce a YAML block with:
 - description: one sentence explaining what this tests
 - tags: list of tags (smoke, in-scope, out-of-scope, edge-case, etc.)
 - path: expected_tools list OR max_tool_calls: 0 for decline cases
-- correctness: expected_in_answer keywords if deterministic, or llm_judge rule
-- cost: max_llm_calls budget
+- correctness: use any_expected_in_answer (OR logic) for list-type answers,
+  expected_in_answer (AND logic) only when ALL terms are essential, or llm_judge rule
+- cost: max_llm_calls budget (default 8 for in-scope queries)
 
 JUDGE RULE GUIDELINES:
 Write judge rules that evaluate whether the response is HELPFUL and ACCURATE,
@@ -573,10 +584,23 @@ not an exam candidate.
    - Focus on what makes a GOOD response, not a checklist of requirements
    - Avoid rules that penalize the agent for being honest about knowledge gaps
 
-4. EXPECTED_IN_ANSWER:
-   All expected_in_answer values MUST come directly from the knowledge base
-   content or golden Q&A pairs above. Do NOT invent or hallucinate facts.
+4. KEYWORD CHECKS (expected_in_answer vs any_expected_in_answer):
+   All keyword values MUST come directly from the knowledge base content or
+   golden Q&A pairs above. Do NOT invent or hallucinate facts.
    If a fact is not in the provided content, use llm_judge instead.
+
+   - Use `any_expected_in_answer` (OR logic) when the query expects a LIST or
+     enumeration (e.g., "What tools are available?" → any ONE tool name suffices).
+     This is the PREFERRED default for most keyword checks.
+   - Use `expected_in_answer` (AND logic) ONLY when ALL terms are essential to a
+     correct answer (e.g., "What is the install command?" → both "pip" and "install"
+     must appear).
+   - When in doubt, prefer `any_expected_in_answer` — it is more resilient to
+     agent paraphrasing and partial answers.
+
+5. COST BUDGET:
+   Set max_llm_calls to 8 for in-scope queries (RAG agents typically use 4-8
+   LLM calls per query). Use 2-3 for out-of-scope/greeting queries.
 
 EXAMPLES OF GOOD vs BAD JUDGE RULES:
 
@@ -722,7 +746,7 @@ def _calibrate_spec_from_traces(
         return queries
 
     max_observed = max(observed_llm_calls)
-    calibrated_max = max(3, int(max_observed * 1.5))
+    calibrated_max = max(8, int(max_observed * 1.5))
 
     for q in queries:
         tags = q.get("tags") or []

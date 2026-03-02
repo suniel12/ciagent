@@ -158,6 +158,84 @@ llm_judge:
 
 ---
 
+## OR-Logic Keywords (`any_expected_in_answer`)
+
+When a query expects a list or enumeration, use `any_expected_in_answer` (OR logic)
+instead of `expected_in_answer` (AND logic). The agent only needs to mention ONE of
+the terms to pass.
+
+```yaml
+# BAD — too strict, agent must mention ALL three:
+correctness:
+  expected_in_answer: ["LangGraph", "OpenAI Agents SDK", "Anthropic"]
+
+# GOOD — agent mentioning ANY one passes:
+correctness:
+  any_expected_in_answer: ["LangGraph", "OpenAI Agents SDK", "Anthropic"]
+```
+
+Use `expected_in_answer` only when ALL terms are essential:
+```yaml
+# GOOD — both "pip" and "install" must appear:
+correctness:
+  expected_in_answer: ["pip", "install"]
+```
+
+Both can coexist in the same query (AND + OR):
+```yaml
+correctness:
+  expected_in_answer: ["Python"]           # MUST mention Python
+  any_expected_in_answer: ["3.10", "3.11"] # AND at least one version
+```
+
+---
+
+## Prompt Engineering Tips
+
+Agent prompts directly affect test pass rates. These patterns emerged from
+debugging real RAG agent failures:
+
+**Avoid over-defensive disclaimers.** Agents that lead with "I'm sorry, I can only
+answer questions about X..." produce answers dominated by disclaimers, causing
+judge failures because the actual content is buried.
+
+```
+# BAD — agent system prompt:
+"If the question is off-topic, reply: 'I'm an AgentCI documentation assistant
+and I can only help with AgentCI-related questions.'"
+
+# GOOD — natural, brief deflection:
+"If the question is off-topic, reply with a friendly, brief response and offer
+to help with AgentCI questions instead."
+```
+
+**Be thorough in answers.** Agents that truncate or summarize too aggressively
+miss keywords and judge criteria.
+
+```
+# BAD:
+"Keep responses concise and under 2 sentences."
+
+# GOOD:
+"Be thorough — include all relevant details from the context, especially
+unique features, differentiators, and specific technical capabilities."
+```
+
+**Set realistic `max_llm_calls` budgets.** RAG agents with retrieval + generation
+typically use 4-8 LLM calls per query. A budget of 3 will cause false failures.
+
+```yaml
+# BAD:
+cost:
+  max_llm_calls: 3
+
+# GOOD:
+cost:
+  max_llm_calls: 8
+```
+
+---
+
 ## Pattern Library
 
 Copy-paste templates in `DemoAgents/examples/patterns/`:

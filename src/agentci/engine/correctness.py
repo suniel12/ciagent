@@ -117,8 +117,12 @@ def evaluate_correctness(
             "all_found": not missing,
         }
         if missing:
+            answer_preview = answer[:200] + ("..." if len(answer) > 200 else "")
             for term in missing:
-                failures.append(f"Expected '{term}' not found in answer")
+                failures.append(
+                    f"Expected '{term}' not found in answer"
+                    f"\n         Agent said: \"{answer_preview}\""
+                )
         else:
             found_str = ", ".join(f'"{t}"' for t in spec.expected_in_answer)
             pass_messages.append(f"Found keywords: {found_str}")
@@ -133,7 +137,11 @@ def evaluate_correctness(
         }
         if not found_any:
             terms_str = ", ".join(f'"{t}"' for t in spec.any_expected_in_answer)
-            failures.append(f"None of [{terms_str}] found in answer")
+            answer_preview = answer[:200] + ("..." if len(answer) > 200 else "")
+            failures.append(
+                f"None of [{terms_str}] found in answer"
+                f"\n         Agent said: \"{answer_preview}\""
+            )
         else:
             found_str = ", ".join(f'"{t}"' for t in found_any)
             pass_messages.append(f"Found keyword (any-of): {found_str}")
