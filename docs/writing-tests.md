@@ -222,17 +222,37 @@ unique features, differentiators, and specific technical capabilities."
 ```
 
 **Set realistic `max_llm_calls` budgets.** RAG agents with retrieval + generation
-typically use 4-8 LLM calls per query. A budget of 3 will cause false failures.
+typically use 4-10 LLM calls per query. A budget of 3 will cause false failures.
+Use `agentci calibrate` to measure real metrics and auto-tune budgets.
 
 ```yaml
 # BAD:
 cost:
   max_llm_calls: 3
 
-# GOOD:
+# GOOD (v0.6.0 default):
 cost:
-  max_llm_calls: 8
+  max_llm_calls: 10
 ```
+
+---
+
+## Strict Tool Sequence (`expected_tool_sequence`)
+
+When the **order** of tool calls matters (not just which tools were called), use
+`expected_tool_sequence` for a strict ordered check. Mismatches produce a WARN
+with a position-level diff showing the first deviation.
+
+```yaml
+path:
+  expected_tools: [retrieve_docs, grade_answer]       # unordered — any order passes
+  expected_tool_sequence: [retrieve_docs, grade_answer]  # ordered — must match exactly
+```
+
+Use this when:
+- Your agent has a mandatory pipeline order (retrieve → grade → generate)
+- You want to detect when a refactor changes the execution order
+- Debugging flaky routing where tool order matters
 
 ---
 

@@ -96,9 +96,12 @@ agentci init --generate        # Scan project, generate test spec
 agentci init                   # Generate GitHub Actions workflow + pre-push hook
 agentci test --mock --yes      # Zero-cost synthetic traces, CI-friendly (no keys, no prompts)
 agentci test                   # Run 3-layer evaluation (correctness → path → cost)
+agentci test --format html -o report.html  # HTML report with per-query details
+agentci calibrate              # Measure real agent metrics, auto-tune spec budgets
 agentci doctor                 # Health check: spec, deps, API keys
 agentci record <test>          # Record golden baseline
 agentci diff                   # Diff against baseline
+agentci report -i results.json # Generate HTML report from JSON results
 ```
 ## Contributing
 

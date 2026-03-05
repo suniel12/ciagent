@@ -3,7 +3,7 @@
 > Machine-readable reference for coding agents (Claude Code, Cursor, Codex, Copilot).
 > For human-friendly docs, see [README.md](README.md).
 
-**Version**: 0.5.1 | **Package**: `pip install ciagent` | **License**: Apache-2.0
+**Version**: 0.6.0 | **Package**: `pip install ciagent` | **License**: Apache-2.0
 
 ## Overview
 
@@ -44,13 +44,19 @@ agentci validate agentci_spec.yaml    # Validate spec against schema (no executi
 agentci bootstrap                     # Quick setup from queries file + runner path
 agentci bootstrap --queries q.txt --runner myagent:run --output spec.yaml
 
-# ── Testing & Evaluation (v2 commands) ────────────────────────────────
+agentci calibrate                     # Run sample queries, measure actuals, auto-tune spec budgets
+agentci calibrate --samples 3         # Number of sample queries per spec entry
+agentci calibrate --dry-run           # Show proposed changes without writing
+agentci calibrate --yes               # Skip confirmation prompt
+
+# ── Testing & Evaluation ────────────────────────────────────────────────
 agentci test                          # 3-layer evaluation (Correctness → Path → Cost)
 agentci test --mock                   # Zero-cost synthetic traces — no API keys needed
 agentci test --yes                    # Skip cost-estimate confirmation (CI-friendly)
 agentci test --workers 4              # Parallel execution
 agentci test --tags routing           # Filter queries by tag
 agentci test --format json            # Machine-readable JSON output
+agentci test --format html -o report.html  # HTML report with per-query details
 agentci test --sample-ensemble 3      # LLM judge ensemble (majority vote)
 
 agentci eval                          # Standalone correctness evaluation (no golden baselines)
@@ -129,16 +135,16 @@ from agentci.capture import TraceContext
 with TraceContext(agent_name="my_agent", test_name="test_routing") as ctx:
     result = my_agent.run("I need help with billing")
     trace = ctx.trace
-    trace.metadata["final_output"] = str(result)  # Required for answer assertions
 
 # Inspect trace properties
 print(trace.tool_call_sequence)     # ["lookup_account", "check_billing"]
 print(trace.total_cost_usd)         # 0.0023
 print(trace.total_llm_calls)        # 3
 print(trace.total_tool_calls)       # 2
+print(trace.metadata["final_output"])  # Auto-captured from trace
 ```
 
-> **Important:** You must manually set `trace.metadata["final_output"]` for `expected_in_answer`, `not_in_answer`, and `regex_match` assertions to work. Auto-capture is planned for a future release. Without this line, correctness assertions that check the agent's response text will silently pass (no output to check against).
+> **Note (v0.6.0):** `final_output` is now auto-captured from traces. Extraction priority: LangGraph state messages > span `output_data` > last LLM call output. Manual `trace.metadata["final_output"] = str(result)` still works and takes precedence if set.
 
 ### Common Assertion Patterns
 
