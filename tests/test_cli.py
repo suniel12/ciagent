@@ -712,8 +712,8 @@ class TestCalibrateCommand:
 
         with spec_path.open() as f:
             updated = yaml.safe_load(f)
-        # max(8, int(6 * 1.5)) = 9
-        assert updated["queries"][0]["cost"]["max_llm_calls"] == 9
+        # max(10, int(6 * 1.5)) = 10
+        assert updated["queries"][0]["cost"]["max_llm_calls"] == 10
 
     def test_no_runner_exits_with_error(self, tmp_path):
         spec_path = self._write_spec(tmp_path, runner=None)

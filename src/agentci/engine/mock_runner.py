@@ -65,7 +65,7 @@ def mock_run(query: str, query_spec: dict) -> Trace:
 
     # Set LLM calls within budget
     cost_spec = query_spec.get("cost") or {}
-    max_llm_calls = cost_spec.get("max_llm_calls") or 3
+    max_llm_calls = cost_spec.get("max_llm_calls") or 10
     llm_call_count = min(max_llm_calls, 2)  # stay comfortably within budget
     for _ in range(llm_call_count):
         span.llm_calls.append(

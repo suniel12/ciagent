@@ -433,7 +433,7 @@ def _generate_skeleton_spec(
     correctness:
       any_expected_in_answer: ["TODO: keyword1", "TODO: keyword2"]
     cost:
-      max_llm_calls: 8
+      max_llm_calls: 10
 
   - query: "What is the weather today?"
     description: "Out-of-scope question — agent should decline"
@@ -455,7 +455,7 @@ def _generate_skeleton_spec(
     path:
       expected_tools: [{tool}]
     cost:
-      max_llm_calls: 8
+      max_llm_calls: 10
 """
         queries_yaml += """
   - query: "What is the weather today?"
@@ -472,7 +472,7 @@ def _generate_skeleton_spec(
     correctness:
       any_expected_in_answer: ["TODO: keyword1", "TODO: keyword2"]
     cost:
-      max_llm_calls: 8
+      max_llm_calls: 10
 
   - query: "TODO: Replace with a topic your agent should decline"
     description: "Out-of-scope — agent should refuse"
@@ -629,7 +629,7 @@ For each query, produce a YAML block with:
   expected_in_answer (AND logic) only when ALL terms are essential, or llm_judge rule.
   For judge rules on in-scope queries, include context_file pointing to the KB file
   that contains the answer so the judge can verify against the actual documentation.
-- cost: max_llm_calls budget (default 8 for in-scope queries)
+- cost: max_llm_calls budget (default 10 for in-scope queries)
 
 JUDGE RULE GUIDELINES:
 Write judge rules that evaluate whether the response is HELPFUL and ACCURATE,
@@ -669,7 +669,7 @@ not an exam candidate.
      agent paraphrasing and partial answers.
 
 5. COST BUDGET:
-   Set max_llm_calls to 8 for in-scope queries (RAG agents typically use 4-8
+   Set max_llm_calls to 10 for in-scope queries (RAG agents typically use 4-10
    LLM calls per query). Use 2-3 for out-of-scope/greeting queries.
 
 EXAMPLES OF GOOD vs BAD JUDGE RULES:
@@ -1924,7 +1924,7 @@ def calibrate_cmd(config, samples, dry_run, yes):
     max_cost = max(o["cost_usd"] for o in observations)
 
     suggested = {
-        "max_llm_calls": max(8, int(max_llm * 1.5)),
+        "max_llm_calls": max(10, int(max_llm * 1.5)),
         "max_tool_calls": max(5, int(max_tools * 1.5)),
         "max_total_tokens": int(max_tokens * 2.0) if max_tokens else None,
         "max_cost_usd": round(max_cost * 2.0, 4) if max_cost else None,

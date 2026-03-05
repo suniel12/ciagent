@@ -5,6 +5,42 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-03-05
+
+### Added
+
+#### `final_output` Auto-Capture
+- `TraceContext._auto_extract_final_output()` called in `__exit__()` — automatically extracts the agent's answer from traces
+- Extraction priority: LangGraph state messages > span `output_data` (string) > span `output_data` (dict with `content`/`message`/`text`/`output` keys) > last LLM call `output_text`
+- Manual `trace.metadata["final_output"]` still takes precedence (no overwrite)
+- LangGraph adapter: auto-sets `final_output` from last AI message in `parse_state()`
+- OpenAI Agents adapter: auto-sets `final_output` from last span output in `on_trace_end()`
+
+#### `agentci calibrate` Command
+- Runs N sample queries against the live agent, measures actual metrics, shows Rich comparison table
+- Updates spec budgets with headroom: +50% for LLM/tool calls, +100% for tokens/cost
+- Flags: `--samples N` (default 2), `--dry-run`, `--yes`, `--spec PATH`
+
+#### Strict Tool Sequence Assertions
+- `PathSpec.expected_tool_sequence: Optional[list[str]]` — strict ordered tool call check
+- Mismatch = WARN (soft warning) with position-level diff via `_format_sequence_diff()`
+
+#### HTML Trace Report
+- Self-contained `report.html.j2` Jinja2 template with dark theme
+- Summary dashboard (pass/fail/warn counts, total cost)
+- Per-query cards with status badges, answer preview, three-layer details
+- Collapsible trace tree with JS toggle
+- Available via `agentci test --format html --output report.html` or `agentci report -i results.json`
+
+### Changed
+- `max_llm_calls` default in spec generator raised from 8 to 10 (better headroom for real agents)
+- `max_llm_calls` fallback in mock runner raised from 3 to 10
+- Calibrate command floor raised from 8 to 10
+- `--format` choices in `test` and `eval` commands now include `html`
+- `--output / -o` option added to `test` and `eval` commands for HTML file path
+- `agentci report` command fully implemented (was stub) — converts JSON results to HTML
+- 22 new tests added (570 total, up from 548 in v0.5.1)
+
 ## [0.5.0] - 2026-03-01
 
 ### Added
