@@ -3,7 +3,7 @@
 > Machine-readable reference for coding agents (Claude Code, Cursor, Codex, Copilot).
 > For human-friendly docs, see [README.md](README.md).
 
-**Version**: 0.6.0 | **Package**: `pip install ciagent` | **License**: Apache-2.0
+**Version**: 0.8.0 | **Package**: `pip install ciagent` | **License**: Apache-2.0
 
 ## Overview
 
