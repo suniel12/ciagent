@@ -43,6 +43,7 @@ agentci validate agentci_spec.yaml    # Validate spec against schema (no executi
 
 agentci bootstrap                     # Quick setup from queries file + runner path
 agentci bootstrap --queries q.txt --runner myagent:run --output spec.yaml
+agentci bootstrap --queries q.txt --runner myagent:run --yes  # Non-interactive: accept every trace as golden (coding agents / CI). Runner may return a plain str.
 
 agentci calibrate                     # Run sample queries, measure actuals, auto-tune spec budgets
 agentci calibrate --samples 3         # Number of sample queries per spec entry

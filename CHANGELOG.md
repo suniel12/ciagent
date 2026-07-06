@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Claude Code plugin (F5: your coding agent onboards and operates AgentCI)
+- The repo is now a Claude Code plugin marketplace
+  (`/plugin marketplace add suniel12/AgentCI`, `/plugin install agentci@agentci`)
+  with two skills: **onboard** (write the runner, record goldens via
+  `bootstrap --yes`, generate + tighten the spec, verify with `test --runs 3`)
+  and **check** (run the right check after agent changes; route failures by
+  flip source; never weaken a correct check to go green)
+- `agentci bootstrap --yes`: fully non-interactive golden recording (requires
+  `--queries`); bootstrap now runs the runner through the same TraceContext
+  capture path as `agentci test`, so **runners returning plain strings work**
+  (previously crashed on anything but a Trace)
+- `--format json` output now includes the agent's `answer` text per query
+  (eng-review work item: JSON consumers need what the agent said, not just
+  verdicts; also unblocks JSON as a judge-audit answers source)
+- Tests: skills are lint-gated — every `agentci` command and flag a skill
+  teaches is asserted to exist in the CLI, so skill docs cannot rot silently
+
 ### Added — zero-key demo (`uvx ciagent test --mock --runs 3`)
 - `agentci test --mock` with no `agentci_spec.yaml` in the working directory now
   falls back to a bundled demo spec (8 synthetic support-agent queries), clearly

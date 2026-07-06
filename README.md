@@ -198,6 +198,22 @@ It extracts hard facts (prices, rates, SKUs, "30 days") as variant-set assertion
 would fail a known-good answer is rejected before you ever see it. One LLM call at
 authoring time; the checks run free forever. Details: [docs/generate-checks.md](docs/generate-checks.md).
 
+## Let your coding agent set it up
+
+AgentCI ships as a Claude Code plugin. Two skills: **onboard** (writes the runner,
+records golden baselines, generates the spec, verifies it) and **check** (runs the
+right test after every change to your agent and routes failures by flip source).
+
+```
+/plugin marketplace add suniel12/AgentCI
+/plugin install agentci@agentci
+```
+
+Then ask your coding agent to "set up AgentCI for this repo." It records goldens with
+`agentci bootstrap --yes` and verifies with `agentci test --runs 3` — no human CLI use
+needed. The runner it writes is one function: `(query: str) -> str`; trace capture is
+automatic.
+
 ## Demo
 
 Here's a RAG agent demo where someone "optimizes for latency" by reducing retriever docs from 8 to 1. AgentCI catches the correctness regression:

@@ -1627,15 +1627,26 @@ queries:
 @click.option('--runner', required=True, help='Import path for runner function, e.g. myagent.run:run')
 @click.option('--output', default='agentci_spec.yaml', help='Output spec file')
 @click.option('--baseline-dir', default='./baselines', help='Directory for baselines')
-def bootstrap(queries, agent, runner, output, baseline_dir):
-    """Zero-to-Golden interactive bootstrapper."""
+@click.option('--yes', '-y', is_flag=True,
+              help='Accept every captured trace as golden without prompting '
+                   '(for CI and coding agents; requires --queries)')
+def bootstrap(queries, agent, runner, output, baseline_dir, yes):
+    """Zero-to-Golden bootstrapper: run queries, record golden baselines, write a spec.
+
+    The runner may return an agentci.models.Trace or a plain string — string
+    returns get automatic LLM/tool capture, same as `agentci test`.
+    """
     import yaml
     import json
     import re
     from datetime import datetime, timezone
     from pathlib import Path
     from rich.prompt import Prompt, Confirm
-    from .engine.parallel import resolve_runner
+    from .engine.parallel import resolve_runner, _run_with_retry
+
+    if yes and not queries:
+        console.print("[bold red]--yes requires --queries[/] (nothing to confirm interactively)")
+        sys.exit(2)
 
     try:
         runner_fn = resolve_runner(runner)
@@ -1678,8 +1689,13 @@ def bootstrap(queries, agent, runner, output, baseline_dir):
     for i, q in enumerate(query_list):
         console.print(f"\n[bold cyan]Running Query {i+1}/{len(query_list)}:[/] {q}")
         try:
-            trace = runner_fn(q)
-            
+            # Same execution path as `agentci test`: TraceContext capture plus
+            # coercion, so string-returning runners work here too.
+            trace = _run_with_retry(runner_fn, q, retry_count=0, backoff=1.0, agent_name=agent)
+            if trace is None:
+                console.print("  [yellow]Runner returned nothing — skipping this query.[/]")
+                continue
+
             # Print Tier 1 summary
             console.print(f"  Duration:   {trace.total_duration_ms:.1f}ms")
             console.print(f"  Cost:       ${trace.total_cost_usd:.4f}")
@@ -1687,8 +1703,11 @@ def bootstrap(queries, agent, runner, output, baseline_dir):
             console.print(f"  Tool Calls: {len(trace.tool_call_sequence)}")
             if trace.tool_call_sequence:
                 console.print(f"  Path:       {' → '.join(trace.tool_call_sequence)}")
-            
-            if Confirm.ask("Accept this trace as golden? [Y/n]", default=True):
+            answer_preview = (trace.metadata.get("final_output") or "")[:120]
+            if answer_preview:
+                console.print(f"  Answer:     {answer_preview}")
+
+            if yes or Confirm.ask("Accept this trace as golden? [Y/n]", default=True):
                 # Generates assertions
                 expected_tools = trace.tool_call_sequence
                 max_tool_calls = len(trace.tool_call_sequence) + 1

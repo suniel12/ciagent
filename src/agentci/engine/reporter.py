@@ -528,8 +528,15 @@ def _serialize_stability(report: "StabilityReport") -> dict[str, Any]:
 
 
 def _serialize_result(r: QueryResult) -> dict[str, Any]:
+    # Answer text included so JSON consumers (coding agents, judge-audit
+    # answer sources) can see what the agent said, not just the verdicts.
+    answer = None
+    if r.trace is not None:
+        metadata = getattr(r.trace, "metadata", None) or {}
+        answer = metadata.get("final_output")
     return {
         "query": r.query,
+        "answer": answer,
         "hard_fail": r.hard_fail,
         "has_warnings": r.has_warnings,
         "correctness": {
