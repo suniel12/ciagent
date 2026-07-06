@@ -25,6 +25,12 @@ _active_trace: contextvars.ContextVar[Trace | None] = contextvars.ContextVar(
 _active_span: contextvars.ContextVar[Span | None] = contextvars.ContextVar(
     '_active_span', default=None
 )
+# Nesting depth of active TraceContexts. SDK patches are installed only by the
+# outermost context — stacked patches would record every LLM call once per
+# wrapper into the same active span.
+_patch_depth: contextvars.ContextVar[int] = contextvars.ContextVar(
+    '_patch_depth', default=0
+)
 
 
 class TraceContext:
@@ -58,23 +64,31 @@ class TraceContext:
         self.trace = Trace(agent_name=agent_name, test_name=test_name)
         self._patches = []
         self._start_time = 0.0
-    
+        self._trace_token = None
+        self._span_token = None
+
     def __enter__(self):
         # Create root span
         root_span = Span(kind=SpanKind.AGENT, name=self.trace.agent_name)
         self.trace.spans.append(root_span)
-        
-        # Set context vars
-        _active_trace.set(self.trace)
-        _active_span.set(root_span)
-        
-        # Apply monkey patches
-        self._patch_openai()
-        self._patch_anthropic()
-        
+
+        # Set context vars, keeping reset tokens so a nested context restores
+        # the enclosing context on exit instead of clearing it
+        self._trace_token = _active_trace.set(self.trace)
+        self._span_token = _active_span.set(root_span)
+
+        # Apply monkey patches only in the outermost context: stacked patches
+        # would record every LLM call once per wrapper into the active span
+        # (e.g. a Trace-returning runner that uses TraceContext itself, wrapped
+        # again by _run_with_retry)
+        if _patch_depth.get() == 0:
+            self._patch_openai()
+            self._patch_anthropic()
+        _patch_depth.set(_patch_depth.get() + 1)
+
         self._start_time = time.perf_counter()
         return self
-    
+
     def __exit__(self, *args):
         # Compute duration
         self.trace.total_duration_ms = (time.perf_counter() - self._start_time) * 1000
@@ -85,13 +99,19 @@ class TraceContext:
         # Auto-extract final output if not manually set
         self._auto_extract_final_output()
 
-        # Remove patches
+        # Remove patches (only the outermost context installed any)
+        _patch_depth.set(max(_patch_depth.get() - 1, 0))
         for restore_fn in self._patches:
             restore_fn()
+        self._patches = []
 
-        # Clear context
-        _active_trace.set(None)
-        _active_span.set(None)
+        # Restore the enclosing context (None only when outermost)
+        if self._trace_token is not None:
+            _active_trace.reset(self._trace_token)
+            self._trace_token = None
+        if self._span_token is not None:
+            _active_span.reset(self._span_token)
+            self._span_token = None
 
     def _auto_extract_final_output(self) -> None:
         """Auto-extract the agent's final output from the trace.

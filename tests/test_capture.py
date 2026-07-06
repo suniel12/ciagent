@@ -160,3 +160,47 @@ class TestAutoExtractFinalOutput:
         ctx.trace = Trace(agent_name="test")  # No spans at all
         ctx._auto_extract_final_output()
         assert "final_output" not in ctx.trace.metadata
+
+
+class TestNestedTraceContext:
+    """Nested TraceContexts (a Trace-returning runner that uses TraceContext
+    itself, wrapped again by _run_with_retry) must not stack SDK patches or
+    clobber the enclosing context on exit."""
+
+    def test_inner_exit_restores_outer_context(self):
+        from agentci.capture import TraceContext, _active_span, _active_trace
+
+        with TraceContext(agent_name="outer") as outer:
+            outer_span = _active_span.get()
+            with TraceContext(agent_name="inner"):
+                assert _active_span.get() is not outer_span
+            # Regression: exit used to set(None), losing the outer capture
+            assert _active_span.get() is outer_span
+            assert _active_trace.get() is outer.trace
+        assert _active_span.get() is None
+        assert _active_trace.get() is None
+
+    def test_nested_context_does_not_stack_patches(self):
+        pytest.importorskip("openai")
+        import openai
+
+        from agentci.capture import TraceContext
+
+        original = openai.resources.chat.completions.Completions.create
+        with TraceContext(agent_name="outer"):
+            patched_once = openai.resources.chat.completions.Completions.create
+            assert patched_once is not original
+            with TraceContext(agent_name="inner"):
+                # Regression: inner enter used to re-patch, wrapping the
+                # outer wrapper so one LLM call recorded twice
+                assert openai.resources.chat.completions.Completions.create is patched_once
+            assert openai.resources.chat.completions.Completions.create is patched_once
+        assert openai.resources.chat.completions.Completions.create is original
+
+    def test_patch_depth_recovers_after_exception(self):
+        from agentci.capture import TraceContext, _patch_depth
+
+        with pytest.raises(RuntimeError):
+            with TraceContext(agent_name="outer"):
+                raise RuntimeError("boom")
+        assert _patch_depth.get() == 0

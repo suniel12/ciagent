@@ -120,6 +120,21 @@ queries:
         assert payload["results"][0]["answer"]
         assert "documentation" in payload["results"][0]["answer"]
 
+    def test_answer_falls_back_to_span_output(self):
+        # Codex review finding: traces whose answer lives only in the last
+        # span's output_data (no metadata final_output) must still serialize
+        # an answer — same fallback the correctness evaluator uses.
+        from agentci.engine.reporter import _serialize_result
+        from agentci.engine.results import LayerResult, LayerStatus, QueryResult
+        from agentci.models import Span, SpanKind, Trace
+
+        span = Span(kind=SpanKind.AGENT, name="a")
+        span.output_data = "answer from span"
+        trace = Trace(spans=[span])
+        ok = LayerResult(status=LayerStatus.PASS)
+        r = QueryResult(query="q", correctness=ok, path=ok, cost=ok, trace=trace)
+        assert _serialize_result(r)["answer"] == "answer from span"
+
 
 # ── Plugin artifact integrity ───────────────────────────────────────────────────
 

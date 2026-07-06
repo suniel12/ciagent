@@ -24,6 +24,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Tests: skills are lint-gated — every `agentci` command and flag a skill
   teaches is asserted to exist in the CLI, so skill docs cannot rot silently
 
+### Fixed — from Codex cross-model review of this branch
+- **Nested `TraceContext` no longer double-records or loses capture**: a
+  Trace-returning runner that uses `TraceContext` internally, wrapped again by
+  the executor, used to stack SDK patches (every LLM call recorded once per
+  wrapper) and its exit cleared the outer context entirely. Patches now install
+  only in the outermost context, and exits restore the enclosing context via
+  contextvar tokens. Affected `agentci test` as well as the new bootstrap path
+- JSON `answer` field now uses the correctness layer's extractor (metadata →
+  last span output), so trace shapes the evaluator can grade also serialize
+  their answer instead of `null`
+
 ### Added — zero-key demo (`uvx ciagent test --mock --runs 3`)
 - `agentci test --mock` with no `agentci_spec.yaml` in the working directory now
   falls back to a bundled demo spec (8 synthetic support-agent queries), clearly
