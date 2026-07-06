@@ -3112,21 +3112,76 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
         exit_code = report_results(results, format=fmt, spec_file=config, output_path=output)
     sys.exit(exit_code)
 
+def _collect_replay_paths(path, agent):
+    """Resolve --replay PATH to golden envelope files.
+
+    A file replays as-is. A directory prefers the recorded-golden layout
+    (<dir>/<agent>/scenarios/*.json — what --record writes into baseline_dir),
+    falling back to the .json files directly inside it.
+    """
+    if path.is_file():
+        return [path]
+    if path.is_dir():
+        scenarios_dir = path / agent / "scenarios"
+        if scenarios_dir.is_dir():
+            return sorted(scenarios_dir.glob("*.json"))
+        return sorted(p for p in path.glob("*.json") if p.is_file())
+    return []
+
+
+def _print_conversation_diff(diff):
+    """Console block for a replay's turn-by-turn diff vs its golden."""
+    if not diff.has_changes:
+        console.print("   [dim]diff vs golden: no changes[/]")
+        return
+    if diff.turn_count_changed:
+        console.print(
+            f"   [yellow]diff: turn count changed[/] {diff.turns_before} → {diff.turns_after}"
+        )
+    for t in diff.turn_diffs:
+        if not t.changed:
+            continue
+        if t.tools_changed:
+            console.print(
+                f"   [yellow]diff turn {t.turn_index + 1}: tools[/] "
+                f"{t.tools_before} → {t.tools_after}"
+            )
+        if t.answer_changed:
+            console.print(
+                f"   [yellow]diff turn {t.turn_index + 1}: answer[/] "
+                f"{t.answer_before[:60]!r} → {t.answer_after[:60]!r}"
+            )
+
+
 @cli.command(name="simulate")
 @click.option('--config', '-c', default='agentci_spec.yaml',
               help='Path to agentci_spec.yaml', show_default=True)
 @click.option('--mock', is_flag=True,
               help='Synthetic conversations, zero API calls: each turn satisfies '
                    'the scenario checks. Validates scenario structure.')
+@click.option('--record', is_flag=True,
+              help='Save each scenario\'s conversation as a golden envelope under '
+                   '<baseline_dir>/<agent>/scenarios/. Failed scenarios record too — '
+                   'that is the found-bug → regression-test conversion.')
+@click.option('--record-dir', default=None, type=click.Path(),
+              help='Record into this directory instead of the spec\'s baseline_dir '
+                   '(implies --record).')
+@click.option('--replay', 'replay_path', default=None, type=click.Path(),
+              help='Replay recorded conversation envelope(s) — a golden .json file '
+                   'or a directory — feeding the recorded user turns back to the '
+                   'agent verbatim. Spec scenarios are ignored.')
 @click.option('--yes', '-y', is_flag=True, help='Skip the live-run confirmation')
 @click.option('--format', 'fmt', type=click.Choice(['console', 'json']),
               default='console', show_default=True, help='Output format')
-def simulate_cmd(config, mock, yes, fmt):
+def simulate_cmd(config, mock, record, record_dir, replay_path, yes, fmt):
     """Drive multi-turn conversation scenarios against your agent.
 
-    Phase 1: scripted scenarios (a `turns:` list of user messages) run
-    deterministically — the CI path. Generative personas, replay mode, and
-    cost guardrails arrive in later 0.9 releases.
+    Scripted scenarios (a `turns:` list of user messages) run
+    deterministically — the CI path. `--record` saves each conversation as a
+    golden envelope; `--replay` feeds a recorded conversation's user turns
+    back verbatim (only the agent side can vary) and shows a turn-by-turn
+    diff against the golden. Generative personas and cost guardrails arrive
+    in later 0.9 releases.
 
     \b
     Spec additions:
@@ -3138,6 +3193,11 @@ def simulate_cmd(config, mock, yes, fmt):
               path: {expected_tools: [search_kb]}
             outcome:
               correctness: {any_expected_in_answer: ["refund", "5-7 business days"]}
+
+    \b
+    Found-bug → regression-test in one command:
+        ciagent simulate --record            # failing conversation saved as golden
+        ciagent simulate --replay ./golden   # the suite now gates on it
 
     \b
     Termination is deterministic: scripted turns exhausted, max_turns, or an
@@ -3153,8 +3213,9 @@ def simulate_cmd(config, mock, yes, fmt):
     import json as _json
     from pathlib import Path
 
-    from .engine.simulate import run_scenario
-    from .exceptions import ConfigError
+    from .conversation import load_envelope
+    from .engine.simulate import envelope_to_scenario, run_scenario
+    from .exceptions import BaselineError, ConfigError
     from .loader import load_spec
 
     try:
@@ -3163,25 +3224,54 @@ def simulate_cmd(config, mock, yes, fmt):
         console.print(f"[bold red]Config error:[/] {e}")
         sys.exit(2)
 
-    if not spec.scenarios:
-        console.print(
-            "[bold red]No scenarios in spec.[/] Add a [cyan]scenarios:[/] block — "
-            "see [cyan]ciagent simulate --help[/] for the shape."
-        )
-        sys.exit(2)
+    # ── Resolve what to run: spec scenarios, or recorded envelopes (--replay) ─
+    from typing import Any as _Any
 
-    unscripted = [s.display_name() for s in spec.scenarios if not s.turns]
-    if unscripted:
-        console.print(
-            f"[bold red]{len(unscripted)} scenario(s) have no scripted turns[/] "
-            f"(e.g. '{unscripted[0]}'). Generative personas are not available yet — "
-            "each scenario needs a [cyan]turns:[/] list."
-        )
-        sys.exit(2)
+    goldens: list[_Any] = []  # parallel to scenarios: (path, envelope) when replaying, else None
+    if replay_path:
+        paths = _collect_replay_paths(Path(replay_path), spec.agent)
+        if not paths:
+            console.print(
+                f"[bold red]Nothing to replay at[/] [cyan]{replay_path}[/] — expected a "
+                "golden envelope .json or a directory containing "
+                f"[cyan]{spec.agent}/scenarios/*.json[/]."
+            )
+            sys.exit(2)
+        scenarios = []
+        for p in paths:
+            try:
+                env = load_envelope(p)
+                scenarios.append(envelope_to_scenario(env))
+            except (BaselineError, ValueError) as e:
+                console.print(f"[bold red]Replay error:[/] {e}")
+                sys.exit(2)
+            goldens.append((p, env))
+    else:
+        if not spec.scenarios:
+            console.print(
+                "[bold red]No scenarios in spec.[/] Add a [cyan]scenarios:[/] block — "
+                "see [cyan]ciagent simulate --help[/] for the shape."
+            )
+            sys.exit(2)
+        unscripted = [s.display_name() for s in spec.scenarios if not s.turns]
+        if unscripted:
+            console.print(
+                f"[bold red]{len(unscripted)} scenario(s) have no scripted turns[/] "
+                f"(e.g. '{unscripted[0]}'). Generative personas are not available yet — "
+                "each scenario needs a [cyan]turns:[/] list."
+            )
+            sys.exit(2)
+        scenarios = spec.scenarios
+        goldens = [None] * len(scenarios)
 
+    run_mode = "replay" if replay_path else "scripted"
+    if replay_path:
+        mode_str = "mock replay" if mock else "replay"
+    else:
+        mode_str = "mock" if mock else "live"
     console.print(
         f"[bold blue]CIAgent v{__version__}[/] │ simulate │ agent: [cyan]{spec.agent}[/] │ "
-        f"scenarios: [cyan]{len(spec.scenarios)}[/] │ mode: [cyan]{'mock' if mock else 'live'}[/]"
+        f"scenarios: [cyan]{len(scenarios)}[/] │ mode: [cyan]{mode_str}[/]"
     )
 
     # Resolve the conversation runner (mock synthesizes one per scenario)
@@ -3207,13 +3297,13 @@ def simulate_cmd(config, mock, yes, fmt):
         except (ImportError, AttributeError, ValueError) as e:
             console.print(f"[bold red]Runner error:[/] {e}")
             sys.exit(2)
-        total_turns = sum(min(len(s.turns or []), s.max_turns) for s in spec.scenarios)
+        total_turns = sum(min(len(s.turns or []), s.max_turns) for s in scenarios)
         if not yes and fmt == "console":
             from rich.prompt import Confirm
 
             console.print(
                 f"[dim]Live run: up to {total_turns} agent turns across "
-                f"{len(spec.scenarios)} scenario(s), on your agent's API keys.[/]"
+                f"{len(scenarios)} scenario(s), on your agent's API keys.[/]"
             )
             if not Confirm.ask("Proceed?", default=True):
                 console.print("[yellow]Aborted.[/]")
@@ -3221,7 +3311,7 @@ def simulate_cmd(config, mock, yes, fmt):
         conv_runner_for = lambda scenario: live_runner  # noqa: E731
 
     results = []
-    for scenario in spec.scenarios:
+    for scenario in scenarios:
         try:
             r = run_scenario(
                 scenario,
@@ -3235,11 +3325,35 @@ def simulate_cmd(config, mock, yes, fmt):
             sys.exit(2)
         results.append(r)
 
+    # ── Conversation-aware diff vs the golden being replayed ─────────────────
+    diffs: list[_Any] = [None] * len(results)
+    if replay_path:
+        from .engine.diff import diff_envelopes
+
+        diffs = [
+            diff_envelopes(golden_env, r.to_envelope(agent=spec.agent, mode="replay"))
+            for (_, golden_env), r in zip(goldens, results)
+        ]
+
+    # ── Record each conversation as a golden envelope (--record) ─────────────
+    recorded_paths = []
+    if record or record_dir:
+        from .engine.simulate import record_scenario_result
+
+        out_dir = record_dir or spec.baseline_dir
+        for r in results:
+            recorded_paths.append(
+                record_scenario_result(
+                    r, out_dir, agent=spec.agent, mode=run_mode, mock=mock
+                )
+            )
+
     # ── Report ────────────────────────────────────────────────────────────────
     if fmt == "json":
         from .engine.reporter import _serialize_result
 
         payload = {
+            "mode": run_mode,
             "scenarios": [
                 {
                     "name": r.scenario.display_name(),
@@ -3256,9 +3370,11 @@ def simulate_cmd(config, mock, yes, fmt):
                         for t in r.turns
                     ],
                     "outcome": _serialize_result(r.outcome) if r.outcome else None,
+                    "diff": d.summary_json() if d is not None else None,
                 }
-                for r in results
+                for r, d in zip(results, diffs)
             ],
+            "recorded": [str(p) for p in recorded_paths],
             "summary": {
                 "total": len(results),
                 "passed": sum(1 for r in results if not r.hard_fail and not r.is_infra_error),
@@ -3268,7 +3384,7 @@ def simulate_cmd(config, mock, yes, fmt):
         }
         print(_json.dumps(payload, indent=2))
     else:
-        for r in results:
+        for r, d in zip(results, diffs):
             icon = "❌" if r.hard_fail else ("⚠️ " if r.is_infra_error else "✅")
             console.print(
                 f"\n{icon} [bold]{r.scenario.display_name()}[/] — "
@@ -3286,6 +3402,12 @@ def simulate_cmd(config, mock, yes, fmt):
                 status = "FAIL" if r.outcome.hard_fail else "PASS"
                 color = "red" if r.outcome.hard_fail else "green"
                 console.print(f"   outcome: [{color}]{status}[/] {'; '.join(r.outcome.correctness.messages[:2])}")
+            if d is not None:
+                _print_conversation_diff(d)
+        if recorded_paths:
+            console.print(f"\n[dim]Recorded {len(recorded_paths)} golden envelope(s):[/]")
+            for p in recorded_paths:
+                console.print(f"   [cyan]{p}[/]")
         passed = sum(1 for r in results if not r.hard_fail and not r.is_infra_error)
         console.print(
             f"\nScenarios: {passed}/{len(results)} passed"

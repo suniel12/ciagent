@@ -27,6 +27,7 @@ from dataclasses import dataclass, field
 from typing import Any, Optional, TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from ciagent.conversation import ConversationEnvelope
     from ciagent.models import Trace
     from ciagent.schema.spec_models import AgentCISpec
 
@@ -442,6 +443,114 @@ def _extract_answer(trace: "Trace") -> str:
             return out if isinstance(out, str) else str(out)
 
     return ""
+
+
+# ── Conversation-aware diff (F6 Phase 2) ──────────────────────────────────────
+
+
+@dataclass
+class TurnDiff:
+    """Per-turn comparison between a golden conversation and a fresh run."""
+    turn_index: int
+    user_message: str = ""
+    tools_before: list[str] = field(default_factory=list)
+    tools_after: list[str] = field(default_factory=list)
+    answer_before: str = ""
+    answer_after: str = ""
+
+    @property
+    def tools_changed(self) -> bool:
+        return self.tools_before != self.tools_after
+
+    @property
+    def answer_changed(self) -> bool:
+        return self.answer_before != self.answer_after
+
+    @property
+    def changed(self) -> bool:
+        return self.tools_changed or self.answer_changed
+
+
+@dataclass
+class ConversationDiff:
+    """Diff of a replayed (or re-run) conversation against a golden envelope.
+
+    Turns are paired by index — replay feeds the golden's user turns verbatim,
+    so index i is the same user message on both sides unless the turn count
+    changed (early stop_when exit, infra-error, agent now stopping earlier).
+    """
+    agent: str = ""
+    scenario: str = ""
+    turns_before: int = 0
+    turns_after: int = 0
+    turn_diffs: list[TurnDiff] = field(default_factory=list)
+
+    @property
+    def turn_count_changed(self) -> bool:
+        return self.turns_before != self.turns_after
+
+    @property
+    def has_changes(self) -> bool:
+        return self.turn_count_changed or any(t.changed for t in self.turn_diffs)
+
+    @property
+    def tools_changed(self) -> bool:
+        return any(t.tools_changed for t in self.turn_diffs)
+
+    def summary_json(self) -> dict[str, Any]:
+        return {
+            "agent": self.agent,
+            "scenario": self.scenario,
+            "turns_before": self.turns_before,
+            "turns_after": self.turns_after,
+            "turn_count_changed": self.turn_count_changed,
+            "has_changes": self.has_changes,
+            "turns": [
+                {
+                    "turn_index": t.turn_index,
+                    "user_message": t.user_message,
+                    "tools_before": t.tools_before,
+                    "tools_after": t.tools_after,
+                    "tools_changed": t.tools_changed,
+                    "answer_changed": t.answer_changed,
+                    "answer_before": t.answer_before,
+                    "answer_after": t.answer_after,
+                }
+                for t in self.turn_diffs
+                if t.changed
+            ],
+        }
+
+
+def diff_envelopes(
+    golden: "ConversationEnvelope",
+    current: "ConversationEnvelope",
+) -> ConversationDiff:
+    """Compare two conversation envelopes turn by turn.
+
+    Reports turn-count changes and, for each index-paired turn, tool-sequence
+    and answer changes. Purely observational: gating stays with the scenario's
+    own checks — a changed answer is a signal to look, not a verdict.
+    """
+    diff = ConversationDiff(
+        agent=golden.agent or current.agent,
+        scenario=(golden.scenario or {}).get("name", ""),
+        turns_before=len(golden.turns),
+        turns_after=len(current.turns),
+    )
+    for i in range(max(len(golden.turns), len(current.turns))):
+        g = golden.turns[i] if i < len(golden.turns) else None
+        c = current.turns[i] if i < len(current.turns) else None
+        present = g or c
+        diff.turn_diffs.append(TurnDiff(
+            turn_index=i,
+            user_message=present.user_message if present else "",
+            tools_before=list(g.trace.tool_call_sequence or []) if g else [],
+            tools_after=list(c.trace.tool_call_sequence or []) if c else [],
+            answer_before=_extract_answer(g.trace) if g else "",
+            answer_after=_extract_answer(c.trace) if c else "",
+        ))
+    return diff
 
 
 def _format_value(before: Any, after: Any, label: str) -> str:

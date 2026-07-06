@@ -3,9 +3,19 @@
 """
 Conversation driver for `ciagent simulate` (F6).
 
-Phase 1 scope: scripted personas only — fixed user turns from the scenario
-spec, fully deterministic, zero API keys. Generative personas arrive in a
-later phase; this driver is the seed for every F6 test either way.
+Phase 1: scripted personas — fixed user turns from the scenario spec, fully
+deterministic, zero API keys. Generative personas arrive in a later phase;
+this driver is the seed for every F6 test either way.
+
+Phase 2: record + replay. Any driven conversation can be recorded as a
+schema_version-2 golden envelope (`record_scenario_result`). A recorded
+envelope replays through the SAME driver (`replay_envelope`): the recorded
+user turns are fed back verbatim — the persona/scripted source is never
+consulted — so only the agent side can vary. Replaying a deterministic agent
+twice yields byte-identical verdicts (`scenario_verdict` is the contract).
+This is the one-command found-bug → regression-test conversion: a failed
+scenario recorded with `--record` becomes a golden the suite gates on via
+`--replay`.
 
 Termination rules (eng review 2026-07-05, binding):
 - a conversation runs until scripted turns are exhausted or `max_turns` is
@@ -22,7 +32,10 @@ Termination rules (eng review 2026-07-05, binding):
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional, Union
+from typing import TYPE_CHECKING, Any, Callable, Optional, Union
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 from ..conversation import ConversationEnvelope, ConversationTurn
 from ..models import Trace
@@ -79,6 +92,9 @@ class ScenarioResult:
                 "persona": self.scenario.persona,
                 "goal": self.scenario.goal,
                 "max_turns": self.scenario.max_turns,
+                # Full spec (checks, stop_when) so a recorded envelope is a
+                # self-contained regression test — replay needs no spec file.
+                "spec": self.scenario.model_dump(exclude_none=True),
             },
             metadata={"termination": self.termination, **({"error": self.error} if self.error else {})},
             turns=[
@@ -209,3 +225,112 @@ def run_scenario(
             spec_dir=spec_dir,
         )
     return result
+
+
+# ── Phase 2: record + replay ────────────────────────────────────────────────────
+
+
+def scenario_slug(name: str) -> str:
+    """Filesystem-safe golden filename for a scenario display name."""
+    slug = "".join(c if c.isalnum() else "-" for c in name.lower())
+    slug = "-".join(p for p in slug.split("-") if p)
+    return slug[:80] or "scenario"
+
+
+def record_scenario_result(
+    result: ScenarioResult,
+    directory: Union[str, "Path"],
+    agent: str = "",
+    mode: str = "scripted",
+    mock: bool = False,
+) -> "Path":
+    """Save a driven scenario as a golden conversation envelope.
+
+    Written to ``<directory>/<agent>/scenarios/<slug>.json`` — the
+    ``scenarios/`` subdirectory keeps conversation goldens out of the
+    single-turn version listing (`ciagent baselines`). Recording never
+    prechecks: a FAILED scenario is exactly what gets recorded when
+    converting a found bug into a regression test.
+    """
+    from datetime import datetime, timezone
+    from pathlib import Path
+
+    from ..conversation import save_envelope
+
+    envelope = result.to_envelope(agent=agent, mode=mode)
+    envelope.captured_at = datetime.now(timezone.utc).isoformat()
+    envelope.metadata["checks_passed"] = not result.hard_fail
+    if mock:
+        envelope.metadata["mock"] = True
+
+    out_dir = Path(directory) / agent / "scenarios"
+    return save_envelope(envelope, out_dir / f"{scenario_slug(result.scenario.display_name())}.json")
+
+
+def envelope_to_scenario(envelope: ConversationEnvelope) -> ScenarioSpec:
+    """Reconstruct a replayable ScenarioSpec from a recorded envelope.
+
+    The recorded user turns are the script, fed back verbatim — the original
+    persona/scripted source is never consulted, whatever the embedded spec
+    says its `turns:` were. Checks and stop_when carry over from the embedded
+    spec so the golden gates on the same verdict it was recorded with.
+    """
+    recorded_turns = [t.user_message for t in envelope.turns]
+    if not recorded_turns:
+        raise ValueError(
+            f"Envelope '{(envelope.scenario or {}).get('name', envelope.agent)}' has "
+            "no recorded turns — nothing to replay."
+        )
+    spec_dict = dict((envelope.scenario or {}).get("spec") or {})
+    if not spec_dict.get("name"):
+        spec_dict["name"] = (envelope.scenario or {}).get("name")
+    spec_dict["turns"] = recorded_turns
+    spec_dict["max_turns"] = len(recorded_turns)
+    return ScenarioSpec(**spec_dict)
+
+
+def replay_envelope(
+    envelope: ConversationEnvelope,
+    conv_runner: ConversationRunner,
+    agent_name: str = "",
+    judge_config: Optional[dict[str, Any]] = None,
+    spec_dir: Optional[str] = None,
+) -> ScenarioResult:
+    """Replay a recorded conversation's user turns against the agent."""
+    return run_scenario(
+        envelope_to_scenario(envelope),
+        conv_runner,
+        agent_name=agent_name or envelope.agent,
+        judge_config=judge_config,
+        spec_dir=spec_dir,
+    )
+
+
+def scenario_verdict(result: ScenarioResult) -> dict[str, Any]:
+    """Deterministic verdict serialization for a driven scenario.
+
+    This is the replay-determinism contract: statuses and messages only, no
+    trace ids, timestamps, or latencies — replaying a deterministic agent
+    twice must yield byte-identical ``json.dumps(scenario_verdict(r))``.
+    """
+    def layer(qr: Optional[QueryResult]) -> Optional[dict[str, Any]]:
+        if qr is None:
+            return None
+        return {
+            "hard_fail": qr.hard_fail,
+            "correctness": {"status": qr.correctness.status.value, "messages": qr.correctness.messages},
+            "path": {"status": qr.path.status.value, "messages": qr.path.messages},
+            "cost": {"status": qr.cost.status.value, "messages": qr.cost.messages},
+        }
+
+    return {
+        "scenario": result.scenario.display_name(),
+        "termination": result.termination,
+        "error": result.error,
+        "hard_fail": result.hard_fail,
+        "turns": [
+            {"turn_index": t.turn_index, "user_message": t.user_message, "checks": layer(t.checks)}
+            for t in result.turns
+        ],
+        "outcome": layer(result.outcome),
+    }
