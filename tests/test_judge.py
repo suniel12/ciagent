@@ -1,5 +1,5 @@
 """
-Unit tests for agentci.engine.judge.
+Unit tests for ciagent.engine.judge.
 
 All LLM API calls are mocked — no real network requests made here.
 See tests/integration/test_judge_live.py for real API tests.
@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agentci.engine.judge import (
+from ciagent.engine.judge import (
     JudgeError,
     JudgeVerdict,
     _build_judge_system_prompt,
@@ -24,7 +24,7 @@ from agentci.engine.judge import (
     _score_threshold,
     run_judge,
 )
-from agentci.schema.spec_models import JudgeRubric
+from ciagent.schema.spec_models import JudgeRubric
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -193,7 +193,7 @@ class TestRunJudge:
     def _mock_call_judge(self, verdict: JudgeVerdict):
         """Return a context manager that patches _call_judge."""
         return patch(
-            "agentci.engine.judge._call_judge",
+            "ciagent.engine.judge._call_judge",
             return_value=verdict,
         )
 
@@ -301,7 +301,7 @@ class TestRunEnsemble:
             make_verdict(score=4, label="pass"),
             make_verdict(score=2, label="fail"),
         ]
-        with patch("agentci.engine.judge._call_judge", side_effect=verdicts):
+        with patch("ciagent.engine.judge._call_judge", side_effect=verdicts):
             result = _run_ensemble("sys", "user", self._ensemble_config(), rubric)
         assert result["passed"] is True
         assert result["label"] == "pass"
@@ -313,7 +313,7 @@ class TestRunEnsemble:
             make_verdict(score=2, label="fail"),
             make_verdict(score=4, label="pass"),
         ]
-        with patch("agentci.engine.judge._call_judge", side_effect=verdicts):
+        with patch("ciagent.engine.judge._call_judge", side_effect=verdicts):
             result = _run_ensemble("sys", "user", self._ensemble_config(), rubric)
         assert result["passed"] is False
         assert result["label"] == "fail"
@@ -325,14 +325,14 @@ class TestRunEnsemble:
             make_verdict(score=2, label="fail"),
             make_verdict(score=3, label="borderline"),
         ]
-        with patch("agentci.engine.judge._call_judge", side_effect=verdicts):
+        with patch("ciagent.engine.judge._call_judge", side_effect=verdicts):
             result = _run_ensemble("sys", "user", self._ensemble_config(), rubric)
         assert result["score"] == pytest.approx(3.0)
 
     def test_ensemble_result_contains_individual_verdicts(self):
         rubric = make_rubric()
         verdicts = [make_verdict(score=4), make_verdict(score=3), make_verdict(score=4)]
-        with patch("agentci.engine.judge._call_judge", side_effect=verdicts):
+        with patch("ciagent.engine.judge._call_judge", side_effect=verdicts):
             result = _run_ensemble("sys", "user", self._ensemble_config(), rubric)
         assert "individual_verdicts" in result
         assert len(result["individual_verdicts"]) == 3
@@ -341,7 +341,7 @@ class TestRunEnsemble:
         rubric = make_rubric()
         models = ["model-x", "model-y", "model-z"]
         verdicts = [make_verdict(score=4)] * 3
-        with patch("agentci.engine.judge._call_judge", side_effect=verdicts) as mock:
+        with patch("ciagent.engine.judge._call_judge", side_effect=verdicts) as mock:
             _run_ensemble("sys", "user", self._ensemble_config(models), rubric)
         assert mock.call_count == 3
 
@@ -370,7 +370,7 @@ class TestContextFile:
         try:
             rubric = self._make_rubric_with_context(tmp_path)
             verdict = make_verdict(score=4, label="pass")
-            with patch("agentci.engine.judge._call_judge", return_value=verdict) as mock_call:
+            with patch("ciagent.engine.judge._call_judge", return_value=verdict) as mock_call:
                 run_judge("The uptime is 99.9%.", rubric, spec_dir=None)
 
             # Inspect the user prompt passed to _call_judge
@@ -385,7 +385,7 @@ class TestContextFile:
         """When context_file is None, existing behavior is unchanged."""
         rubric = make_rubric()  # no context_file
         verdict = make_verdict(score=4)
-        with patch("agentci.engine.judge._call_judge", return_value=verdict) as mock_call:
+        with patch("ciagent.engine.judge._call_judge", return_value=verdict) as mock_call:
             run_judge("Some answer", rubric)
         user_prompt = mock_call.call_args[0][2]
         assert "GROUND TRUTH REFERENCE DOCUMENT" not in user_prompt
@@ -405,7 +405,7 @@ class TestContextFile:
 
             rubric = self._make_rubric_with_context("sla.md")
             verdict = make_verdict(score=4, label="pass")
-            with patch("agentci.engine.judge._call_judge", return_value=verdict) as mock_call:
+            with patch("ciagent.engine.judge._call_judge", return_value=verdict) as mock_call:
                 run_judge("SLA content here.", rubric, spec_dir=tmpdir)
             user_prompt = mock_call.call_args[0][2]
             assert "SLA content here." in user_prompt
@@ -428,7 +428,7 @@ class TestContextFile:
         try:
             rubric = self._make_rubric_with_context(tmp_path)
             verdict = make_verdict(score=4)
-            with patch("agentci.engine.judge._call_judge", return_value=verdict) as mock_call:
+            with patch("ciagent.engine.judge._call_judge", return_value=verdict) as mock_call:
                 run_judge("Pro plan costs $29/month.", rubric, spec_dir=None)
             user_prompt = mock_call.call_args[0][2]
             assert "prior training knowledge" in user_prompt or "prior knowledge" in user_prompt

@@ -23,7 +23,7 @@ import pytest
 import yaml
 from click.testing import CliRunner
 
-from agentci.cli import cli
+from ciagent.cli import cli
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PLUGIN_DIR = REPO_ROOT / "plugins" / "ciagent"
@@ -66,7 +66,7 @@ class TestBootstrapYes:
         # spec written and loadable
         spec_file = toy_repo / "agentci_spec.yaml"
         assert spec_file.exists()
-        from agentci.loader import load_spec
+        from ciagent.loader import load_spec
 
         spec = load_spec(spec_file)
         assert len(spec.queries) == 2
@@ -124,9 +124,9 @@ queries:
         # Codex review finding: traces whose answer lives only in the last
         # span's output_data (no metadata final_output) must still serialize
         # an answer — same fallback the correctness evaluator uses.
-        from agentci.engine.reporter import _serialize_result
-        from agentci.engine.results import LayerResult, LayerStatus, QueryResult
-        from agentci.models import Span, SpanKind, Trace
+        from ciagent.engine.reporter import _serialize_result
+        from ciagent.engine.results import LayerResult, LayerStatus, QueryResult
+        from ciagent.models import Span, SpanKind, Trace
 
         span = Span(kind=SpanKind.AGENT, name="a")
         span.output_data = "answer from span"
@@ -167,21 +167,34 @@ class TestPluginArtifacts:
 
     @pytest.mark.parametrize("skill", ["onboard", "check"])
     def test_skill_commands_are_real(self, skill):
-        """Every `agentci <cmd> --flag` the skill teaches must exist in the CLI."""
+        """Every `ciagent <cmd> --flag` the skill teaches must exist in the CLI."""
         text = (PLUGIN_DIR / "skills" / skill / "SKILL.md").read_text()
+        # the module rename dropped the `agentci` CLI alias — skills must not
+        # teach it (file/spec names like agentci_spec.yaml are fine)
+        stripped = text.replace("agentci_", "").replace("agentci.", "")
+        assert not re.search(r"\bagentci\b", stripped), (
+            f"skill '{skill}' still references the removed agentci command"
+        )
+        matches = re.findall(
+            r"\bciagent\s+([a-z-]+)((?:\s+--?[a-zA-Z-]+(?:\s+<[^>]+>|\s+[\w./-]+)?)*)", text
+        )
+        # guard against the vacuous pass this test had after the brand rename:
+        # a skill with zero matching commands means the regex is stale, not
+        # that the skill is clean
+        assert matches, f"skill '{skill}' contains no ciagent commands to verify"
         group_flags = {o for p in cli.params for o in (*p.opts, *p.secondary_opts)}
-        for cmd_line in re.findall(r"agentci\s+([a-z-]+)((?:\s+--?[a-zA-Z-]+(?:\s+<[^>]+>|\s+[\w./-]+)?)*)", text):
+        for cmd_line in matches:
             sub, flag_blob = cmd_line
             if sub.startswith("-"):
                 assert sub in group_flags, (
                     f"skill '{skill}': top-level flag '{sub}' not accepted by the CLI group"
                 )
                 continue
-            assert sub in cli.commands, f"skill '{skill}' references unknown command 'agentci {sub}'"
+            assert sub in cli.commands, f"skill '{skill}' references unknown command 'ciagent {sub}'"
             param_names = set()
             for param in cli.commands[sub].params:
                 param_names.update(param.opts + param.secondary_opts)
             for flag in re.findall(r"--?[a-zA-Z][a-zA-Z-]*", flag_blob):
                 assert flag in param_names, (
-                    f"skill '{skill}': 'agentci {sub}' does not accept '{flag}'"
+                    f"skill '{skill}': 'ciagent {sub}' does not accept '{flag}'"
                 )

@@ -12,16 +12,16 @@ from unittest.mock import patch
 
 import pytest
 
-from agentci.baselines import list_baselines, load_baseline, save_baseline
-from agentci.engine.results import LayerResult, LayerStatus
-from agentci.exceptions import BaselineError
-from agentci.models import Span, SpanKind, Trace
-from agentci.schema.spec_models import AgentCISpec, CorrectnessSpec, GoldenQuery
+from ciagent.baselines import list_baselines, load_baseline, save_baseline
+from ciagent.engine.results import LayerResult, LayerStatus
+from ciagent.exceptions import BaselineError
+from ciagent.models import Span, SpanKind, Trace
+from ciagent.schema.spec_models import AgentCISpec, CorrectnessSpec, GoldenQuery
 
 # Force runner module import before any patches.  Without this,
-# patch("agentci.engine.correctness.evaluate_correctness") can cause
+# patch("ciagent.engine.correctness.evaluate_correctness") can cause
 # runner.py's first import to bind the Mock instead of the real function.
-import agentci.engine.runner  # noqa: F401
+import ciagent.engine.runner  # noqa: F401
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -117,7 +117,7 @@ class TestSaveBaseline:
         trace = make_trace()
         spec = make_spec(query="Q")
         with patch(
-            "agentci.engine.correctness.evaluate_correctness",
+            "ciagent.engine.correctness.evaluate_correctness",
             return_value=pass_layer(),
         ):
             path = save_baseline(
@@ -137,7 +137,7 @@ class TestSaveBaseline:
             )],
         )
         with patch(
-            "agentci.engine.correctness.evaluate_correctness",
+            "ciagent.engine.correctness.evaluate_correctness",
             return_value=fail_layer(),
         ):
             with pytest.raises(ValueError, match="Precheck failed"):

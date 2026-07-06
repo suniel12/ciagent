@@ -1,11 +1,11 @@
 """
-Unit tests for agentci.engine.metrics — pure metric functions.
+Unit tests for ciagent.engine.metrics — pure metric functions.
 All tests are deterministic and require no mocks or I/O.
 """
 
 import pytest
 
-from agentci.engine.metrics import (
+from ciagent.engine.metrics import (
     compute_edit_distance_similarity,
     compute_sequence_lcs,
     compute_tool_f1,

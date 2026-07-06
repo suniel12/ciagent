@@ -1,7 +1,7 @@
 """
 Tests for the cost estimator — pre-execution cost estimates.
 """
-from agentci.engine.cost_estimator import estimate_cost, format_estimate
+from ciagent.engine.cost_estimator import estimate_cost, format_estimate
 
 
 class TestEstimateCost:

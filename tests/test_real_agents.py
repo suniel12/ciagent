@@ -12,9 +12,9 @@ import os
 import pytest
 from pathlib import Path
 
-from agentci.config import load_config
-from agentci.runner import TestRunner
-from agentci.models import TestResult
+from ciagent.config import load_config
+from ciagent.runner import TestRunner
+from ciagent.models import TestResult
 
 PROJECT_ROOT = Path(__file__).parent.parent
 

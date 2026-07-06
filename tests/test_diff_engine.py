@@ -1,6 +1,6 @@
 import pytest
-from agentci.models import Trace, Span, ToolCall, SpanKind, DiffType
-from agentci.diff_engine import diff_traces
+from ciagent.models import Trace, Span, ToolCall, SpanKind, DiffType
+from ciagent.diff_engine import diff_traces
 
 def create_trace(
     tool_calls: list[tuple[str, dict]] = None,

@@ -1,8 +1,8 @@
 """
 Tests for the mock runner — synthetic trace generation from spec expectations.
 """
-from agentci.engine.mock_runner import mock_run, run_mock_spec
-from agentci.models import Trace
+from ciagent.engine.mock_runner import mock_run, run_mock_spec
+from ciagent.models import Trace
 
 
 class TestMockRun:
@@ -71,7 +71,7 @@ class TestRunMockSpec:
     """Tests for run_mock_spec()."""
 
     def test_generates_traces_for_all_queries(self):
-        from agentci.schema.spec_models import AgentCISpec, GoldenQuery
+        from ciagent.schema.spec_models import AgentCISpec, GoldenQuery
 
         spec = AgentCISpec(
             agent="test-agent",
@@ -88,7 +88,7 @@ class TestRunMockSpec:
         assert "Goodbye" in traces
 
     def test_all_traces_are_valid(self):
-        from agentci.schema.spec_models import AgentCISpec, GoldenQuery
+        from ciagent.schema.spec_models import AgentCISpec, GoldenQuery
 
         spec = AgentCISpec(
             agent="test-agent",

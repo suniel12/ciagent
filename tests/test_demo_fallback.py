@@ -20,8 +20,8 @@ from importlib.resources import files
 import pytest
 from click.testing import CliRunner
 
-from agentci.cli import cli
-from agentci.loader import load_spec
+from ciagent.cli import cli
+from ciagent.loader import load_spec
 
 MINIMAL_SPEC = """
 agent: local-agent
@@ -47,7 +47,7 @@ def _invoke_isolated(runner, args, env=None):
 
 class TestBundledDemoSpec:
     def test_demo_spec_loads_and_validates(self):
-        path = files("agentci").joinpath("examples", "demo_spec.yaml")
+        path = files("ciagent").joinpath("examples", "demo_spec.yaml")
         spec = load_spec(str(path))
         assert spec.agent == "demo-support-agent"
         # ≥4 queries so the spread style (breaks queries 0-2) leaves the
@@ -57,9 +57,9 @@ class TestBundledDemoSpec:
             assert q.correctness is not None
 
     def test_spread_style_breaks_one_query_per_run(self):
-        from agentci.engine.mock_runner import run_mock_spec
+        from ciagent.engine.mock_runner import run_mock_spec
 
-        path = files("agentci").joinpath("examples", "demo_spec.yaml")
+        path = files("ciagent").joinpath("examples", "demo_spec.yaml")
         spec = load_spec(str(path))
         for run_index in range(3):
             traces = run_mock_spec(
@@ -73,9 +73,9 @@ class TestBundledDemoSpec:
             assert broken == [spec.queries[run_index % 3].query]
 
     def test_alternate_style_unchanged(self):
-        from agentci.engine.mock_runner import run_mock_spec
+        from ciagent.engine.mock_runner import run_mock_spec
 
-        path = files("agentci").joinpath("examples", "demo_spec.yaml")
+        path = files("ciagent").joinpath("examples", "demo_spec.yaml")
         spec = load_spec(str(path))
         traces = run_mock_spec(spec, run_index=1, flaky=True)
         broken = [

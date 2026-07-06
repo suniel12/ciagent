@@ -1,11 +1,11 @@
 import pytest
-import agentci
-from agentci.models import Trace
+import ciagent
+from ciagent.models import Trace
 
 def mock_agent_function(input_text):
     return "Processed: " + input_text
 
-@agentci.test(
+@ciagent.test(
     max_cost_usd=0.01,
     assertions=[{"type": "cost_under", "threshold": 0.01}]
 )
@@ -15,10 +15,10 @@ def test_decorated_agent(agentci_trace):
     result = mock_agent_function("test input")
     assert result == "Processed: test input"
     # Manual span creation to verify trace is active
-    from agentci.models import Span
+    from ciagent.models import Span
     agentci_trace.spans.append(Span(name="manual_span"))
 
-@agentci.test()
+@ciagent.test()
 def test_simple_decorator(agentci_trace):
     """Verify decorator works without arguments."""
     assert agentci_trace is not None
@@ -38,7 +38,7 @@ queries:
     
     # Write a dummy python runner so it doesn't fail import
     pytester.makepyfile(dummy="""
-from agentci.models import Trace
+from ciagent.models import Trace
 def run(query: str):
     return Trace(agent_name="dummy", test_name="t1")
     """)

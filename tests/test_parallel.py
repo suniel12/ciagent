@@ -9,14 +9,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from agentci.engine.parallel import (
+from ciagent.engine.parallel import (
     _run_with_retry,
     resolve_runner,
     run_spec,
     run_spec_parallel,
 )
-from agentci.models import LLMCall, Span, Trace
-from agentci.schema.spec_models import AgentCISpec, GoldenQuery
+from ciagent.models import LLMCall, Span, Trace
+from ciagent.schema.spec_models import AgentCISpec, GoldenQuery
 
 
 # ── Fixtures ────────────────────────────────────────────────────────────────────
@@ -160,7 +160,7 @@ class TestRunSpec:
 
     def test_hard_fail_propagates(self):
         """A correctness failure should appear in the result."""
-        from agentci.schema.spec_models import CorrectnessSpec, GoldenQuery, AgentCISpec
+        from ciagent.schema.spec_models import CorrectnessSpec, GoldenQuery, AgentCISpec
 
         spec = AgentCISpec(
             agent="test-agent",
@@ -241,7 +241,7 @@ class TestRunWithRetryAutoWrap:
         def str_runner(q: str) -> str:
             return "answer"
 
-        with patch("agentci.capture.TraceContext") as mock_ctx_cls:
+        with patch("ciagent.capture.TraceContext") as mock_ctx_cls:
             # Build a fake TraceContext that adds an LLM call to its trace
             fake_trace = Trace(agent_name="test", test_name="q")
             fake_span = Span(name="test")
@@ -268,7 +268,7 @@ class TestRunWithRetryAutoWrap:
         empty_trace = Trace(agent_name="test", test_name="q")
         assert empty_trace.spans == []
 
-        with patch("agentci.capture.TraceContext") as mock_ctx_cls:
+        with patch("ciagent.capture.TraceContext") as mock_ctx_cls:
             ctx_trace = Trace(agent_name="test", test_name="q")
             ctx_span = Span(name="captured")
             ctx_span.llm_calls.append(
@@ -292,7 +292,7 @@ class TestRunWithRetryAutoWrap:
 
     def test_agent_name_passed_to_trace_context(self):
         """agent_name kwarg should be forwarded to TraceContext."""
-        with patch("agentci.capture.TraceContext") as mock_ctx_cls:
+        with patch("ciagent.capture.TraceContext") as mock_ctx_cls:
             fake_trace = Trace(agent_name="my-agent", test_name="q")
             fake_trace.spans.append(Span(name="root"))
             fake_trace.compute_metrics()
@@ -321,7 +321,7 @@ class TestRunWithRetryAutoWrap:
         """run_spec_parallel should pass spec.agent as agent_name to _run_with_retry."""
         spec = _make_spec(["q1"])
 
-        with patch("agentci.engine.parallel._run_with_retry") as mock_retry:
+        with patch("ciagent.engine.parallel._run_with_retry") as mock_retry:
             mock_retry.return_value = _make_trace("q1")
             run_spec_parallel(spec, _sync_runner, max_workers=1)
 

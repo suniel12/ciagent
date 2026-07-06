@@ -4,8 +4,8 @@ Tests for capture.py: TraceContext, attach(), and langgraph_trace().
 import pytest
 from unittest.mock import patch
 
-from agentci.capture import TraceContext, langgraph_trace
-from agentci.models import Trace, Span, LLMCall, SpanKind
+from ciagent.capture import TraceContext, langgraph_trace
+from ciagent.models import Trace, Span, LLMCall, SpanKind
 
 
 class TestTraceContextAttach:
@@ -168,7 +168,7 @@ class TestNestedTraceContext:
     clobber the enclosing context on exit."""
 
     def test_inner_exit_restores_outer_context(self):
-        from agentci.capture import TraceContext, _active_span, _active_trace
+        from ciagent.capture import TraceContext, _active_span, _active_trace
 
         with TraceContext(agent_name="outer") as outer:
             outer_span = _active_span.get()
@@ -184,7 +184,7 @@ class TestNestedTraceContext:
         pytest.importorskip("openai")
         import openai
 
-        from agentci.capture import TraceContext
+        from ciagent.capture import TraceContext
 
         original = openai.resources.chat.completions.Completions.create
         with TraceContext(agent_name="outer"):
@@ -198,7 +198,7 @@ class TestNestedTraceContext:
         assert openai.resources.chat.completions.Completions.create is original
 
     def test_patch_depth_recovers_after_exception(self):
-        from agentci.capture import TraceContext, _patch_depth
+        from ciagent.capture import TraceContext, _patch_depth
 
         with pytest.raises(RuntimeError):
             with TraceContext(agent_name="outer"):

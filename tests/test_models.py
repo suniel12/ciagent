@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from agentci.models import Span, SpanKind, Trace, ToolCall
+from ciagent.models import Span, SpanKind, Trace, ToolCall
 
 
 def test_trace_initialization():
