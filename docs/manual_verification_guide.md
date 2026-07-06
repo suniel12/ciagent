@@ -28,7 +28,7 @@ Since CIAgent is a CI tool, the ultimate test is running it in a real GitHub Act
     ```bash
     mkdir -p .github/workflows
     # Copy the template we just created
-    cp /path/to/AgentCI/.github/workflows/agentci-template.yml .github/workflows/agentci.yml
+    cp /path/to/ciagent/.github/workflows/agentci-template.yml .github/workflows/agentci.yml
     ```
 
 4.  **Update `agentci.yml` dependency**:
@@ -40,7 +40,7 @@ Since CIAgent is a CI tool, the ultimate test is running it in a real GitHub Act
       run: |
         pip install --upgrade pip
         # For testing, install directly from the main branch of your fork/repo
-        # pip install git+https://github.com/YOUR_USERNAME/AgentCI.git@main
+        # pip install git+https://github.com/YOUR_USERNAME/ciagent.git@main
         
         # OR if you just want to test that the workflow runs (it will fail to install ciagent if not on PyPI)
         # You can comment out the install step and just echo "Installing..."
