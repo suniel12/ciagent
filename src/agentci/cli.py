@@ -1746,8 +1746,13 @@ from collections import defaultdict
 @click.option('--ci', is_flag=True, help='CI mode: exit code 1 on any failure')
 @click.option('--json', 'output_json', is_flag=True, help='Output results as JSON (for agent consumption)')
 def run(suite, runs, tag, diff, html, fail_on_cost, ci, output_json):
-    """Execute the test suite."""
+    """Execute the test suite. (DEPRECATED — use 'agentci test')"""
     if not output_json:
+        console.print(
+            "[yellow]DEPRECATED:[/] 'agentci run' is the legacy suite runner and will "
+            "be removed in 0.9.0. Use [cyan]agentci test[/] "
+            "(and [cyan]agentci test --runs N[/] for stability) instead.\n"
+        )
         console.print(f"[bold blue]Agent CI[/] Running suite: [cyan]{suite}[/]")
 
     try:

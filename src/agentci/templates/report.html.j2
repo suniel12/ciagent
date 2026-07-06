@@ -130,14 +130,13 @@
     <p>{{ stability.flipped_queries|length }}/{{ stability.total_queries }} queries flipped verdicts across runs:</p>
     <table style="width:100%; border-collapse:collapse; font-size:0.85rem">
       <tr style="text-align:left; color:var(--muted)">
-        <th style="padding:0.3rem">Query</th><th>Verdicts</th><th>Pass rate</th><th>pass^k</th><th>Source</th>
+        <th style="padding:0.3rem">Query</th><th>Verdicts</th><th>Pass rate</th><th>Source</th>
       </tr>
       {% for q in stability.flipped_queries %}
       <tr>
-        <td style="padding:0.3rem">{{ q.query[:70] }}</td>
+        <td style="padding:0.3rem">{{ q.query[:70] }}{% if q.partial %} <em>({{ q.runs }}/{{ q.expected_runs }} runs)</em>{% endif %}</td>
         <td>{{ q.verdict_string }}</td>
         <td>{{ "%.2f"|format(q.pass_rate) }}</td>
-        <td>{{ "%.2f"|format(q.pass_pow_k) }}</td>
         <td>{{ q.flip_source.value if q.flip_source else "—" }} ({{ q.flip_reason }})</td>
       </tr>
       {% endfor %}

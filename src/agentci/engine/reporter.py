@@ -211,6 +211,12 @@ def emit_stability_console(report: "StabilityReport") -> None:
     scores = "  /  ".join(f"{s:.0%}" for s in report.per_run_scores)
     print(f"Suite score across {report.runs} runs: {scores}")
 
+    if report.duplicate_queries:
+        print(f"\n⚠️  {len(report.duplicate_queries)} duplicate query text(s) in the spec "
+              f"— their runs merge into one record each:")
+        for text in report.duplicate_queries:
+            print(f"   • {_short(text, 70)}")
+
     if report.is_stable:
         print(f"\n✅ STABLE — all {report.total_queries} queries returned the same "
               f"verdict in every run")
@@ -220,18 +226,29 @@ def emit_stability_console(report: "StabilityReport") -> None:
               f"verdicts across runs:")
         for q in flipped:
             label = q.flip_source.value if q.flip_source else "unknown"
+            partial = f"  [partial: {q.runs}/{q.expected_runs} runs]" if q.partial else ""
             print(
                 f"   {_short(q.query, 44):<46} {q.verdict_string}  "
-                f"pass_rate={q.pass_rate:.2f}  pass^{q.runs}={q.pass_pow_k:.2f}  "
-                f"source: {label} ({q.flip_reason})"
+                f"pass_rate={q.pass_rate:.2f}  "
+                f"source: {label} ({q.flip_reason}){partial}"
             )
-        agent_side = sum(1 for q in flipped if q.flip_source == _flip_agent())
-        judge_side = sum(1 for q in flipped if q.flip_source == _flip_judge())
-        mixed = len(flipped) - agent_side - judge_side
+        from agentci.engine.stability import FlipSource
+        agent_side = sum(1 for q in flipped if q.flip_source == FlipSource.AGENT_VARIANCE)
+        judge_side = sum(1 for q in flipped if q.flip_source == FlipSource.JUDGE_FLAKE)
+        infra = sum(1 for q in flipped if q.flip_source == FlipSource.INFRA_ERROR)
+        mixed = len(flipped) - agent_side - judge_side - infra
         print(
             f"\n   Flip sources: {agent_side} agent-variance (fix the agent) │ "
-            f"{judge_side} judge-flake (fix the eval) │ {mixed} mixed"
+            f"{judge_side} judge-flake (fix the eval) │ "
+            f"{infra} infra-error (retry) │ {mixed} mixed"
         )
+
+    stable_partials = [q for q in report.partial_queries if not q.flipped]
+    if stable_partials:
+        print(f"\n⚠️  {len(stable_partials)} query(ies) missing from some runs "
+              f"(runner failures) — verdicts aggregate over fewer runs:")
+        for q in stable_partials:
+            print(f"   • {_short(q.query, 60)} [{q.runs}/{q.expected_runs} runs]")
 
     if report.consistent_failures:
         print(f"\n❌ {len(report.consistent_failures)} query(ies) failed in EVERY run "
@@ -240,16 +257,6 @@ def emit_stability_console(report: "StabilityReport") -> None:
             print(f"   • {_short(q.query, 70)}")
 
     print(f"\nStability verdict: {report.verdict}")
-
-
-def _flip_agent():
-    from agentci.engine.stability import FlipSource
-    return FlipSource.AGENT_VARIANCE
-
-
-def _flip_judge():
-    from agentci.engine.stability import FlipSource
-    return FlipSource.JUDGE_FLAKE
 
 
 def _short(text: str, max_len: int) -> str:
@@ -493,13 +500,21 @@ def _serialize_stability(report: "StabilityReport") -> dict[str, Any]:
         "per_run_scores": report.per_run_scores,
         "flipped": len(report.flipped_queries),
         "consistent_failures": len(report.consistent_failures),
+        "duplicate_queries": report.duplicate_queries,
+        # pass@k / pass^k are ESTIMATES computed from the observed pass rate with
+        # k = observed runs — at small k they restate the pass rate, which is why
+        # the console shows observed facts only and estimates live here, labeled.
+        "estimate_note": "pass_at_k/pass_pow_k are estimates from observed pass_rate with k=runs",
         "queries": [
             {
                 "query": q.query,
                 "verdicts": q.verdicts,
+                "runs": q.runs,
+                "expected_runs": q.expected_runs,
+                "partial": q.partial,
                 "pass_rate": round(q.pass_rate, 3),
-                "pass_at_k": q.pass_at_k,
-                "pass_pow_k": q.pass_pow_k,
+                "pass_at_k_estimate": q.pass_at_k,
+                "pass_pow_k_estimate": q.pass_pow_k,
                 "flipped": q.flipped,
                 "flip_source": q.flip_source.value if q.flip_source else None,
                 "flip_reason": q.flip_reason or None,

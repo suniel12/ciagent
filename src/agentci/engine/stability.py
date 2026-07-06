@@ -41,7 +41,8 @@ SIMILARITY_AMBIGUITY_THRESHOLD = 0.9
 class FlipSource(str, Enum):
     """Why a query's verdict flipped across runs."""
     AGENT_VARIANCE = "agent-variance"  # agent output changed → fix the agent
-    JUDGE_FLAKE = "judge-flake"        # same output, judge verdict changed → fix the eval
+    JUDGE_FLAKE = "judge-flake"        # same output/checks, judge verdict changed → fix the eval
+    INFRA_ERROR = "infra-error"        # a judge call errored → fix nothing, retry
     MIXED = "mixed"                    # near-identical paraphrase + judge → ambiguous
 
 
@@ -55,10 +56,17 @@ class QueryStability:
     answer_similarity: float = 1.0          # min pairwise similarity of normalized answers
     cost_usd: list[float] = field(default_factory=list)
     latency_ms: list[float] = field(default_factory=list)
+    expected_runs: int = 0                  # session run count; < means partial aggregation
 
     @property
     def runs(self) -> int:
         return len(self.verdicts)
+
+    @property
+    def partial(self) -> bool:
+        """The query is missing from at least one run (runner failure) —
+        its verdicts aggregate over fewer runs than the session ran."""
+        return 0 < self.runs < self.expected_runs
 
     @property
     def flipped(self) -> bool:
@@ -97,6 +105,11 @@ class StabilityReport:
     per_run_passed: list[int]               # passed count per run
     total_queries: int
     queries: list[QueryStability]
+    duplicate_queries: list[str] = field(default_factory=list)  # texts appearing >1× in spec
+
+    @property
+    def partial_queries(self) -> list[QueryStability]:
+        return [q for q in self.queries if q.partial]
 
     @property
     def flipped_queries(self) -> list[QueryStability]:
@@ -138,6 +151,15 @@ def build_stability_report(
     runs = len(run_results)
     query_specs = {q.query: q for q in spec.queries}
 
+    # Duplicate query texts collapse into one record when grouping by text —
+    # surface that instead of hiding it.
+    seen: set[str] = set()
+    duplicates: list[str] = []
+    for q in spec.queries:
+        if q.query in seen and q.query not in duplicates:
+            duplicates.append(q.query)
+        seen.add(q.query)
+
     # Group results by query text, preserving spec order
     grouped: dict[str, list[QueryResult]] = {q.query: [] for q in spec.queries}
     for results in run_results:
@@ -148,7 +170,9 @@ def build_stability_report(
     for query_text, results in grouped.items():
         if not results:
             continue
-        qs = _build_query_stability(query_text, results, query_specs.get(query_text))
+        qs = _build_query_stability(
+            query_text, results, query_specs.get(query_text), expected_runs=runs,
+        )
         stabilities.append(qs)
 
     per_run_passed = [
@@ -160,6 +184,7 @@ def build_stability_report(
         per_run_passed=per_run_passed,
         total_queries=len(query_specs),
         queries=stabilities,
+        duplicate_queries=duplicates,
     )
 
 
@@ -170,6 +195,7 @@ def _build_query_stability(
     query_text: str,
     results: list[QueryResult],
     query_spec: Optional["GoldenQuery"],
+    expected_runs: int = 0,
 ) -> QueryStability:
     verdicts = [not r.hard_fail for r in results]
     answers = [_normalize_answer(_answer_of(r)) for r in results]
@@ -180,6 +206,7 @@ def _build_query_stability(
         verdicts=verdicts,
         cost_usd=[_trace_attr(r, "total_cost_usd") for r in results],
         latency_ms=[_trace_attr(r, "total_duration_ms") for r in results],
+        expected_runs=expected_runs or len(results),
     )
     qs.answer_similarity = _min_pairwise_similarity(answers)
 
@@ -191,6 +218,9 @@ def _build_query_stability(
         tool_seqs=tool_seqs,
         similarity=qs.answer_similarity,
         has_judge=_query_has_judge(query_spec),
+        det_signatures=[_det_signature(r) for r in results],
+        judge_verdicts=[_judge_verdict_of(r) for r in results],
+        judge_errored=[_judge_errored(r) for r in results],
     )
     return qs
 
@@ -200,13 +230,41 @@ def _attribute_flip(
     tool_seqs: list[tuple[str, ...]],
     similarity: float,
     has_judge: bool,
+    det_signatures: list[tuple],
+    judge_verdicts: list[Optional[bool]],
+    judge_errored: list[bool],
 ) -> tuple[FlipSource, str]:
-    """Attribute a verdict flip to the agent or the evaluation.
+    """Attribute a verdict flip to the agent, the evaluation, or infrastructure.
 
-    Deterministic layers evaluate the answer string and tool sequence, so on
-    identical output they return identical verdicts by construction — a flip
-    on identical output can only come from the LLM judge.
+    Discriminator order (most reliable signal first):
+      1. A judge call errored in any run → infra-error. A transient API failure
+         counts as a fail in the verdict, and must never read as "fix your rubric".
+      2. Per-layer sub-verdicts: if every deterministic check returned the same
+         outcome across runs but the judge's verdict changed, the flip is the
+         judge's — regardless of how much the answer text was paraphrased.
+      3. Identical output (answer + tool sequence) → judge-flake by construction:
+         deterministic layers cannot flip on identical input.
+      4. Tool sequence changed → agent-variance.
+      5. Deterministic check outcomes changed → the output change caused the flip:
+         agent-variance.
+      6. Near-identical paraphrase with a judge configured → mixed (never guess).
     """
+    if any(judge_errored):
+        return (
+            FlipSource.INFRA_ERROR,
+            "a judge call errored during at least one run — retry before trusting this flip",
+        )
+
+    det_flipped = len(set(det_signatures)) > 1
+    judge_present = any(v is not None for v in judge_verdicts)
+    judge_flipped = judge_present and len({v for v in judge_verdicts if v is not None}) > 1
+
+    if not det_flipped and judge_flipped:
+        return (
+            FlipSource.JUDGE_FLAKE,
+            "deterministic checks agreed across runs; the judge changed its verdict",
+        )
+
     identical_answers = len(set(answers)) == 1
     identical_tools = len(set(tool_seqs)) == 1
 
@@ -215,6 +273,9 @@ def _attribute_flip(
 
     if not identical_tools:
         return FlipSource.AGENT_VARIANCE, "tool sequence changed"
+
+    if det_flipped:
+        return FlipSource.AGENT_VARIANCE, "answer changed, deterministic check outcome changed"
 
     if similarity >= SIMILARITY_AMBIGUITY_THRESHOLD and has_judge:
         # A near-identical paraphrase could flip either a judge or a keyword
@@ -225,6 +286,49 @@ def _attribute_flip(
         )
 
     return FlipSource.AGENT_VARIANCE, "answer changed"
+
+
+# Deterministic correctness checks and where their outcome lives in
+# LayerResult.details — the per-layer signature compared across runs.
+_DET_DETAIL_KEYS = (
+    ("expected_in_answer", "all_found"),
+    ("any_expected_in_answer", "any_found"),
+    ("not_in_answer", "none_found"),
+    ("exact_match", "matched"),
+    ("regex_match", "matched"),
+    ("json_schema", "valid"),
+)
+
+
+def _det_signature(r: QueryResult) -> tuple:
+    """Outcomes of every deterministic correctness check for one run."""
+    d = r.correctness.details or {}
+    sig = []
+    for key, outcome_field in _DET_DETAIL_KEYS:
+        entry = d.get(key)
+        sig.append(entry.get(outcome_field) if isinstance(entry, dict) else None)
+    return tuple(sig)
+
+
+def _judge_entries(r: QueryResult) -> list[dict]:
+    d = r.correctness.details or {}
+    entries = [v for k, v in d.items() if k.startswith("judge_") and isinstance(v, dict)]
+    for k in ("safety", "hallucination"):
+        if isinstance(d.get(k), dict):
+            entries.append(d[k])
+    return entries
+
+
+def _judge_verdict_of(r: QueryResult) -> Optional[bool]:
+    """Aggregate judge verdict for one run (None = no judge ran)."""
+    entries = _judge_entries(r)
+    if not entries:
+        return None
+    return all(e.get("passed", False) for e in entries)
+
+
+def _judge_errored(r: QueryResult) -> bool:
+    return any(e.get("error") for e in _judge_entries(r))
 
 
 def _query_has_judge(query_spec: Optional["GoldenQuery"]) -> bool:

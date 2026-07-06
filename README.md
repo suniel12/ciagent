@@ -106,19 +106,22 @@ Stability Report
 Suite score across 3 runs: 95%  /  95%  /  95%
 
 ⚠️  FLAKY — 2/19 queries flipped verdicts across runs:
-   "What's your return window?"    ✅❌✅  pass_rate=0.67  pass^3=0.30  source: agent-variance (answer changed)
-   "Do you sell gift cards?"       ❌✅✅  pass_rate=0.67  pass^3=0.30  source: judge-flake (same answer, verdict flipped)
+   "What's your return window?"    ✅❌✅  pass_rate=0.67  source: agent-variance (answer changed)
+   "Do you sell gift cards?"       ❌✅✅  pass_rate=0.67  source: judge-flake (same answer, verdict flipped)
 
-   Flip sources: 1 agent-variance (fix the agent) │ 1 judge-flake (fix the eval) │ 0 mixed
+   Flip sources: 1 agent-variance (fix the agent) │ 1 judge-flake (fix the eval) │ 0 infra-error (retry) │ 0 mixed
 
 Stability verdict: FLAKY
 ```
 
 Every flip is attributed to its source, so it's a routed work item, not a scary number:
 **agent-variance** means the agent produced different output (fix the prompt, retrieval, or
-temperature); **judge-flake** means the output was identical but the LLM judge changed its
-mind (fix the rubric — or replace the judge with a deterministic check). Attribution is
-structural, not guessed: deterministic checks cannot flip on identical output.
+temperature); **judge-flake** means the output — or every deterministic check's outcome —
+was identical but the LLM judge changed its mind (fix the rubric, or replace the judge with
+a deterministic check); **infra-error** means a judge API call failed (retry, fix nothing).
+Attribution is structural, not guessed: deterministic checks cannot flip on identical
+output, and per-layer sub-verdicts are compared across runs. The console shows observed
+facts; pass@k/pass^k estimates live in the JSON output, labeled as estimates.
 
 Flaky-but-passing exits 0 so adoption won't break your CI; add `--fail-on-flaky` when
 you're ready to gate on it. Try it with zero API keys:

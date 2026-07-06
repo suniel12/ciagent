@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed — stability report hardening (pre-launch fixes from eng review)
+- **Flip attribution now compares per-layer sub-verdicts first**: if every
+  deterministic check returned the same outcome across runs and only the LLM judge's
+  verdict changed, the flip is `judge-flake` even when the answer text was
+  paraphrased (previously mislabeled `agent-variance`)
+- **New flip source `infra-error`**: a judge API failure counted as a fail no longer
+  reads as `judge-flake` — one transient hiccup must not say "fix your rubric"
+- **Console shows observed facts only** (verdict history + pass rate); pass@k /
+  pass^k move to JSON output as clearly labeled estimates (at small k they restate
+  the pass rate)
+- Duplicate query texts in a spec are flagged (they merge into one stability
+  record); queries missing from some runs are marked `partial (k/N runs)`
+- `agentci run` (legacy suite runner) now prints a deprecation warning pointing at
+  `agentci test`; removal planned for 0.9.0
+- Removed stale `src/agentci/_version.py` (said 0.1.0; version comes from package
+  metadata)
+
 ## [0.7.0] - 2026-07-05
 
 ### Added

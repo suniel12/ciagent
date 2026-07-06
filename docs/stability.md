@@ -19,13 +19,13 @@ Per query:
 
 - **Verdict history** — `✅❌✅` across runs
 - **pass rate** — observed fraction of passing runs
-- **pass@k** — estimated probability of ≥1 pass in k trials (use when one
-  success matters, e.g. retry-able workflows)
-- **pass^k** — estimated probability that all k trials pass (use for
-  consistency-critical, customer-facing systems). These diverge as k grows —
-  a query with pass rate 0.67 has pass@3 ≈ 0.96 but pass^3 ≈ 0.30.
 - **Flip source** — see below
-- Cost and latency per run (JSON output)
+- Partial-aggregation flag when a query is missing from some runs (runner
+  failures), and a warning when duplicate query texts merge into one record
+- In **JSON output only**: pass@k / pass^k *estimates* (probability of ≥1 pass /
+  all passes in k trials, computed from the observed pass rate with k = runs),
+  plus cost and latency per run. They live in JSON, explicitly labeled, because
+  at small k they restate the pass rate — the console shows observed facts only.
 
 Suite-level: score per run side by side, flip counts by source, and a
 `STABLE` / `FLAKY` verdict.
@@ -36,14 +36,17 @@ A verdict flips for one of two reasons, and they demand different fixes:
 
 | Source | What happened | Where the fix lives |
 |--------|---------------|---------------------|
-| `agent-variance` | The agent produced different output (answer or tool sequence changed) | The agent: prompt, retrieval, temperature |
-| `judge-flake` | Output identical across runs, but the LLM judge's verdict changed | The eval: rubric, judge model — or replace the judge with a deterministic check |
-| `mixed` | Near-identical paraphrases (similarity ≥ 0.9) with a judge configured | Ambiguous — AgentCI does not guess |
+| `agent-variance` | The agent produced different output (answer, tool sequence, or a deterministic check's outcome changed) | The agent: prompt, retrieval, temperature |
+| `judge-flake` | Every deterministic check agreed across runs — or the output was identical — but the LLM judge's verdict changed | The eval: rubric, judge model — or replace the judge with a deterministic check |
+| `infra-error` | A judge API call errored during at least one run (an errored call counts as a fail in the verdict) | Nothing — retry before trusting the flip |
+| `mixed` | Near-identical paraphrases (similarity ≥ 0.9) with a judge configured and no clearer signal | Ambiguous — AgentCI does not guess |
 
-Attribution is structural, not heuristic: deterministic checks evaluate the
-answer string and tool sequence, so on identical output they return identical
-verdicts *by construction*. A flip on identical output can only have come
-from the judge.
+Attribution is structural, not heuristic, and checks signals in reliability
+order: judge errors first, then per-layer sub-verdicts (if deterministic checks
+returned identical outcomes across runs and only the judge's verdict changed,
+the flip is the judge's — regardless of answer paraphrase), then output
+identity: deterministic checks cannot flip on identical output *by
+construction*.
 
 Answers are normalized (whitespace, casing) before comparison so formatting
 noise doesn't read as agent variance.
