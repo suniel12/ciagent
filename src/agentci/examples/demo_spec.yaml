@@ -1,16 +1,16 @@
-# AgentCI bundled demo spec — SYNTHETIC DATA ONLY.
+# CIAgent bundled demo spec — SYNTHETIC DATA ONLY.
 #
 # This spec backs the zero-API-key demo:
 #
 #     uvx ciagent test --mock --runs 3
 #
-# When `agentci test --mock` runs with no agentci_spec.yaml in the working
+# When `ciagent test --mock` runs with no agentci_spec.yaml in the working
 # directory, the CLI falls back to this file. Traces are synthesized by the
 # mock runner; in multi-run demo sessions a deterministic pseudo-flaky agent
 # is simulated so the stability report shows verdict flips with
 # flip-source attribution. Nothing here touches a real agent or API.
 #
-# To test your own agent instead: `agentci init`
+# To test your own agent instead: `ciagent init`
 
 version: 1
 agent: demo-support-agent

@@ -5,7 +5,7 @@ from agentci.models import ToolCall
 def run_agent(input_text: str):
     """
     A specific "mock" agent that simulates tool calls based on input keywords.
-    This allows us to test the AgentCI framework without a real LLM.
+    This allows us to test the CIAgent framework without a real LLM.
     """
     span = _active_span.get()
     

@@ -6,7 +6,7 @@ summarize articles. Supports both mock mode (default) and live API mode.
 
 Mock mode (default): Patches the Anthropic client's create method to return
 canned responses with tool_use content blocks. The call still flows through
-the Anthropic client path, so AgentCI's capture.py can intercept and record.
+the Anthropic client path, so CIAgent's capture.py can intercept and record.
 
 Live mode: Set AGENTCI_LIVE=1 and ANTHROPIC_API_KEY to use real Claude API.
 """

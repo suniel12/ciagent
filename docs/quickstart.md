@@ -17,7 +17,7 @@ that takes a query string and returns a response:
 agent: my-agent
 runner: my_app.agent:run_for_agentci
 queries:
-  - query: "How do I install AgentCI?"
+  - query: "How do I install CIAgent?"
     correctness:
       any_expected_in_answer: ["pip install", "ciagent"]
     path:
@@ -29,7 +29,7 @@ queries:
 Don't have queries yet? Generate a starter spec from your codebase:
 
 ```bash
-agentci init --generate
+ciagent init --generate
 ```
 
 ## 3. Validate with zero cost
@@ -37,13 +37,13 @@ agentci init --generate
 Mock mode runs your whole spec against synthetic traces — no API keys, no spend:
 
 ```bash
-agentci test --mock
+ciagent test --mock
 ```
 
 ## 4. Run live
 
 ```bash
-agentci test
+ciagent test
 ```
 
 Each query is evaluated through three layers: **correctness** (deterministic
@@ -52,7 +52,7 @@ tools, loop detection), and **cost** (LLM calls, tokens, dollars).
 
 ## 5. Next steps
 
-- `agentci calibrate` — measure your agent's real metrics and auto-tune spec budgets
-- `agentci init` — generate a GitHub Actions workflow ([CI/CD guide](ci-cd.md))
-- `agentci doctor` — health-check your setup
+- `ciagent calibrate` — measure your agent's real metrics and auto-tune spec budgets
+- `ciagent init` — generate a GitHub Actions workflow ([CI/CD guide](ci-cd.md))
+- `ciagent doctor` — health-check your setup
 - [Writing tests](writing-tests.md) — the full spec reference

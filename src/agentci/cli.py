@@ -1,15 +1,15 @@
 # Copyright 2025-2026 The AgentCI Authors
 # SPDX-License-Identifier: Apache-2.0
 """
-Agent CI Command Line Interface.
+CIAgent Command Line Interface.
 
 Commands:
-  agentci init          Scaffold a new test suite
-  agentci run           Execute test suite
-  agentci run --runs N  Statistical mode (run N times)
-  agentci record        Run agent live, save golden trace
-  agentci diff          Compare latest run against golden
-  agentci report        Generate HTML report from last run
+  ciagent init          Scaffold a new test suite
+  ciagent run           Execute test suite
+  ciagent run --runs N  Statistical mode (run N times)
+  ciagent record        Run agent live, save golden trace
+  ciagent diff          Compare latest run against golden
+  ciagent report        Generate HTML report from last run
 """
 from __future__ import annotations
 
@@ -47,7 +47,7 @@ except Exception:
     __version__ = "0.0.0"
 
 
-# ── agentci init --generate helpers ───────────────────────────────────────────
+# ── ciagent init --generate helpers ───────────────────────────────────────────
 
 _AGENT_KEYWORDS = [
     "@tool", "def retrieve", "def run", "SystemMessage",
@@ -382,7 +382,7 @@ def _build_golden_queries(pairs: list[dict]) -> list[dict]:
 
 _RUNNER_FN_NAMES = {"run_for_agentci", "run_agent", "run_for_agent", "run"}
 _RUNNER_BODY_HINTS = (
-    # Existing: explicit AgentCI trace usage
+    # Existing: explicit CIAgent trace usage
     "ctx.trace", "-> Trace", "TraceContext", "langgraph_trace",
     # Functions that call LLM APIs (auto-wrapped by TraceContext in parallel.py)
     "client.messages.create", "client.chat.completions.create",
@@ -557,11 +557,11 @@ def _generate_runner_file(
     # Generate the runner file
     if sdk == "anthropic":
         runner_code = (
-            '"""Auto-generated AgentCI runner.\n'
-            'Created by: agentci init --generate\n'
+            '"""Auto-generated CIAgent runner.\n'
+            'Created by: ciagent init --generate\n'
             '\n'
             'This runner wraps your agent\'s tools using the Anthropic SDK.\n'
-            'AgentCI automatically captures all LLM calls and tool invocations\n'
+            'CIAgent automatically captures all LLM calls and tool invocations\n'
             'via monkey-patching — just return the final answer as a string.\n'
             '\n'
             'Edit the tool implementations in execute_tool() to match your agent\'s logic.\n'
@@ -585,7 +585,7 @@ def _generate_runner_file(
             f'{tool_impl_code}\n'
             '\n'
             'def run_agent(query: str) -> str:\n'
-            '    """AgentCI runner entry point. Returns the agent\'s final answer."""\n'
+            '    """CIAgent runner entry point. Returns the agent\'s final answer."""\n'
             '    client = anthropic.Anthropic()\n'
             '    messages = [{"role": "user", "content": query}]\n'
             '\n'
@@ -621,8 +621,8 @@ def _generate_runner_file(
         )
     elif sdk == "openai":
         runner_code = (
-            '"""Auto-generated AgentCI runner.\n'
-            'Created by: agentci init --generate\n'
+            '"""Auto-generated CIAgent runner.\n'
+            'Created by: ciagent init --generate\n'
             '"""\n'
             'import os\n'
             'import json\n'
@@ -639,7 +639,7 @@ def _generate_runner_file(
             f'{tool_impl_code}\n'
             '\n'
             'def run_agent(query: str) -> str:\n'
-            '    """AgentCI runner entry point. Returns the agent\'s final answer."""\n'
+            '    """CIAgent runner entry point. Returns the agent\'s final answer."""\n'
             '    client = openai.OpenAI()\n'
             '    messages = [{"role": "user", "content": query}]\n'
             '\n'
@@ -789,14 +789,14 @@ def _build_next_steps(run_mode: str, created_workflow: bool, has_queries: bool) 
 
     if run_mode == "mock":
         n = len(steps) + 1
-        steps.append(f"{n}. Run [cyan]agentci test --mock[/] to validate your spec")
+        steps.append(f"{n}. Run [cyan]ciagent test --mock[/] to validate your spec")
     else:
         n = len(steps) + 1
-        steps.append(f"{n}. Run [cyan]agentci test[/] to execute live tests")
+        steps.append(f"{n}. Run [cyan]ciagent test[/] to execute live tests")
 
     n = len(steps) + 1
     steps.append(
-        f"{n}. Run [cyan]agentci generate-checks[/] to mine deterministic "
+        f"{n}. Run [cyan]ciagent generate-checks[/] to mine deterministic "
         f"fact checks from your knowledge base"
     )
 
@@ -888,7 +888,7 @@ def _generate_queries(context: dict, runner_path: str, interview: dict | None = 
         )
 
     prompt = f"""You are an expert AI agent test engineer. Given the following agent project context,
-generate a diverse set of test queries for AgentCI's agentci_spec.yaml.
+generate a diverse set of test queries for CIAgent's agentci_spec.yaml.
 
 {interview_section}
 
@@ -970,14 +970,14 @@ GOOD (accepts partial knowledge):
   threshold: 0.7
 
 BAD (requires specific phrasing):
-  rule: "The agent must state it is an AgentCI documentation assistant and
+  rule: "The agent must state it is a CIAgent documentation assistant and
         list its exact capabilities."
   threshold: 0.85
 
 GOOD (evaluates helpfulness):
   rule: "The agent should respond with a friendly greeting and indicate
-        readiness to help with AgentCI questions. It should not fabricate
-        any AgentCI facts unprompted."
+        readiness to help with CIAgent questions. It should not fabricate
+        any CIAgent facts unprompted."
   threshold: 0.7
 
 6. DOC-GROUNDED JUDGING (context_file):
@@ -1147,9 +1147,9 @@ def _calibrate_spec_from_traces(
 
 
 @click.group()
-@click.version_option(version=__version__, prog_name="agentci")
+@click.version_option(version=__version__, prog_name="ciagent")
 def cli():
-    """Agent CI — Continuous Integration for AI Agents"""
+    """CIAgent — Continuous Integration for AI Agents"""
     # Suppress noisy Python warnings (Pydantic serializer, deprecations, etc.)
     import warnings
     warnings.filterwarnings("ignore")
@@ -1187,7 +1187,7 @@ def cli():
 @click.option('--runner', default=None,
               help='Runner import path (e.g. myagent.run:run_agent). Skips prompt.')
 def init(hook, force, example, generate, agent_description, kb_path, run_mode, golden_file, runner):
-    """Scaffold a new AgentCI test suite and CI/CD pipeline."""
+    """Scaffold a new CIAgent test suite and CI/CD pipeline."""
     import jinja2
     from rich.prompt import Prompt
     from pathlib import Path
@@ -1210,7 +1210,7 @@ def init(hook, force, example, generate, agent_description, kb_path, run_mode, g
     if spec_dest.exists() and not force:
         console.print(f"[yellow]Skipped:[/] {spec_dest} already exists. Use --force to overwrite.")
     else:
-        console.print("\n[bold green]AgentCI Setup[/]")
+        console.print("\n[bold green]CIAgent Setup[/]")
 
         has_queries = False
 
@@ -1259,8 +1259,8 @@ def init(hook, force, example, generate, agent_description, kb_path, run_mode, g
                         "\n[bold red]Error:[/] Live mode requires ANTHROPIC_API_KEY or OPENAI_API_KEY.\n"
                         "Options:\n"
                         "  1. Set an API key and retry\n"
-                        "  2. Use [cyan]agentci init --generate --mode mock[/]\n"
-                        "  3. Use [cyan]agentci init --example[/] for a static template"
+                        "  2. Use [cyan]ciagent init --generate --mode mock[/]\n"
+                        "  3. Use [cyan]ciagent init --example[/] for a static template"
                     )
                     sys.exit(1)
 
@@ -1578,7 +1578,7 @@ queries:
             content = template.render(**template_data)
         except Exception as e:
             console.print(f"[yellow]Warning:[/] Could not load Jinja template ({e}). Using fallback.")
-            content = f"# Scaffolded by AgentCI\n# Test Path: {test_path}\n# Deps: {dependency_file}\n"
+            content = f"# Scaffolded by CIAgent\n# Test Path: {test_path}\n# Deps: {dependency_file}\n"
 
         with open(github_action_dest, "w") as f:
             f.write(content)
@@ -1615,7 +1615,7 @@ queries:
     except NameError:
         _has_queries = True
     next_steps = _build_next_steps(_run_mode, created_workflow, _has_queries)
-    console.print("\n[bold green]AgentCI Initialization Complete![/]")
+    console.print("\n[bold green]CIAgent Initialization Complete![/]")
     console.print("\n[bold]Next Steps:[/]")
     for step in next_steps:
         console.print(step)
@@ -1634,7 +1634,7 @@ def bootstrap(queries, agent, runner, output, baseline_dir, yes):
     """Zero-to-Golden bootstrapper: run queries, record golden baselines, write a spec.
 
     The runner may return an agentci.models.Trace or a plain string — string
-    returns get automatic LLM/tool capture, same as `agentci test`.
+    returns get automatic LLM/tool capture, same as `ciagent test`.
     """
     import yaml
     import json
@@ -1689,7 +1689,7 @@ def bootstrap(queries, agent, runner, output, baseline_dir, yes):
     for i, q in enumerate(query_list):
         console.print(f"\n[bold cyan]Running Query {i+1}/{len(query_list)}:[/] {q}")
         try:
-            # Same execution path as `agentci test`: TraceContext capture plus
+            # Same execution path as `ciagent test`: TraceContext capture plus
             # coercion, so string-returning runners work here too.
             trace = _run_with_retry(runner_fn, q, retry_count=0, backoff=1.0, agent_name=agent)
             if trace is None:
@@ -1751,7 +1751,7 @@ def bootstrap(queries, agent, runner, output, baseline_dir, yes):
         with open(output, "w") as f:
             yaml.dump(spec_dict, f, sort_keys=False)
         console.print(f"\n[bold green]Bootstrap complete![/] Spec saved to {output}")
-        console.print("Run [cyan]agentci test[/] to verify.")
+        console.print("Run [cyan]ciagent test[/] to verify.")
 
 
 from collections import defaultdict
@@ -1765,12 +1765,12 @@ from collections import defaultdict
 @click.option('--ci', is_flag=True, help='CI mode: exit code 1 on any failure')
 @click.option('--json', 'output_json', is_flag=True, help='Output results as JSON (for agent consumption)')
 def run(suite, runs, tag, diff, html, fail_on_cost, ci, output_json):
-    """Execute the test suite. (DEPRECATED — use 'agentci test')"""
+    """Execute the test suite. (DEPRECATED — use 'ciagent test')"""
     if not output_json:
         console.print(
-            "[yellow]DEPRECATED:[/] 'agentci run' is the legacy suite runner and will "
-            "be removed in 0.9.0. Use [cyan]agentci test[/] "
-            "(and [cyan]agentci test --runs N[/] for stability) instead.\n"
+            "[yellow]DEPRECATED:[/] 'ciagent run' is the legacy suite runner and will "
+            "be removed in 0.9.0. Use [cyan]ciagent test[/] "
+            "(and [cyan]ciagent test --runs N[/] for stability) instead.\n"
         )
         console.print(f"[bold blue]Agent CI[/] Running suite: [cyan]{suite}[/]")
 
@@ -2004,7 +2004,7 @@ def diff_cmd(baseline, compare, agent, spec_path, baseline_dir, fmt, query_filte
     and renders a structured diff report.
 
     Example:
-        agentci diff --baseline v1-broken --compare v2-fixed --agent rag-agent
+        ciagent diff --baseline v1-broken --compare v2-fixed --agent rag-agent
 
     Exit codes:
         0  No regressions detected
@@ -2094,7 +2094,7 @@ def diff_cmd(baseline, compare, agent, spec_path, baseline_dir, fmt, query_filte
         elif fmt == "github":
             j = report.summary_json()
             prefix = "error" if report.has_regression else "notice"
-            title = f"AgentCI Diff: {report.agent} ({report.from_version} → {report.to_version})"
+            title = f"CIAgent Diff: {report.agent} ({report.from_version} → {report.to_version})"
             body_parts = []
             for p in j.get("path", []):
                 pct = f" ({p['pct_change']:+.1f}%)" if p.get("pct_change") is not None else ""
@@ -2116,13 +2116,13 @@ def diff_cmd(baseline, compare, agent, spec_path, baseline_dir, fmt, query_filte
 def report(input_path, output_path):
     """Generate an HTML report from a JSON results file.
 
-    Convert previously saved JSON output (from `agentci test --format json`)
+    Convert previously saved JSON output (from `ciagent test --format json`)
     into a self-contained HTML report.
 
     \b
     Example:
-        agentci test -c spec.yaml --format json > results.json
-        agentci report -i results.json -o report.html
+        ciagent test -c spec.yaml --format json > results.json
+        ciagent report -i results.json -o report.html
     """
     import json as _json
     from .engine.results import LayerResult, LayerStatus, QueryResult
@@ -2186,7 +2186,7 @@ def calibrate_cmd(config, samples, dry_run, yes):
     from .loader import load_spec
     from .engine.parallel import resolve_runner
 
-    console.print(Panel(f"[bold cyan]AgentCI Calibration[/] v{__version__}"))
+    console.print(Panel(f"[bold cyan]CIAgent Calibration[/] v{__version__}"))
 
     spec_path = Path(config)
     spec = load_spec(str(spec_path))
@@ -2302,7 +2302,7 @@ def calibrate_cmd(config, samples, dry_run, yes):
         yaml.dump(spec_data, f, default_flow_style=False, sort_keys=False)
 
     console.print(f"\n[green]✓[/] Updated {spec_path.name}")
-    console.print("[dim]Run 'agentci test' to validate the new budgets[/]")
+    console.print("[dim]Run 'ciagent test' to validate the new budgets[/]")
 
 
 # ── v2 Commands ────────────────────────────────────────────────────────────────
@@ -2341,7 +2341,7 @@ def validate(spec_path):
 @click.option('--config', '-c', default='agentci_spec.yaml',
               help='Path to agentci_spec.yaml', show_default=True)
 def doctor_cmd(config):
-    """Check your AgentCI setup for common issues.
+    """Check your CIAgent setup for common issues.
 
     Validates the spec, runner, API keys, knowledge base, dependencies,
     and CI configuration. Prints a pass/warn/fail summary with fix hints.
@@ -2353,7 +2353,7 @@ def doctor_cmd(config):
     # 1. Spec file exists and validates
     spec = None
     if not Path(config).exists():
-        checks.append(("fail", f"{config} not found", "Run: agentci init --generate"))
+        checks.append(("fail", f"{config} not found", "Run: ciagent init --generate"))
     else:
         try:
             from .loader import load_spec
@@ -2425,7 +2425,7 @@ def doctor_cmd(config):
         checks.append(("pass", ".github/workflows/agentci.yml exists", ""))
     else:
         checks.append(("warn", "No GitHub Actions workflow found",
-                        "Run: agentci init"))
+                        "Run: ciagent init"))
 
     # 8. requirements.txt includes ciagent
     for req_file in ("requirements.txt", "pyproject.toml"):
@@ -2440,7 +2440,7 @@ def doctor_cmd(config):
 
     # ── Print results ─────────────────────────────────────────────────────
     icons = {"pass": "[green]✓[/]", "warn": "[yellow]![/]", "fail": "[red]✗[/]"}
-    console.print("\n[bold blue]AgentCI Doctor[/]\n")
+    console.print("\n[bold blue]CIAgent Doctor[/]\n")
     for status, msg, fix in checks:
         line = f"  {icons[status]} {msg}"
         if fix and status != "pass":
@@ -2526,11 +2526,11 @@ def generate_checks_cmd(config, kb_path, baseline_dir, dry_run, yes):
         console.print(
             f"[yellow]Warning:[/] no golden baselines in '{effective_baseline_dir}' — "
             "generated checks cannot be validated against known-good answers.\n"
-            "Record baselines first ([cyan]agentci record[/]) for the full gate.\n"
+            "Record baselines first ([cyan]ciagent record[/]) for the full gate.\n"
         )
 
     console.print(
-        f"[bold blue]AgentCI v{__version__}[/] │ generate-checks │ "
+        f"[bold blue]CIAgent v{__version__}[/] │ generate-checks │ "
         f"kb: [cyan]{effective_kb}[/] │ queries: [cyan]{len(spec.queries)}[/] │ "
         f"golden answers: [cyan]{len(answers)}[/]"
     )
@@ -2607,7 +2607,7 @@ def generate_checks_cmd(config, kb_path, baseline_dir, dry_run, yes):
     console.print(f"\n[green]Updated {config}[/] (backup: {backup}; note: YAML comments are not preserved)")
     for change in changes:
         console.print(f"   • {change}")
-    console.print("\nVerify: [cyan]agentci test --mock --yes[/]")
+    console.print("\nVerify: [cyan]ciagent test --mock --yes[/]")
     sys.exit(0)
 
 
@@ -2669,7 +2669,7 @@ def judge_audit_cmd(config, baseline_dir, repeats, labels_path, sample, fmt, yes
         console.print(
             f"[bold red]No recorded answers found in '{effective_baseline_dir}'.[/]\n"
             "The audit re-scores recorded baselines. Record some first:\n"
-            "  [cyan]agentci record <test>[/]  or  [cyan]agentci test --format json[/]"
+            "  [cyan]ciagent record <test>[/]  or  [cyan]ciagent test --format json[/]"
         )
         sys.exit(2)
 
@@ -2702,7 +2702,7 @@ def judge_audit_cmd(config, baseline_dir, repeats, labels_path, sample, fmt, yes
         len(_judge_rubrics(q.correctness)) for q in judged_queries
     ) * max(1, repeats)
     console.print(
-        f"[bold blue]AgentCI v{__version__}[/] │ judge-audit │ agent: [cyan]{spec.agent}[/] │ "
+        f"[bold blue]CIAgent v{__version__}[/] │ judge-audit │ agent: [cyan]{spec.agent}[/] │ "
         f"queries: [cyan]{len(judged_queries)}[/] │ repeats: [cyan]{repeats}[/] │ "
         f"judge calls: [cyan]~{n_calls}[/]"
     )
@@ -2792,14 +2792,14 @@ def _finish_stability_session(fmt, config, output, run_results, stability, fail_
               help='With --runs > 1: exit 1 if any query flips verdicts across runs')
 def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, mock, yes,
              runs, fail_on_flaky):
-    """Run AgentCI v2 evaluation against a spec file.
+    """Run CIAgent v2 evaluation against a spec file.
 
     Loads agentci_spec.yaml, runs the agent for each query (capturing traces),
     evaluates all three layers (Correctness / Path / Cost), and reports results.
 
     Use --mock to validate your spec with synthetic traces (zero API cost).
     With no agentci_spec.yaml present, --mock runs a bundled demo spec —
-    try `agentci test --mock --runs 3` in an empty directory (zero API keys).
+    try `ciagent test --mock --runs 3` in an empty directory (zero API keys).
 
     Use --runs N to run the whole suite N times: a stable aggregate score can
     hide per-query verdict flips. Each flip is attributed to its source —
@@ -2841,8 +2841,8 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
         else:
             console.print(
                 "[bold red]No agentci_spec.yaml found in this directory.[/]\n\n"
-                "  [cyan]agentci init[/]                     scaffold a spec for your own agent\n"
-                "  [cyan]agentci test --mock --runs 3[/]     try the bundled demo (synthetic traces, zero API keys)"
+                "  [cyan]ciagent init[/]                     scaffold a spec for your own agent\n"
+                "  [cyan]ciagent test --mock --runs 3[/]     try the bundled demo (synthetic traces, zero API keys)"
             )
             sys.exit(2)
 
@@ -2883,7 +2883,7 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
         from .engine.mock_runner import run_mock_spec
 
         console.print(
-            f"[bold blue]AgentCI v{__version__}[/] │ agent: [cyan]{spec.agent}[/] │ "
+            f"[bold blue]CIAgent v{__version__}[/] │ agent: [cyan]{spec.agent}[/] │ "
             f"queries: [cyan]{len(spec.queries)}[/] │ mode: [cyan]mock[/]"
             + (f" │ runs: [cyan]{runs}[/]" if runs > 1 else "")
         )
@@ -2893,7 +2893,7 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
             console.print(
                 "[yellow]Demo mode:[/] no agentci_spec.yaml found — using the bundled "
                 "demo spec ([bold]synthetic data[/], simulated agent).\n"
-                "[dim]Test your own agent instead: agentci init[/]\n"
+                "[dim]Test your own agent instead: ciagent init[/]\n"
             )
 
         # AGENTCI_MOCK_FLAKY=1 simulates agent-variance across runs so the
@@ -2936,7 +2936,7 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
         exit_code = report_results(run_results[0], format=fmt, spec_file=config)
         if demo_mode and fmt == "console":
             console.print(
-                "\n[dim]Tip: agentci test --mock --runs 3 runs the demo suite three times "
+                "\n[dim]Tip: ciagent test --mock --runs 3 runs the demo suite three times "
                 "and shows the stability report with flip-source attribution.[/]"
             )
         sys.exit(exit_code)
@@ -2944,14 +2944,14 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
     # ── Check for runner ──────────────────────────────────────────────────────
     if not spec.runner:
         console.print(
-            f"[bold blue]AgentCI v{__version__}[/] spec has [cyan]{len(spec.queries)}[/] "
+            f"[bold blue]CIAgent v{__version__}[/] spec has [cyan]{len(spec.queries)}[/] "
             f"queries for agent '[cyan]{spec.agent}[/]'\n"
         )
         console.print(
             "[yellow]ℹ[/] No [bold]runner[/] declared in spec. Add one to run live:\n\n"
             "  [cyan]runner: \"myagent.run:run_agent\"[/]\n\n"
             "The function must accept [bold](query: str) → Trace[/].\n\n"
-            "Or use [cyan]agentci test --mock[/] to validate your spec without API calls.\n\n"
+            "Or use [cyan]ciagent test --mock[/] to validate your spec without API calls.\n\n"
             "Or use the Python API in your test suite:\n"
             "  [cyan]from agentci import load_spec, run_spec[/]\n"
             "  [cyan]results = run_spec(spec, my_agent_fn)[/]"
@@ -3004,7 +3004,7 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
 
     # ── Run queries in parallel ───────────────────────────────────────────────
     console.print(
-        f"[bold blue]AgentCI v{__version__}[/] │ agent: [cyan]{spec.agent}[/] │ "
+        f"[bold blue]CIAgent v{__version__}[/] │ agent: [cyan]{spec.agent}[/] │ "
         f"queries: [cyan]{len(spec.queries)}[/] │ workers: [cyan]{workers}[/]"
         + (f" │ runs: [cyan]{runs}[/]" if runs > 1 else "")
     )
@@ -3169,7 +3169,7 @@ def eval_cmd(config, tags, fmt, output, workers, sample_ensemble):
         spec.judge_config["sample_ensemble"] = sample_ensemble
 
     console.print(
-        f"[bold blue]AgentCI v{__version__} Eval[/] │ agent: [cyan]{spec.agent}[/] │ "
+        f"[bold blue]CIAgent v{__version__} Eval[/] │ agent: [cyan]{spec.agent}[/] │ "
         f"queries: [cyan]{len(spec.queries)}[/] │ workers: [cyan]{workers}[/]"
     )
     if fmt in ("console", "github"):

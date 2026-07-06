@@ -1,6 +1,6 @@
 # STUDY.md: Provenance for the Numbers
 
-AgentCI's launch materials quote three findings. This document is where they come from:
+CIAgent's launch materials quote three findings. This document is where they come from:
 the system, the data, the hand-grading protocol, and the derivation of each figure,
 including the parts of the study that went wrong before they went right.
 
@@ -14,7 +14,7 @@ including the parts of the study that went wrong before they went right.
    while covering 36 of the 58 sampled answers (the other 22 had no checkable fact).
 
 Study conducted July 4–5, 2026 on eval data recorded March–April 2026. Author: Sunil
-Pandey, who is both the maintainer of AgentCI and the builder of the system under test.
+Pandey, who is both the maintainer of CIAgent and the builder of the system under test.
 That conflict is real and disclosed; the protocol below exists to contain it.
 
 ---
@@ -112,7 +112,7 @@ doc:
   verdicts visible, and came away believing most failures were fluent hallucinations.
   The blind check reversed that: many of the "fails" I had endorsed were correct
   answers, and the real asymmetry ran the other way (a lenient judge, §5). No number
-  from the non-blind review appears in AgentCI's materials.
+  from the non-blind review appears in CIAgent's materials.
 
 ## 5. Results: auditing the judge
 
@@ -170,7 +170,7 @@ Same input, same KB: right once, and the judge passed all three. Retrieval
 nondeterminism produced the variance; the judge, sharing the agent's context,
 rubber-stamped both evasions.
 
-The two hard flips split cleanly across failure sources, which is why AgentCI's
+The two hard flips split cleanly across failure sources, which is why CIAgent's
 stability report attributes flips instead of just counting them: "do you process
 orders on holidays?" scored `[2, 5, 5]` from the judge while I graded the underlying
 answers `[fail, pass, pass]` (the agent's answers changed: agent variance). "can I
@@ -180,7 +180,7 @@ borderline, pass]` (judge noise on similar answers).
 ## 7. Results: the deterministic replay
 
 On July 5, 2026 I replayed all 58 recorded answers through ciagent's deterministic
-correctness layer (AgentCI v0.6.0). Zero LLM calls; the agent was never re-run.
+correctness layer (CIAgent v0.6.0). Zero LLM calls; the agent was never re-run.
 
 **Check-authorship rule:** every check derives from the golden answers and the KB
 document only. I did not consult agent answers while writing checks. Hard-fact
@@ -207,14 +207,14 @@ without giving the support email address (the LLM judge failed that one too). Al
 honest: 2 of the judge's 3 false-fails sat in the uncheckable 22, where only a judge
 or a human can rule.
 
-A real `agentci test` run against the worst run of the triple (14 checked queries)
+A real `ciagent test` run against the worst run of the triple (14 checked queries)
 returned 8 pass / 6 fail; the 6 failures were that run's 5 silent failures plus its
 1 borderline. The CLI output is preserved with the study artifacts.
 
 **Citation rails:** "8 of 8" is this sample, one agent, one store. The checks
 required golden answers containing hard facts, which these had. Deterministic checks
 shrank the surface that had to be delegated to an LLM judge from 58 answers to 22;
-they do not close the judge problem, and AgentCI does not claim they do.
+they do not close the judge problem, and CIAgent does not claim they do.
 
 ## 8. Limitations
 

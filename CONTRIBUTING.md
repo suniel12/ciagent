@@ -1,6 +1,6 @@
-# Contributing to Agent CI
+# Contributing to CIAgent
 
-Thank you for your interest in contributing to Agent CI!
+Thank you for your interest in contributing to CIAgent!
 
 ## Getting Started
 

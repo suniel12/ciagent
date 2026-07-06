@@ -1,4 +1,4 @@
-# KB-Derived Fact Checks — `agentci generate-checks`
+# KB-Derived Fact Checks — `ciagent generate-checks`
 
 Most agent failures that matter involve a hard fact — a price, a rate, a
 product, a version. Those are checkable in code, deterministically, for
@@ -7,10 +7,10 @@ proposes them as deterministic assertions on your existing spec queries,
 reserving the LLM judge for answers with nothing checkable.
 
 ```bash
-agentci generate-checks                  # interactive review of proposals
-agentci generate-checks --dry-run        # look, don't touch
-agentci generate-checks --yes            # accept everything the gate validated
-agentci generate-checks --kb ./docs      # explicit KB directory
+ciagent generate-checks                  # interactive review of proposals
+ciagent generate-checks --dry-run        # look, don't touch
+ciagent generate-checks --yes            # accept everything the gate validated
+ciagent generate-checks --kb ./docs      # explicit KB directory
 ```
 
 Extraction uses an LLM **once, at authoring time**. The generated checks run
@@ -28,7 +28,7 @@ fail correct paraphrases. Three rules are built in:
 2. **Every candidate is validated against your recorded golden answers
    before you see it.** A check that would fail a known-good answer is
    rejected automatically, with the failing answer shown. Record baselines
-   first (`agentci record`) — the gate is only as strong as the answers it
+   first (`ciagent record`) — the gate is only as strong as the answers it
    can test against.
 3. **Nothing is written silently.** Gate survivors go through interactive
    review; `--yes` accepts validated checks only. Candidates whose query has
@@ -52,8 +52,8 @@ fail correct paraphrases. Three rules are built in:
 ## Suggested workflow
 
 ```bash
-agentci record <tests>        # 1. record known-good baselines
-agentci generate-checks       # 2. mine KB facts, gate against baselines
-agentci test --mock --yes     # 3. sanity-check spec structure, zero cost
-agentci test --runs 3         # 4. confirm checks are stable across runs
+ciagent record <tests>        # 1. record known-good baselines
+ciagent generate-checks       # 2. mine KB facts, gate against baselines
+ciagent test --mock --yes     # 3. sanity-check spec structure, zero cost
+ciagent test --runs 3         # 4. confirm checks are stable across runs
 ```

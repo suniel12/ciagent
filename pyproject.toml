@@ -42,6 +42,7 @@ dev = ["pytest>=8.0", "ruff", "mypy"]
 
 [project.scripts]
 agentci = "agentci.cli:cli"
+ciagent = "agentci.cli:cli"
 
 [project.entry-points.pytest11]
 agentci = "agentci.pytest_plugin"

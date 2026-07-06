@@ -1,7 +1,7 @@
 # Cost Tracking
 
-AgentCI automatically tracks the cost of every LLM call in a trace and
-evaluates it as Layer 3 of every `agentci test` run. Cost exceedances produce
+CIAgent automatically tracks the cost of every LLM call in a trace and
+evaluates it as Layer 3 of every `ciagent test` run. Cost exceedances produce
 warnings by default, so they're visible without blocking CI.
 
 ## Setting Budgets
@@ -41,11 +41,11 @@ defaults:
 
 ## Don't Guess — Calibrate
 
-Instead of inventing budget numbers, measure your agent and let AgentCI set
+Instead of inventing budget numbers, measure your agent and let CIAgent set
 them with headroom:
 
 ```bash
-agentci calibrate
+ciagent calibrate
 ```
 
 This runs sample queries live, shows measured vs. configured budgets, and

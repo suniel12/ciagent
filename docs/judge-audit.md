@@ -1,4 +1,4 @@
-# Judge Audit — `agentci judge-audit`
+# Judge Audit — `ciagent judge-audit`
 
 Every eval tool runs an LLM judge. None of them tell you whether the judge
 can be trusted. `judge-audit` measures your judge against ground truth you
@@ -6,10 +6,10 @@ already have — by re-scoring **recorded** answers (golden baselines). The
 agent is never re-run; the only cost is judge calls.
 
 ```bash
-agentci judge-audit                        # audit against golden baselines
-agentci judge-audit --repeats 5            # tighter flip-rate measurement
-agentci judge-audit --labels labels.yaml   # add human ground truth
-agentci judge-audit --sample 20 --yes      # cap cost, skip confirmation
+ciagent judge-audit                        # audit against golden baselines
+ciagent judge-audit --repeats 5            # tighter flip-rate measurement
+ciagent judge-audit --labels labels.yaml   # add human ground truth
+ciagent judge-audit --sample 20 --yes      # cap cost, skip confirmation
 ```
 
 ## The three measurements
@@ -75,6 +75,6 @@ With fewer than 5 checkable queries the report flags its rates as anecdotes.
 ## Where the answers come from
 
 `--baseline-dir` (default: the spec's `baseline_dir`) is scanned recursively
-for baseline JSON files; both `agentci record` output and versioned
-`agentci save` baselines are accepted. Queries are matched to the spec by
+for baseline JSON files; both `ciagent record` output and versioned
+`ciagent save` baselines are accepted. Queries are matched to the spec by
 query text.

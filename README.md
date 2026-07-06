@@ -1,4 +1,4 @@
-# AgentCI
+# CIAgent
 
 **Pytest-native regression testing for AI agents.** Catch routing changes, tool call drift, and cost spikes before production.
 
@@ -53,7 +53,7 @@ agent: my-agent
 # runner: any function that takes a query string and returns a response
 runner: my_app.agent:run_for_agentci
 queries:
-  - query: "How do I install AgentCI?"
+  - query: "How do I install CIAgent?"
     correctness:
       any_expected_in_answer: ["pip install", "ciagent"]
     path:
@@ -71,17 +71,17 @@ queries:
 Run:
 
 ```bash
-agentci test --mock       # start here: zero-cost with synthetic traces
-agentci test              # run live against your real agent
+ciagent test --mock       # start here: zero-cost with synthetic traces
+ciagent test              # run live against your real agent
 ```
 
-`agentci test` evaluates each query through 3 layers — correctness, path, and cost:
+`ciagent test` evaluates each query through 3 layers — correctness, path, and cost:
 
 ```
 ============================================================
 
-Query: How do I install AgentCI?
-Answer: To install AgentCI, you can use pip with the following command:
+Query: How do I install CIAgent?
+Answer: To install CIAgent, you can use pip with the following command:
         pip install ciagent. Make sure you have Python 3.10 or later.
 
   ✅  CORRECTNESS: PASS
@@ -96,8 +96,8 @@ Answer: To install AgentCI, you can use pip with the following command:
 
 ============================================================
 
-Query: What Python version does AgentCI require and what frameworks does it support?
-Answer: AgentCI currently does not specify a required Python version
+Query: What Python version does CIAgent require and what frameworks does it support?
+Answer: CIAgent currently does not specify a required Python version
         in the provided context, so I don't have that information...
 
   ❌  CORRECTNESS: FAIL
@@ -111,7 +111,7 @@ Answer: AgentCI currently does not specify a required Python version
 ============================================================
 ```
 
-Don't have golden queries yet? `agentci init --generate` scans your code and generates a starter spec.
+Don't have golden queries yet? `ciagent init --generate` scans your code and generates a starter spec.
 
 ## A stable score is not a stable system
 
@@ -120,7 +120,7 @@ individual queries flip verdicts every run. The aggregate holds because the erro
 around. `--runs N` shows what a single run can't:
 
 ```bash
-agentci test --runs 3
+ciagent test --runs 3
 ```
 
 ```
@@ -153,7 +153,7 @@ facts; pass@k/pass^k estimates live in the JSON output, labeled as estimates.
 
 Flaky-but-passing exits 0 so adoption won't break your CI; add `--fail-on-flaky` when
 you're ready to gate on it. Try it with zero API keys:
-`AGENTCI_MOCK_FLAKY=1 agentci test --mock --runs 3`. Details: [docs/stability.md](docs/stability.md).
+`AGENTCI_MOCK_FLAKY=1 ciagent test --mock --runs 3`. Details: [docs/stability.md](docs/stability.md).
 
 ## Audit the judge itself
 
@@ -163,7 +163,7 @@ nothing, passes it. `judge-audit` measures your judge against ground truth you a
 by re-scoring recorded baselines (the agent is never re-run):
 
 ```bash
-agentci judge-audit
+ciagent judge-audit
 ```
 
 1. **Judge vs. deterministic checks** — the disagreement matrix. The row that matters:
@@ -180,7 +180,7 @@ shouldn't be trusted where you can't. Verdict: `TRUSTWORTHY` / `NEEDS CALIBRATIO
 
 Most agent failures that matter involve a hard fact — a product name, a price, a version number. Those are checkable deterministically, for free. And an LLM judge grading against the same context as your agent inherits your agent's blind spots: when retrieval comes up empty, the agent answers from nothing and the judge — reading the same nothing — passes it.
 
-So AgentCI runs deterministic checks first and treats the judge as the last resort, not the default:
+So CIAgent runs deterministic checks first and treats the judge as the last resort, not the default:
 
 1. **Fact checks in code** — `expected_in_answer`, `not_in_answer`, `regex_match`, `json_schema`. Zero LLM calls, zero flakiness, same verdict every run.
 2. **Path checks** — did the agent call the tools it should have? A missing expected tool warns; a forbidden tool fails.
@@ -190,7 +190,7 @@ So AgentCI runs deterministic checks first and treats the judge as the last reso
 Don't write the fact checks by hand — mine them from your knowledge base:
 
 ```bash
-agentci generate-checks
+ciagent generate-checks
 ```
 
 It extracts hard facts (prices, rates, SKUs, "30 days") as variant-set assertions, and
@@ -200,7 +200,7 @@ authoring time; the checks run free forever. Details: [docs/generate-checks.md](
 
 ## Let your coding agent set it up
 
-AgentCI ships as a Claude Code plugin. Two skills: **onboard** (writes the runner,
+CIAgent ships as a Claude Code plugin. Two skills: **onboard** (writes the runner,
 records golden baselines, generates the spec, verifies it) and **check** (runs the
 right test after every change to your agent and routes failures by flip source).
 
@@ -209,33 +209,33 @@ right test after every change to your agent and routes failures by flip source).
 /plugin install agentci@agentci
 ```
 
-Then ask your coding agent to "set up AgentCI for this repo." It records goldens with
-`agentci bootstrap --yes` and verifies with `agentci test --runs 3` — no human CLI use
+Then ask your coding agent to "set up CIAgent for this repo." It records goldens with
+`ciagent bootstrap --yes` and verifies with `ciagent test --runs 3` — no human CLI use
 needed. The runner it writes is one function: `(query: str) -> str`; trace capture is
 automatic.
 
 ## Demo
 
-Here's a RAG agent demo where someone "optimizes for latency" by reducing retriever docs from 8 to 1. AgentCI catches the correctness regression:
+Here's a RAG agent demo where someone "optimizes for latency" by reducing retriever docs from 8 to 1. CIAgent catches the correctness regression:
 
-![AgentCI Demo](demo/agentci-rag-demo.gif)
+![CIAgent Demo](demo/agentci-rag-demo.gif)
 
 ## CLI
 
 ```bash
-agentci init --generate        # Scan project, generate test spec
-agentci init                   # Generate GitHub Actions workflow + pre-push hook
-agentci test --mock --yes      # Zero-cost synthetic traces, CI-friendly (no keys, no prompts)
-agentci test                   # Run 3-layer evaluation (correctness → path → cost)
-agentci test --runs 3          # Stability report: verdict flips + flip-source attribution
-agentci judge-audit            # Audit the LLM judge against checks, retests, hand labels
-agentci generate-checks        # Mine KB facts into deterministic assertions (gated)
-agentci test --format html -o report.html  # HTML report with per-query details
-agentci calibrate              # Measure real agent metrics, auto-tune spec budgets
-agentci doctor                 # Health check: spec, deps, API keys
-agentci record <test>          # Record golden baseline
-agentci diff                   # Diff against baseline
-agentci report -i results.json # Generate HTML report from JSON results
+ciagent init --generate        # Scan project, generate test spec
+ciagent init                   # Generate GitHub Actions workflow + pre-push hook
+ciagent test --mock --yes      # Zero-cost synthetic traces, CI-friendly (no keys, no prompts)
+ciagent test                   # Run 3-layer evaluation (correctness → path → cost)
+ciagent test --runs 3          # Stability report: verdict flips + flip-source attribution
+ciagent judge-audit            # Audit the LLM judge against checks, retests, hand labels
+ciagent generate-checks        # Mine KB facts into deterministic assertions (gated)
+ciagent test --format html -o report.html  # HTML report with per-query details
+ciagent calibrate              # Measure real agent metrics, auto-tune spec budgets
+ciagent doctor                 # Health check: spec, deps, API keys
+ciagent record <test>          # Record golden baseline
+ciagent diff                   # Diff against baseline
+ciagent report -i results.json # Generate HTML report from JSON results
 ```
 ## Docs
 
@@ -252,13 +252,13 @@ agentci report -i results.json # Generate HTML report from JSON results
 
 ## Why not just an LLM judge?
 
-Judge-only evals are expensive, flaky, and blind to their own context. AgentCI is pytest-native regression testing: deterministic checks catch the factual failures, golden traces catch behavioral drift, cost budgets catch spend regressions — and the judge handles only what genuinely needs judgment. Mock mode (`agentci test --mock`) runs the whole suite with zero API keys and zero cost, so it can gate every PR.
+Judge-only evals are expensive, flaky, and blind to their own context. CIAgent is pytest-native regression testing: deterministic checks catch the factual failures, golden traces catch behavioral drift, cost budgets catch spend regressions — and the judge handles only what genuinely needs judgment. Mock mode (`ciagent test --mock`) runs the whole suite with zero API keys and zero cost, so it can gate every PR.
 
 ## Contributing
 
 [GitHub Issues](https://github.com/suniel12/AgentCI/issues) ·
 [DemoAgents](https://github.com/suniel12/DemoAgents) — working examples for OpenAI, Anthropic, and LangGraph agents
 
-Apache 2.0. If you build an agent and test it with AgentCI, I'd love to hear about it.
+Apache 2.0. If you build an agent and test it with CIAgent, I'd love to hear about it.
 
 ---

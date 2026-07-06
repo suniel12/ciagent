@@ -24,7 +24,7 @@ class TestDoctorCommand:
                     "version: 1.0\nagent: test\nqueries:\n  - query: hello\n"
                 )
             result = runner.invoke(cli, ["doctor"])
-            assert "AgentCI Doctor" in result.output
+            assert "CIAgent Doctor" in result.output
             assert "valid" in result.output
 
     def test_doctor_with_invalid_spec(self, tmp_path):

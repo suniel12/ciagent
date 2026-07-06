@@ -1,10 +1,10 @@
 ---
 name: check
-description: Run AgentCI regression checks after changing an AI agent's code, prompts, or knowledge base in a repo that has agentci_spec.yaml, and interpret the results. Use after editing agent logic, before committing agent changes, or when the user asks whether the agent still works.
-allowed-tools: Bash(agentci *)
+description: Run CIAgent regression checks after changing an AI agent's code, prompts, or knowledge base in a repo that has agentci_spec.yaml, and interpret the results. Use after editing agent logic, before committing agent changes, or when the user asks whether the agent still works.
+allowed-tools: Bash(agentci *), Bash(ciagent *)
 ---
 
-# Run AgentCI checks on this repo's agent
+# Run CIAgent checks on this repo's agent
 
 The repo has `agentci_spec.yaml` (if it does not, use the `onboard` skill
 instead). Your job: run the right check for the change that was just made,
@@ -14,11 +14,11 @@ read the result correctly, and never paper over a failure.
 
 | Situation | Command |
 |---|---|
-| Spec or wiring changed, or no API keys | `agentci test --mock` |
-| Agent code / prompt / retrieval changed | `agentci test --yes --format json` |
-| Result differs from last run, or flakiness suspected | `agentci test --runs 3 --yes` |
-| Knowledge base changed | `agentci generate-checks --dry-run`, review, then apply |
-| The LLM judge's verdicts look wrong | `agentci judge-audit` |
+| Spec or wiring changed, or no API keys | `ciagent test --mock` |
+| Agent code / prompt / retrieval changed | `ciagent test --yes --format json` |
+| Result differs from last run, or flakiness suspected | `ciagent test --runs 3 --yes` |
+| Knowledge base changed | `ciagent generate-checks --dry-run`, review, then apply |
+| The LLM judge's verdicts look wrong | `ciagent judge-audit` |
 
 Live runs (`test` without `--mock`, `judge-audit`, `generate-checks`) call model
 APIs on the user's keys. Mock mode is free. If the user has not already
@@ -50,7 +50,7 @@ Flip sources route the work:
   report the failure to the user instead.
 - After intentionally changing agent behavior, re-record the affected golden:
   delete its baseline file and rerun
-  `agentci bootstrap --runner <runner> --queries <file> --yes` for that query,
+  `ciagent bootstrap --runner <runner> --queries <file> --yes` for that query,
   or update the spec's expectations — with the user's confirmation.
 - Report results in one or two sentences: score, what failed and in which
   layer, flip sources if any, and the command you ran.

@@ -7,12 +7,12 @@ the agent behaves correctly, then diff future runs against it.
 ## Recording a Golden Trace
 
 ```bash
-agentci record my_test_case
+ciagent record my_test_case
 ```
 
 This runs your agent live and saves the trace to
-`golden/my_test_case.golden.json`. Use `agentci save` to store a trace as a
-*versioned* baseline (e.g. `v1`, `v2`) and `agentci baselines` to list the
+`golden/my_test_case.golden.json`. Use `ciagent save` to store a trace as a
+*versioned* baseline (e.g. `v1`, `v2`) and `ciagent baselines` to list the
 versions you have.
 
 ## Diffing
@@ -20,7 +20,7 @@ versions you have.
 Compare two versioned baselines with a three-tier analysis:
 
 ```bash
-agentci diff --baseline v1 --compare v2 --agent my-agent
+ciagent diff --baseline v1 --compare v2 --agent my-agent
 ```
 
 Differences are classified and highlighted:
@@ -32,5 +32,5 @@ Differences are classified and highlighted:
 - **Cost Spike** — the cost increased significantly
 - **Stop Reason Changed** — the run terminated differently
 
-Exit code 1 signals a correctness regression (pass → fail), so `agentci diff`
+Exit code 1 signals a correctness regression (pass → fail), so `ciagent diff`
 can gate CI directly.

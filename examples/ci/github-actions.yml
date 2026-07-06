@@ -1,7 +1,7 @@
 # .github/workflows/agentci.yml
 # Copy this to your repo's .github/workflows/ directory
 
-name: Agent CI Tests
+name: CIAgent Tests
 
 on:
   pull_request:
@@ -23,18 +23,18 @@ jobs:
       
       - name: Install dependencies
         run: |
-          pip install agentci
+          pip install ciagent
           # pip install -r requirements.txt
-      
-      - name: Run Agent CI tests
+
+      - name: Run CIAgent tests
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}  # Optional if using mocks
         run: |
-          agentci run --ci --fail-on-cost 0.50
-      
+          ciagent run --ci --fail-on-cost 0.50
+
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: agentci-report
-          path: agentci-report.html
+          name: ciagent-report
+          path: ciagent-report.html

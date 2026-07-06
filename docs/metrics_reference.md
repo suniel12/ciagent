@@ -1,4 +1,4 @@
-# AgentCI v2 Metrics Reference
+# CIAgent v2 Metrics Reference
 
 Mathematical definitions for every metric in the three-layer evaluation engine.
 

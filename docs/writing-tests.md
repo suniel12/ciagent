@@ -1,6 +1,6 @@
-# Writing Tests with AgentCI
+# Writing Tests with CIAgent
 
-AgentCI tests are defined in `agentci_spec.yaml`. Each spec file contains
+CIAgent tests are defined in `agentci_spec.yaml`. Each spec file contains
 a list of `queries` — golden test cases the agent must pass.
 
 ## Quick Start
@@ -16,7 +16,7 @@ queries:
 
 Run with:
 ```bash
-agentci validate agentci_spec.yaml
+ciagent validate agentci_spec.yaml
 ```
 
 ---
@@ -78,7 +78,7 @@ correctness:
 ```yaml
 correctness:
   llm_judge:
-    - rule: "Response provides the pip install command for agentci"
+    - rule: "Response provides the pip install command for ciagent"
       threshold: 0.7
     - rule: "Response specifies Python version requirements"
       threshold: 0.6
@@ -201,12 +201,12 @@ judge failures because the actual content is buried.
 
 ```
 # BAD — agent system prompt:
-"If the question is off-topic, reply: 'I'm an AgentCI documentation assistant
-and I can only help with AgentCI-related questions.'"
+"If the question is off-topic, reply: 'I'm a CIAgent documentation assistant
+and I can only help with CIAgent-related questions.'"
 
 # GOOD — natural, brief deflection:
 "If the question is off-topic, reply with a friendly, brief response and offer
-to help with AgentCI questions instead."
+to help with CIAgent questions instead."
 ```
 
 **Be thorough in answers.** Agents that truncate or summarize too aggressively
@@ -223,7 +223,7 @@ unique features, differentiators, and specific technical capabilities."
 
 **Set realistic `max_llm_calls` budgets.** RAG agents with retrieval + generation
 typically use 4-10 LLM calls per query. A budget of 3 will cause false failures.
-Use `agentci calibrate` to measure real metrics and auto-tune budgets.
+Use `ciagent calibrate` to measure real metrics and auto-tune budgets.
 
 ```yaml
 # BAD:

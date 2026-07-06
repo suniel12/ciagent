@@ -130,7 +130,7 @@ class TestDemoFallback:
     def test_no_mock_no_spec_errors_with_demo_hint(self, runner):
         result = _invoke_isolated(runner, ["test"])
         assert result.exit_code == 2, result.output
-        assert "agentci init" in result.output
+        assert "ciagent init" in result.output
         assert "--mock --runs 3" in result.output
 
     def test_explicit_missing_config_is_error_not_demo(self, runner):

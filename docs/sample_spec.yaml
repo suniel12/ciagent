@@ -1,9 +1,9 @@
 # yaml-language-server: $schema=../src/agentci/schema/agentci_spec.schema.json
 #
-# AgentCI v2 — Sample Spec File
+# CIAgent v2 — Sample Spec File
 #
 # This is a fully annotated reference spec. Copy it to your project and
-# customize. Run `agentci validate agentci_spec.yaml` to check it.
+# customize. Run `ciagent validate agentci_spec.yaml` to check it.
 
 # Schema version for forward compatibility
 version: 1
@@ -52,13 +52,13 @@ judge_config:
 queries:
 
   # ── Happy-path in-scope question ──────────────────────────────────────────
-  - query: "How do I install AgentCI?"
+  - query: "How do I install CIAgent?"
     description: "Core in-scope question — should retrieve from docs"
     tags: [smoke, happy-path, in-scope]
 
     correctness:
       # Deterministic checks run first (free), judge runs last (expensive)
-      expected_in_answer: ["pip install", "agentci"]
+      expected_in_answer: ["pip install", "ciagent"]
       llm_judge:
         - rule: "Response provides clear, actionable installation steps"
           threshold: 0.7

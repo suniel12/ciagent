@@ -3,13 +3,13 @@
   "owner": {
     "name": "Sunil Pandey"
   },
-  "description": "AgentCI plugins: let your coding agent set up and run regression tests for the AI agent it is building.",
+  "description": "CIAgent plugins: let your coding agent set up and run regression tests for the AI agent it is building.",
   "plugins": [
     {
       "name": "agentci",
-      "displayName": "AgentCI",
+      "displayName": "CIAgent",
       "source": "./plugins/agentci",
-      "description": "Onboard AgentCI into a repo (runner + golden baselines + spec) and run its eval-reliability checks after every change to your AI agent.",
+      "description": "Onboard CIAgent into a repo (runner + golden baselines + spec) and run its eval-reliability checks after every change to your AI agent.",
       "author": {
         "name": "Sunil Pandey"
       },

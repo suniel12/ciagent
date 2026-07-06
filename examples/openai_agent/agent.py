@@ -6,7 +6,7 @@ weather data. Supports both mock mode (default) and live API mode.
 
 Mock mode (default): Patches the OpenAI client's create method to return
 canned responses. The call still flows through the OpenAI client path,
-so AgentCI's capture.py can intercept and record tool calls.
+so CIAgent's capture.py can intercept and record tool calls.
 
 Live mode: Set AGENTCI_LIVE=1 and OPENAI_API_KEY to use real OpenAI API.
 """

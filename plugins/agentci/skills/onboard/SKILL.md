@@ -1,25 +1,25 @@
 ---
 name: onboard
-description: Set up AgentCI regression testing for the AI agent in this repo — write a runner, record golden baselines, generate a test spec, and verify it. Use when the user asks to add tests, evals, or regression testing for their AI agent, or to set up AgentCI.
-allowed-tools: Bash(agentci *)
+description: Set up CIAgent regression testing for the AI agent in this repo — write a runner, record golden baselines, generate a test spec, and verify it. Use when the user asks to add tests, evals, or regression testing for their AI agent, or to set up CIAgent.
+allowed-tools: Bash(agentci *), Bash(ciagent *)
 ---
 
-# Onboard AgentCI into this repo
+# Onboard CIAgent into this repo
 
-You are setting up AgentCI (`pip install ciagent`) so this repo's AI agent has
+You are setting up CIAgent (`pip install ciagent`) so this repo's AI agent has
 recorded golden baselines and a runnable regression suite. The end state: the
-user can run `agentci test --runs 3` and see a stability report for their agent.
+user can run `ciagent test --runs 3` and see a stability report for their agent.
 
 Work through the steps in order. Do not skip the cost gate in step 4.
 
-## 1. Find the agent and install AgentCI
+## 1. Find the agent and install CIAgent
 
 - Locate the agent: search for LLM SDK usage (`openai`, `anthropic`, `langgraph`,
   `langchain`) and for the function or endpoint that takes a user message and
   returns the agent's answer.
 - Install with the matching extra so trace capture hooks the SDK:
   `pip install "ciagent[openai]"`, `[anthropic]`, `[langgraph]`, or `[all]`.
-- Sanity check: `agentci --version` then `agentci doctor` (it reports what is
+- Sanity check: `ciagent --version` then `ciagent doctor` (it reports what is
   missing; a missing spec is expected at this point).
 
 ## 2. Write the runner
@@ -29,14 +29,14 @@ has one clear package):
 
 ```python
 def run_for_agentci(query: str) -> str:
-    """AgentCI entry point: one query in, final answer text out."""
+    """CIAgent entry point: one query in, final answer text out."""
     # import the user's agent and invoke it ONCE, no chat history
     ...
     return final_answer_text
 ```
 
 Rules:
-- Return the final answer **string**. AgentCI wraps the call in its own trace
+- Return the final answer **string**. CIAgent wraps the call in its own trace
   capture, so LLM calls and tool calls are recorded automatically — do not
   build Trace objects unless the repo already produces them.
 - Fresh context per call: no shared history between queries.
@@ -60,12 +60,12 @@ Recording baselines runs the real agent once per query, on the user's API keys.
 State the query count and a cost ballpark, and **ask the user to confirm**
 before step 5. If there are no API keys or the user declines: write
 `agentci_spec.yaml` by hand instead (same queries, `runner:` set), validate with
-`agentci test --mock`, and tell the user which step to resume later.
+`ciagent test --mock`, and tell the user which step to resume later.
 
 ## 5. Record golden baselines
 
 ```bash
-agentci bootstrap --runner agentci_runner:run_for_agentci \
+ciagent bootstrap --runner agentci_runner:run_for_agentci \
   --queries agentci_queries.txt --agent <agent-name> --yes
 ```
 
@@ -89,15 +89,15 @@ correctness:
 ```
 
 Check facts, not phrasing. If the repo has a knowledge-base directory, run
-`agentci generate-checks --kb <dir> --dry-run` and review its candidates —
+`ciagent generate-checks --kb <dir> --dry-run` and review its candidates —
 every surviving candidate was already validated against the recorded goldens.
 
 ## 7. Verify
 
 ```bash
-agentci test --mock                      # structure check, zero API calls
-agentci test --yes --format json         # live run (covered by step 4 approval)
-agentci test --runs 3 --yes              # stability report
+ciagent test --mock                      # structure check, zero API calls
+ciagent test --yes --format json         # live run (covered by step 4 approval)
+ciagent test --runs 3 --yes              # stability report
 ```
 
 Exit codes: 0 = pass (flaky-but-passing is 0), 1 = correctness failure in every
@@ -110,10 +110,10 @@ correct check to make the run green — report the failure to the user instead.
 
 ## 8. Wire CI and hand off
 
-- `agentci init` scaffolds a GitHub Actions workflow (add `--hook` for a
+- `ciagent init` scaffolds a GitHub Actions workflow (add `--hook` for a
   pre-push hook if the user wants it).
 - Commit: runner, `agentci_queries.txt`, `agentci_spec.yaml`, `baselines/`,
   and the workflow.
 - Tell the user: how many goldens were recorded, the suite score, anything
-  flaky (with its flip source), and that `agentci test --runs 3` is the
+  flaky (with its flip source), and that `ciagent test --runs 3` is the
   command to watch after future agent changes.

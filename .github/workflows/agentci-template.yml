@@ -1,4 +1,4 @@
-name: Agent CI Tests
+name: CIAgent Tests
 
 on:
   pull_request:
@@ -26,7 +26,7 @@ jobs:
           if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
           if [ -f pyproject.toml ]; then pip install .; fi
       
-      - name: Run Agent CI tests
+      - name: Run CIAgent tests
         env:
           # Secrets should be set in repo settings
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -35,11 +35,11 @@ jobs:
         run: |
           # Use --ci flag to exit with 1 on failure
           export PYTHONPATH="$(pwd):$PYTHONPATH"
-          agentci run --suite examples/demo_agent/agentci.yaml --ci --fail-on-cost 0.50
-      
+          ciagent run --suite examples/demo_agent/agentci.yaml --ci --fail-on-cost 0.50
+
       - name: Upload test report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: agentci-report
-          path: agentci-report.html
+          name: ciagent-report
+          path: ciagent-report.html

@@ -1,4 +1,4 @@
-# Stability Testing — `agentci test --runs N`
+# Stability Testing — `ciagent test --runs N`
 
 A suite score that holds steady across runs is not evidence that your system
 behaves the same twice. Individual queries can flip verdicts on every run
@@ -8,9 +8,9 @@ mode runs the whole suite N times and reports the difference.
 ## Usage
 
 ```bash
-agentci test --runs 3                 # run every query 3 times, live
-agentci test --runs 5 --fail-on-flaky # gate CI on verdict stability
-AGENTCI_MOCK_FLAKY=1 agentci test --mock --runs 3   # zero-key demo
+ciagent test --runs 3                 # run every query 3 times, live
+ciagent test --runs 5 --fail-on-flaky # gate CI on verdict stability
+AGENTCI_MOCK_FLAKY=1 ciagent test --mock --runs 3   # zero-key demo
 ```
 
 ## What you get
@@ -39,7 +39,7 @@ A verdict flips for one of two reasons, and they demand different fixes:
 | `agent-variance` | The agent produced different output (answer, tool sequence, or a deterministic check's outcome changed) | The agent: prompt, retrieval, temperature |
 | `judge-flake` | Every deterministic check agreed across runs — or the output was identical — but the LLM judge's verdict changed | The eval: rubric, judge model — or replace the judge with a deterministic check |
 | `infra-error` | A judge API call errored during at least one run (an errored call counts as a fail in the verdict) | Nothing — retry before trusting the flip |
-| `mixed` | Near-identical paraphrases (similarity ≥ 0.9) with a judge configured and no clearer signal | Ambiguous — AgentCI does not guess |
+| `mixed` | Near-identical paraphrases (similarity ≥ 0.9) with a judge configured and no clearer signal | Ambiguous — CIAgent does not guess |
 
 Attribution is structural, not heuristic, and checks signals in reliability
 order: judge errors first, then per-layer sub-verdicts (if deterministic checks

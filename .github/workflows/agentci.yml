@@ -1,4 +1,4 @@
-name: AgentCI Checks
+name: CIAgent Checks
 
 on:
   push:
@@ -24,11 +24,11 @@ jobs:
           pip install --upgrade pip
           pip install .
 
-      - name: Run deterministic AgentCI tests
+      - name: Run deterministic CIAgent tests
         run: |
           pytest tests/ -v -m "not live" \
             --tb=short \
-            2>&1 | tee agentci-test-results.txt
+            2>&1 | tee ciagent-test-results.txt
         env:
           ANTHROPIC_API_KEY: sk-ant-dummy-key-for-testing
 
@@ -36,8 +36,8 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: agentci-results-deterministic
-          path: agentci-test-results.txt
+          name: ciagent-results-deterministic
+          path: ciagent-test-results.txt
           retention-days: 14
 
   agentci-llm-judge:

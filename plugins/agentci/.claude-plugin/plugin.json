@@ -1,6 +1,6 @@
 {
   "name": "agentci",
-  "description": "Set up and operate AgentCI (pip install ciagent) regression testing for the AI agent in this repo: record golden baselines, run stability and judge-reliability checks after every change.",
+  "description": "Set up and operate CIAgent (pip install ciagent) regression testing for the AI agent in this repo: record golden baselines, run stability and judge-reliability checks after every change.",
   "author": {
     "name": "Sunil Pandey"
   },

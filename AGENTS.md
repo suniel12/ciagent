@@ -7,7 +7,7 @@
 
 ## Overview
 
-AgentCI is a trace-based regression testing framework for AI agents. It captures LLM calls, tool invocations, routing decisions, and costs, then diffs them against known-good baselines to catch semantic drift before production.
+CIAgent is a trace-based regression testing framework for AI agents. It captures LLM calls, tool invocations, routing decisions, and costs, then diffs them against known-good baselines to catch semantic drift before production.
 
 ## Installation
 
@@ -28,75 +28,75 @@ pip install ciagent[all]         # All frameworks
 
 ```bash
 # ── Setup & Scaffolding ──────────────────────────────────────────────
-agentci init                          # Scaffold GitHub Actions workflow + optional pre-push hook
-agentci init --hook                   # Also install .git/hooks/pre-push
-agentci init --force                  # Overwrite existing files
-agentci init --generate               # Guided interview: auto-scan, generate agentci_spec.yaml
-agentci init --generate --mode mock   # Non-interactive mock mode
-agentci init --generate --mode mock --golden-file qa.json  # Zero-API-key spec from Q&A file
-agentci init --generate --kb-path ./docs  # Specify knowledge base directory
+ciagent init                          # Scaffold GitHub Actions workflow + optional pre-push hook
+ciagent init --hook                   # Also install .git/hooks/pre-push
+ciagent init --force                  # Overwrite existing files
+ciagent init --generate               # Guided interview: auto-scan, generate agentci_spec.yaml
+ciagent init --generate --mode mock   # Non-interactive mock mode
+ciagent init --generate --mode mock --golden-file qa.json  # Zero-API-key spec from Q&A file
+ciagent init --generate --kb-path ./docs  # Specify knowledge base directory
 
-agentci doctor                        # Health check: spec, deps, API keys, KB, CI workflow
-agentci doctor --config path.yaml     # Check a specific config file
+ciagent doctor                        # Health check: spec, deps, API keys, KB, CI workflow
+ciagent doctor --config path.yaml     # Check a specific config file
 
-agentci validate agentci_spec.yaml    # Validate spec against schema (no execution)
+ciagent validate agentci_spec.yaml    # Validate spec against schema (no execution)
 
-agentci bootstrap                     # Quick setup from queries file + runner path
-agentci bootstrap --queries q.txt --runner myagent:run --output spec.yaml
-agentci bootstrap --queries q.txt --runner myagent:run --yes  # Non-interactive: accept every trace as golden (coding agents / CI). Runner may return a plain str.
+ciagent bootstrap                     # Quick setup from queries file + runner path
+ciagent bootstrap --queries q.txt --runner myagent:run --output spec.yaml
+ciagent bootstrap --queries q.txt --runner myagent:run --yes  # Non-interactive: accept every trace as golden (coding agents / CI). Runner may return a plain str.
 
-agentci calibrate                     # Run sample queries, measure actuals, auto-tune spec budgets
-agentci calibrate --samples 3         # Number of sample queries per spec entry
-agentci calibrate --dry-run           # Show proposed changes without writing
-agentci calibrate --yes               # Skip confirmation prompt
+ciagent calibrate                     # Run sample queries, measure actuals, auto-tune spec budgets
+ciagent calibrate --samples 3         # Number of sample queries per spec entry
+ciagent calibrate --dry-run           # Show proposed changes without writing
+ciagent calibrate --yes               # Skip confirmation prompt
 
 # ── Testing & Evaluation ────────────────────────────────────────────────
-agentci test                          # 3-layer evaluation (Correctness → Path → Cost)
-agentci test --mock                   # Zero-cost synthetic traces — no API keys needed
-agentci test --yes                    # Skip cost-estimate confirmation (CI-friendly)
-agentci test --workers 4              # Parallel execution
-agentci test --tags routing           # Filter queries by tag
-agentci test --format json            # Machine-readable JSON output
-agentci test --format html -o report.html  # HTML report with per-query details
-agentci test --sample-ensemble 3      # LLM judge ensemble (majority vote)
+ciagent test                          # 3-layer evaluation (Correctness → Path → Cost)
+ciagent test --mock                   # Zero-cost synthetic traces — no API keys needed
+ciagent test --yes                    # Skip cost-estimate confirmation (CI-friendly)
+ciagent test --workers 4              # Parallel execution
+ciagent test --tags routing           # Filter queries by tag
+ciagent test --format json            # Machine-readable JSON output
+ciagent test --format html -o report.html  # HTML report with per-query details
+ciagent test --sample-ensemble 3      # LLM judge ensemble (majority vote)
 
-agentci eval                          # Standalone correctness evaluation (no golden baselines)
-agentci eval --config spec.yaml       # Evaluate a specific spec
-agentci eval --tags safety            # Filter by tag
+ciagent eval                          # Standalone correctness evaluation (no golden baselines)
+ciagent eval --config spec.yaml       # Evaluate a specific spec
+ciagent eval --tags safety            # Filter by tag
 
 # ── Golden Baselines ─────────────────────────────────────────────────
-agentci record <test_name>            # Run agent live, save golden baseline
-agentci record <test_name> -o path/   # Specify output path
+ciagent record <test_name>            # Run agent live, save golden baseline
+ciagent record <test_name> -o path/   # Specify output path
 
-agentci save --agent my-agent --version v1 --trace-file trace.json  # Save versioned baseline
-agentci save --agent my-agent --version v2 --trace-file t.json --force-save  # Skip precheck
+ciagent save --agent my-agent --version v1 --trace-file trace.json  # Save versioned baseline
+ciagent save --agent my-agent --version v2 --trace-file t.json --force-save  # Skip precheck
 
-agentci baselines --agent my-agent    # List saved baseline versions for an agent
+ciagent baselines --agent my-agent    # List saved baseline versions for an agent
 
-agentci diff --agent my-agent --baseline v1 --compare v2  # Diff two baseline versions
-agentci diff --agent my-agent --baseline v1 --compare v2 --format json  # JSON output
-agentci diff --spec-path spec.yaml --baseline-dir baselines/  # With custom paths
+ciagent diff --agent my-agent --baseline v1 --compare v2  # Diff two baseline versions
+ciagent diff --agent my-agent --baseline v1 --compare v2 --format json  # JSON output
+ciagent diff --spec-path spec.yaml --baseline-dir baselines/  # With custom paths
 
 # ── Legacy & Reporting ────────────────────────────────────────────────
-agentci run                           # Legacy test suite runner (pytest-compatible)
-agentci run -s path/to/suite.yaml     # Specify suite file
-agentci run -n 5                      # Statistical mode: run 5 times
-agentci run -t routing -t cost        # Filter tests by tag
-agentci run --no-diff                 # Skip golden trace comparison
-agentci run --fail-on-cost 0.50       # Fail if total cost exceeds $0.50
-agentci run --ci                      # CI mode: exit code 1 on any failure
-agentci run --json                    # Machine-readable JSON output
+ciagent run                           # Legacy test suite runner (pytest-compatible)
+ciagent run -s path/to/suite.yaml     # Specify suite file
+ciagent run -n 5                      # Statistical mode: run 5 times
+ciagent run -t routing -t cost        # Filter tests by tag
+ciagent run --no-diff                 # Skip golden trace comparison
+ciagent run --fail-on-cost 0.50       # Fail if total cost exceeds $0.50
+ciagent run --ci                      # CI mode: exit code 1 on any failure
+ciagent run --json                    # Machine-readable JSON output
 
-agentci report -i results.json -o report.html  # Generate HTML report
+ciagent report -i results.json -o report.html  # Generate HTML report
 ```
 
 ## Running Tests
 
-AgentCI is a pytest plugin. Tests can be run with either:
+CIAgent is a pytest plugin. Tests can be run with either:
 
 ```bash
-agentci run                          # Via AgentCI CLI
-pytest                               # Via pytest directly (AgentCI auto-discovers)
+ciagent run                          # Via CIAgent CLI
+pytest                               # Via pytest directly (CIAgent auto-discovers)
 ```
 
 ## Core Imports
@@ -271,10 +271,10 @@ result = tool.call(origin="SFO")
 
 ```bash
 # 1. Record a golden baseline from a live run
-agentci record test_billing_routing -o golden/billing.json
+ciagent record test_billing_routing -o golden/billing.json
 
 # 2. Run tests with automatic diffing against golden
-agentci run  # Compares if golden_trace is set in agentci.yaml
+ciagent run  # Compares if golden_trace is set in agentci.yaml
 
 # 3. Diff categories detected:
 #    TOOLS_CHANGED, ARGS_CHANGED, SEQUENCE_CHANGED, OUTPUT_CHANGED,
@@ -288,14 +288,14 @@ agentci run  # Compares if golden_trace is set in agentci.yaml
 my-agent-project/
 ├── agentci.yaml              # Test suite configuration
 ├── tests/
-│   ├── conftest.py           # AgentCI fixtures and mock setup
+│   ├── conftest.py           # CIAgent fixtures and mock setup
 │   ├── fixtures/             # Recorded mock responses
 │   ├── golden_traces/        # Baseline traces for regression
 │   ├── test_routing.py       # Test files
 │   └── test_tools.py
 └── .github/
     └── workflows/
-        └── agentci.yml       # Generated by `agentci init`
+        └── agentci.yml       # Generated by `ciagent init`
 ```
 
 ## Framework-Specific Setup
@@ -373,7 +373,7 @@ LLMCall
 
 ## Error Messages
 
-AgentCI errors include actionable fix suggestions. Examples:
+CIAgent errors include actionable fix suggestions. Examples:
 
 - `"No agent import path provided in test suite."` — Set `agent: myapp.agent:run_agent` in agentci.yaml
 - `"Could not import agent function 'path': error"` — Check the module:function import path
@@ -385,8 +385,8 @@ AgentCI errors include actionable fix suggestions. Examples:
 ## CI/CD Setup
 
 ```bash
-agentci init         # Generates .github/workflows/agentci.yml
-agentci init --hook  # Also generates .git/hooks/pre-push
+ciagent init         # Generates .github/workflows/agentci.yml
+ciagent init --hook  # Also generates .git/hooks/pre-push
 ```
 
-The generated workflow runs `pytest` and `agentci diff` on every push/PR.
+The generated workflow runs `pytest` and `ciagent diff` on every push/PR.

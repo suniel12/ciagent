@@ -31,7 +31,7 @@ def test_init_command_interactive(tmp_path):
     with runner.isolated_filesystem(temp_dir=tmp_path):
         result = runner.invoke(cli, ['init'], input="my.custom.runner:run\n")
         assert result.exit_code == 0
-        assert "AgentCI Setup" in result.output
+        assert "CIAgent Setup" in result.output
         assert "What is the import path" in result.output
         assert os.path.exists("agentci_spec.yaml")
         
@@ -102,7 +102,7 @@ def run(query: str) -> Trace:
 """)
         result = runner.invoke(cli, ['eval'])
         assert result.exit_code == 0
-        assert "AgentCI v" in result.output
+        assert "CIAgent v" in result.output
         assert "Eval" in result.output
 
 
@@ -405,26 +405,26 @@ class TestBuildNextSteps:
     def test_mock_with_queries(self):
         steps = _build_next_steps(run_mode="mock", created_workflow=False, has_queries=True)
         combined = "\n".join(steps)
-        assert "agentci test --mock" in combined
+        assert "ciagent test --mock" in combined
         assert "git push" not in combined
 
     def test_mock_without_queries(self):
         steps = _build_next_steps(run_mode="mock", created_workflow=False, has_queries=False)
         combined = "\n".join(steps)
         assert "TODO" in combined or "Fill in" in combined
-        assert "agentci test --mock" in combined
+        assert "ciagent test --mock" in combined
 
     def test_live_with_workflow(self):
         steps = _build_next_steps(run_mode="live", created_workflow=True, has_queries=True)
         combined = "\n".join(steps)
-        assert "agentci test" in combined
+        assert "ciagent test" in combined
         assert "git push" in combined
         assert "API key" in combined
 
     def test_live_without_workflow(self):
         steps = _build_next_steps(run_mode="live", created_workflow=False, has_queries=True)
         combined = "\n".join(steps)
-        assert "agentci test" in combined
+        assert "ciagent test" in combined
         assert "git push" not in combined
 
 
@@ -534,7 +534,7 @@ class TestInitContextAwareNextSteps:
                 input="\n\nmyagent:run\nn\n",
             )
             assert result.exit_code == 0
-            assert "agentci test --mock" in result.output
+            assert "ciagent test --mock" in result.output
 
 
 # ── Tests for calibration pass (v0.4.2) ──────────────────────────────────────

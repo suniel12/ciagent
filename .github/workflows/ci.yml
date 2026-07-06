@@ -1,4 +1,4 @@
-name: AgentCI CI
+name: CIAgent CI
 
 on:
   push:
@@ -36,4 +36,4 @@ jobs:
         # Run the demo agent tests
         # We need to set PYTHONPATH so the agent code can be imported
         export PYTHONPATH=$PYTHONPATH:$(pwd)
-        agentci run --suite examples/demo_agent/agentci.yaml --ci
+        ciagent run --suite examples/demo_agent/agentci.yaml --ci

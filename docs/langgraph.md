@@ -1,12 +1,12 @@
 # LangGraph Integration
 
-Agent CI has first-class support for LangGraph.
+CIAgent has first-class support for LangGraph.
 
 ## setup
 
 1. Install the optional dependency:
    ```bash
-   pip install "agentci[langgraph]"
+   pip install "ciagent[langgraph]"
    ```
 
 2. Configure your `agentci.yaml`:
@@ -15,4 +15,4 @@ Agent CI has first-class support for LangGraph.
    agent: "my_graph:app"
    ```
 
-The Agent CI runner will automatically instrument your LangGraph application to capture traces.
+The CIAgent runner will automatically instrument your LangGraph application to capture traces.
