@@ -93,6 +93,10 @@ def save_baseline(
     model_name = _extract_model_name(trace)
 
     baseline_data: dict[str, Any] = {
+        # Format version of the baseline file itself (1 = single-trace wrapper;
+        # 2 = conversation envelope, written by the simulate flow). Files
+        # without the field read as 1 (pre-0.9 legacy).
+        "schema_version": 1,
         "version": version,
         "agent": agent,
         "captured_at": datetime.now(timezone.utc).isoformat(),

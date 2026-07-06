@@ -1,0 +1,77 @@
+{
+  "trace_id": "3ba00441065445e6",
+  "created_at": "2026-07-06T22:12:47.691384Z",
+  "spans": [
+    {
+      "span_id": "b1db2922c8b14208",
+      "parent_span_id": null,
+      "kind": "agent",
+      "name": "mock-agent",
+      "input_data": null,
+      "output_data": "Based on our documentation: 30 days.",
+      "stop_reason": null,
+      "graph_state": {},
+      "tool_calls": [
+        {
+          "tool_name": "search_kb",
+          "arguments": {
+            "query": "what is your return policy?"
+          },
+          "result": "[mock result]",
+          "error": null,
+          "timestamp": "2026-07-06T22:12:47.691579+00:00",
+          "duration_ms": 0.0
+        }
+      ],
+      "llm_calls": [
+        {
+          "model": "mock-model",
+          "provider": "",
+          "input_messages": [],
+          "output_text": "",
+          "tokens_in": 100,
+          "tokens_out": 50,
+          "stop_reason": null,
+          "cost_usd": 0.0,
+          "duration_ms": 0.0,
+          "timestamp": "2026-07-06T22:12:47.691599Z"
+        },
+        {
+          "model": "mock-model",
+          "provider": "",
+          "input_messages": [],
+          "output_text": "",
+          "tokens_in": 100,
+          "tokens_out": 50,
+          "stop_reason": null,
+          "cost_usd": 0.0,
+          "duration_ms": 0.0,
+          "timestamp": "2026-07-06T22:12:47.691602Z"
+        }
+      ],
+      "total_tokens_in": 200,
+      "total_tokens_out": 100,
+      "total_cost_usd": 0.0,
+      "duration_ms": 0.0,
+      "metadata": {},
+      "attributes": {},
+      "from_agent": null,
+      "to_agent": null,
+      "guardrail_name": null,
+      "guardrail_triggered": false
+    }
+  ],
+  "total_cost_usd": 0.0,
+  "total_tokens": 300,
+  "total_duration_ms": 0.0,
+  "total_llm_calls": 2,
+  "total_tool_calls": 1,
+  "test_name": "what is your return policy?",
+  "agent_name": "mock-agent",
+  "framework": "",
+  "graph_state": {},
+  "metadata": {
+    "query": "what is your return policy?",
+    "final_output": "Based on our documentation: 30 days."
+  }
+}

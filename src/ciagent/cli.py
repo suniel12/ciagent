@@ -1728,6 +1728,7 @@ def bootstrap(queries, agent, runner, output, baseline_dir, yes):
                 
                 # Save baseline
                 baseline_data = {
+                    "schema_version": 1,
                     "version": "v1",
                     "agent": agent,
                     "captured_at": datetime.now(timezone.utc).isoformat(),
