@@ -5,7 +5,31 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0] - 2026-07-05
+
+### Added
+
+#### Stability Report — `agentci test --runs N`
+A stable suite score can hide per-query verdict flips: the aggregate holds
+because the errors move around. `--runs N` executes the whole suite N times
+and reports what a single run cannot show:
+
+- Per-query verdict history (✅❌✅), pass rate, pass@k and pass^k estimates
+- Suite score per run printed side by side with the queries that flipped
+- **Flip-source attribution** — every flip is labelled:
+  - `agent-variance`: the agent's output changed → fix the agent
+  - `judge-flake`: same output, the LLM judge changed its verdict → fix the eval
+  - `mixed`: near-identical paraphrase with a judge configured — not guessed
+  Attribution rests on a structural fact: deterministic checks cannot flip on
+  identical output, so identical answer + tools + flipped verdict = judge.
+- Exit semantics: flaky-but-passing exits 0 (warnings only); queries failing
+  in EVERY run exit 1; `--fail-on-flaky` escalates flips to exit 1
+- Works in every format: console section, GitHub `::warning` annotations,
+  `stability` block in JSON, stability card in the HTML report
+- Mock mode support: `AGENTCI_MOCK_FLAKY=1 agentci test --mock --runs 3`
+  demonstrates the report with zero API keys
+- New module `agentci.engine.stability` (`build_stability_report`,
+  `StabilityReport`, `QueryStability`, `FlipSource`); 21 new tests
 
 ### Changed
 - **`expected_tools` now asserts by default**: a missing expected tool produces a WARN

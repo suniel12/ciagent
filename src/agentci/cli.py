@@ -2425,6 +2425,44 @@ def doctor_cmd(config):
     sys.exit(1 if failed > 0 else 0)
 
 
+def _finish_stability_session(fmt, config, output, run_results, stability, fail_on_flaky):
+    """Render a multi-run stability session and exit with the right code.
+
+    Console/github: per-query detail only for consistent failures — flips
+    belong to the stability section, not the per-query noise. Other formats
+    render the last run's results with the stability block attached.
+
+    Exit: 1 if any query failed in EVERY run, or flipped with --fail-on-flaky.
+    """
+    from .engine.reporter import (
+        emit_query_result,
+        emit_stability_console,
+        report_results,
+    )
+
+    if fmt in ("console", "github"):
+        failed_queries = {q.query for q in stability.consistent_failures}
+        for r in run_results[-1]:
+            if r.query in failed_queries:
+                emit_query_result(r)
+        emit_stability_console(stability)
+        if os.environ.get("GITHUB_ACTIONS") == "true" or fmt == "github":
+            from .engine.reporter import _emit_github_annotations, _emit_stability_github
+            _emit_github_annotations(
+                [r for r in run_results[-1] if r.query in failed_queries], config,
+            )
+            _emit_stability_github(stability, config)
+        exit_code = 1 if stability.consistent_failures else 0
+    else:
+        exit_code = report_results(
+            run_results[-1], format=fmt, spec_file=config,
+            output_path=output, stability=stability,
+        )
+    if fail_on_flaky and stability.flipped_queries:
+        exit_code = max(exit_code, 1)
+    sys.exit(exit_code)
+
+
 @cli.command(name="test")
 @click.option('--config', '-c', default='agentci_spec.yaml',
               help='Path to agentci_spec.yaml', show_default=True)
@@ -2444,13 +2482,24 @@ def doctor_cmd(config):
               help='Run with synthetic traces (no API calls). Validates spec structure.')
 @click.option('--yes', '-y', is_flag=True,
               help='Skip cost estimate confirmation (for CI)')
-def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, mock, yes):
+@click.option('--runs', '-n', 'runs', default=1, show_default=True, type=int,
+              help='Run every query N times and report verdict stability with '
+                   'flip-source attribution (agent-variance vs judge-flake)')
+@click.option('--fail-on-flaky', is_flag=True,
+              help='With --runs > 1: exit 1 if any query flips verdicts across runs')
+def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, mock, yes,
+             runs, fail_on_flaky):
     """Run AgentCI v2 evaluation against a spec file.
 
     Loads agentci_spec.yaml, runs the agent for each query (capturing traces),
     evaluates all three layers (Correctness / Path / Cost), and reports results.
 
     Use --mock to validate your spec with synthetic traces (zero API cost).
+
+    Use --runs N to run the whole suite N times: a stable aggregate score can
+    hide per-query verdict flips. Each flip is attributed to its source —
+    agent-variance (the answer changed; fix the agent) or judge-flake (same
+    answer, the LLM judge changed its mind; fix the eval).
 
     \b
     Requires the spec to declare a runner (unless --mock is used):
@@ -2461,7 +2510,8 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
     \b
     Exit codes:
         0 — all correctness checks pass (warnings emitted as annotations)
-        1 — one or more correctness failures
+        1 — one or more correctness failures (with --runs: failed in EVERY run,
+            or flipped and --fail-on-flaky is set)
         2 — runtime / infrastructure error
     """
     import json as _json
@@ -2500,6 +2550,10 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
             sys.exit(1)
         console.print()
 
+    if runs < 1:
+        console.print("[bold red]--runs must be at least 1[/]")
+        sys.exit(2)
+
     # ── Mock mode ─────────────────────────────────────────────────────────────
     if mock:
         from .engine.mock_runner import run_mock_spec
@@ -2507,16 +2561,36 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
         console.print(
             f"[bold blue]AgentCI v{__version__}[/] │ agent: [cyan]{spec.agent}[/] │ "
             f"queries: [cyan]{len(spec.queries)}[/] │ mode: [cyan]mock[/]"
+            + (f" │ runs: [cyan]{runs}[/]" if runs > 1 else "")
         )
         console.print("[dim]Running with synthetic traces — zero API cost[/]\n")
 
-        traces = run_mock_spec(spec)
+        # AGENTCI_MOCK_FLAKY=1 simulates agent-variance across runs so the
+        # stability report (and its tests) can be exercised without API keys.
+        mock_flaky = os.environ.get("AGENTCI_MOCK_FLAKY", "").lower() in ("1", "true", "yes")
+
         try:
-            results = evaluate_spec(spec, traces, None)
+            run_results = []
+            for run_index in range(runs):
+                traces = run_mock_spec(spec, run_index=run_index, flaky=mock_flaky)
+                results = evaluate_spec(spec, traces, None)
+                run_results.append(results)
+                if runs > 1 and fmt in ("console", "github"):
+                    passed = sum(1 for r in results if not r.hard_fail)
+                    console.print(f"Run {run_index + 1}/{runs}: {passed}/{len(results)} passed")
         except Exception as e:  # noqa: BLE001
             console.print(f"[bold red]Evaluation error:[/] {e}")
             sys.exit(2)
-        exit_code = report_results(results, format=fmt, spec_file=config)
+
+        if runs > 1:
+            from .engine.stability import build_stability_report
+
+            stability = build_stability_report(spec, run_results)
+            _finish_stability_session(
+                fmt, config, output, run_results, stability, fail_on_flaky,
+            )
+
+        exit_code = report_results(run_results[0], format=fmt, spec_file=config)
         sys.exit(exit_code)
 
     # ── Check for runner ──────────────────────────────────────────────────────
@@ -2569,11 +2643,11 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
             judge_model = judge_model.split(":", 1)[1]
 
         est = estimate_cost(
-            num_queries=len(spec.queries),
+            num_queries=len(spec.queries) * runs,
             judge_model=judge_model,
             has_llm_judge=has_judge,
         )
-        console.print(f"\n[dim]{format_estimate(est, len(spec.queries))}[/]")
+        console.print(f"\n[dim]{format_estimate(est, len(spec.queries) * runs)}[/]")
 
         from rich.prompt import Confirm
         if not Confirm.ask("Proceed? [Y/n]", default=True):
@@ -2584,6 +2658,7 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
     console.print(
         f"[bold blue]AgentCI v{__version__}[/] │ agent: [cyan]{spec.agent}[/] │ "
         f"queries: [cyan]{len(spec.queries)}[/] │ workers: [cyan]{workers}[/]"
+        + (f" │ runs: [cyan]{runs}[/]" if runs > 1 else "")
     )
     if fmt in ("console", "github"):
         console.print("")
@@ -2603,6 +2678,36 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
                     baselines[q] = Trace.from_dict(b["trace"])
             except Exception:  # noqa: BLE001
                 pass  # Skip malformed baseline files
+
+    # ── Multi-run stability mode: N sequential passes, then attribution ────
+    if runs > 1:
+        from .engine.stability import build_stability_report
+
+        spec_dir = str(Path(config).parent) if config else None
+        run_results = []
+        for run_index in range(runs):
+            try:
+                traces = run_spec_parallel(spec, runner_fn, max_workers=workers)
+            except Exception as e:  # noqa: BLE001
+                console.print(f"[bold red]Infrastructure error:[/] {e}")
+                sys.exit(2)
+            if not traces:
+                console.print("[bold red]Error:[/] No traces captured — runner may have failed for all queries.")
+                sys.exit(1)
+            try:
+                results = evaluate_spec(spec, traces, baselines, spec_dir=spec_dir)
+            except Exception as e:  # noqa: BLE001
+                console.print(f"[bold red]Evaluation error:[/] {e}")
+                sys.exit(2)
+            run_results.append(results)
+            if fmt in ("console", "github"):
+                passed = sum(1 for r in results if not r.hard_fail)
+                console.print(f"Run {run_index + 1}/{runs}: {passed}/{len(results)} passed")
+
+        stability = build_stability_report(spec, run_results)
+        _finish_stability_session(
+            fmt, config, output, run_results, stability, fail_on_flaky,
+        )
 
     # ── Streaming evaluation: print each result as its trace arrives ───────
     import threading

@@ -85,6 +85,45 @@ Answer: AgentCI currently does not specify a required Python version
 
 Don't have golden queries yet? `agentci init --generate` scans your code and generates a starter spec.
 
+## A stable score is not a stable system
+
+Run the identical eval three times and you can get 96% / 95% / 96% — rock solid — while
+individual queries flip verdicts every run. The aggregate holds because the errors move
+around. `--runs N` shows what a single run can't:
+
+```bash
+agentci test --runs 3
+```
+
+```
+Run 1/3: 18/19 passed
+Run 2/3: 18/19 passed
+Run 3/3: 18/19 passed
+
+────────────────────────────────────────────────────────────
+Stability Report
+────────────────────────────────────────────────────────────
+Suite score across 3 runs: 95%  /  95%  /  95%
+
+⚠️  FLAKY — 2/19 queries flipped verdicts across runs:
+   "What's your return window?"    ✅❌✅  pass_rate=0.67  pass^3=0.30  source: agent-variance (answer changed)
+   "Do you sell gift cards?"       ❌✅✅  pass_rate=0.67  pass^3=0.30  source: judge-flake (same answer, verdict flipped)
+
+   Flip sources: 1 agent-variance (fix the agent) │ 1 judge-flake (fix the eval) │ 0 mixed
+
+Stability verdict: FLAKY
+```
+
+Every flip is attributed to its source, so it's a routed work item, not a scary number:
+**agent-variance** means the agent produced different output (fix the prompt, retrieval, or
+temperature); **judge-flake** means the output was identical but the LLM judge changed its
+mind (fix the rubric — or replace the judge with a deterministic check). Attribution is
+structural, not guessed: deterministic checks cannot flip on identical output.
+
+Flaky-but-passing exits 0 so adoption won't break your CI; add `--fail-on-flaky` when
+you're ready to gate on it. Try it with zero API keys:
+`AGENTCI_MOCK_FLAKY=1 agentci test --mock --runs 3`. Details: [docs/stability.md](docs/stability.md).
+
 ## Check facts in code. Save the judge for judgment.
 
 Most agent failures that matter involve a hard fact — a product name, a price, a version number. Those are checkable deterministically, for free. And an LLM judge grading against the same context as your agent inherits your agent's blind spots: when retrieval comes up empty, the agent answers from nothing and the judge — reading the same nothing — passes it.
@@ -109,6 +148,7 @@ agentci init --generate        # Scan project, generate test spec
 agentci init                   # Generate GitHub Actions workflow + pre-push hook
 agentci test --mock --yes      # Zero-cost synthetic traces, CI-friendly (no keys, no prompts)
 agentci test                   # Run 3-layer evaluation (correctness → path → cost)
+agentci test --runs 3          # Stability report: verdict flips + flip-source attribution
 agentci test --format html -o report.html  # HTML report with per-query details
 agentci calibrate              # Measure real agent metrics, auto-tune spec budgets
 agentci doctor                 # Health check: spec, deps, API keys
@@ -119,6 +159,7 @@ agentci report -i results.json # Generate HTML report from JSON results
 ## Docs
 
 - [Quickstart](docs/quickstart.md) — install to first green run
+- [Stability testing](docs/stability.md) — `--runs N`, flip-source attribution
 - [Writing tests](docs/writing-tests.md) — the full spec reference
 - [Cost tracking](docs/cost-tracking.md) — budgets and spike detection
 - [Golden traces](docs/golden-traces.md) — record baselines, diff regressions

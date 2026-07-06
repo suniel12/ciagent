@@ -22,9 +22,12 @@ from __future__ import annotations
 
 import json
 import os
-from typing import Any
+from typing import TYPE_CHECKING, Any, Optional
 
 from agentci.engine.results import LayerStatus, QueryResult
+
+if TYPE_CHECKING:
+    from agentci.engine.stability import StabilityReport
 
 # GitHub limits visible inline annotations per job; exceeding this silently
 # drops annotations. Warnings are budget-capped; errors are always emitted.
@@ -39,6 +42,7 @@ def report_results(
     format: str = "console",
     spec_file: str = "agentci_spec.yaml",
     output_path: str | None = None,
+    stability: Optional["StabilityReport"] = None,
 ) -> int:
     """Generate output and return the appropriate exit code.
 
@@ -47,24 +51,36 @@ def report_results(
         format:     Output format: 'console', 'github', 'json', 'prometheus', 'html'.
         spec_file:  Path to the spec file (used in GitHub annotation file references).
         output_path: File path for HTML output (default: agentci-report.html).
+        stability:  Optional multi-run StabilityReport (from `--runs N`). When
+                    provided, a stability section is added to the output and
+                    failure means "failed in every run", not "failed in the
+                    run being rendered".
 
     Returns:
-        Exit code: 0 = pass, 1 = correctness fail.
+        Exit code: 0 = pass, 1 = correctness fail (consistent across runs when
+        a stability report is provided).
     """
-    has_hard_failures = any(r.hard_fail for r in results)
+    if stability is not None:
+        has_hard_failures = bool(stability.consistent_failures)
+    else:
+        has_hard_failures = any(r.hard_fail for r in results)
 
     # Always emit annotations when running in GitHub Actions
     if format == "github" or _is_github_actions():
         _emit_github_annotations(results, spec_file)
+        if stability is not None:
+            _emit_stability_github(stability, spec_file)
 
     if format == "json":
-        _emit_json(results)
+        _emit_json(results, stability=stability)
     elif format == "prometheus":
         _emit_prometheus(results)
     elif format == "html":
-        _emit_html(results, spec_file, output_path or "agentci-report.html")
+        _emit_html(results, spec_file, output_path or "agentci-report.html", stability=stability)
     else:
         _emit_console(results)
+        if stability is not None:
+            emit_stability_console(stability)
 
     return 1 if has_hard_failures else 0
 
@@ -180,6 +196,81 @@ def _emit_console(results: list[QueryResult]) -> None:
         emit_query_result(r)
     emit_summary(results)
 
+
+def emit_stability_console(report: "StabilityReport") -> None:
+    """Print the multi-run stability section.
+
+    Designed around one contrast: the suite score per run (stable) versus the
+    queries whose verdicts flipped underneath it (not stable) — with every
+    flip attributed to its source so it's actionable.
+    """
+    print(f"\n{'─' * 60}")
+    print("Stability Report")
+    print(f"{'─' * 60}")
+
+    scores = "  /  ".join(f"{s:.0%}" for s in report.per_run_scores)
+    print(f"Suite score across {report.runs} runs: {scores}")
+
+    if report.is_stable:
+        print(f"\n✅ STABLE — all {report.total_queries} queries returned the same "
+              f"verdict in every run")
+    else:
+        flipped = report.flipped_queries
+        print(f"\n⚠️  FLAKY — {len(flipped)}/{report.total_queries} queries flipped "
+              f"verdicts across runs:")
+        for q in flipped:
+            label = q.flip_source.value if q.flip_source else "unknown"
+            print(
+                f"   {_short(q.query, 44):<46} {q.verdict_string}  "
+                f"pass_rate={q.pass_rate:.2f}  pass^{q.runs}={q.pass_pow_k:.2f}  "
+                f"source: {label} ({q.flip_reason})"
+            )
+        agent_side = sum(1 for q in flipped if q.flip_source == _flip_agent())
+        judge_side = sum(1 for q in flipped if q.flip_source == _flip_judge())
+        mixed = len(flipped) - agent_side - judge_side
+        print(
+            f"\n   Flip sources: {agent_side} agent-variance (fix the agent) │ "
+            f"{judge_side} judge-flake (fix the eval) │ {mixed} mixed"
+        )
+
+    if report.consistent_failures:
+        print(f"\n❌ {len(report.consistent_failures)} query(ies) failed in EVERY run "
+              f"(consistent failures, not flakiness):")
+        for q in report.consistent_failures:
+            print(f"   • {_short(q.query, 70)}")
+
+    print(f"\nStability verdict: {report.verdict}")
+
+
+def _flip_agent():
+    from agentci.engine.stability import FlipSource
+    return FlipSource.AGENT_VARIANCE
+
+
+def _flip_judge():
+    from agentci.engine.stability import FlipSource
+    return FlipSource.JUDGE_FLAKE
+
+
+def _short(text: str, max_len: int) -> str:
+    text = " ".join(text.split())
+    return f'"{text[: max_len - 1]}…"' if len(text) > max_len else f'"{text}"'
+
+
+def _emit_stability_github(report: "StabilityReport", spec_file: str) -> None:
+    """Emit stability findings as GitHub annotations.
+
+    Flipped queries are warnings (actionable, non-blocking); consistent
+    failures already surface as ::error via the normal results path.
+    """
+    for q in report.flipped_queries:
+        label = q.flip_source.value if q.flip_source else "unknown"
+        print(
+            f"::warning file={spec_file}::[STABILITY] {q.query[:60]}: verdict "
+            f"flipped across {q.runs} runs ({q.verdict_string}) — source: "
+            f"{label} ({q.flip_reason})"
+        )
+
 def _print_answer_preview(trace: Any, max_len: int = 500) -> None:
     """Show a truncated preview of the extracted answer."""
     from agentci.engine.runner import _extract_answer
@@ -262,7 +353,10 @@ def _print_layer(
 # ── JSON Output ────────────────────────────────────────────────────────────────
 
 
-def _emit_json(results: list[QueryResult]) -> None:
+def _emit_json(
+    results: list[QueryResult],
+    stability: Optional["StabilityReport"] = None,
+) -> None:
     """Structured JSON for dashboards and external tooling."""
     output: dict[str, Any] = {
         "summary": {
@@ -273,7 +367,35 @@ def _emit_json(results: list[QueryResult]) -> None:
         },
         "results": [_serialize_result(r) for r in results],
     }
+    if stability is not None:
+        output["stability"] = _serialize_stability(stability)
     print(json.dumps(output, indent=2))
+
+
+def _serialize_stability(report: "StabilityReport") -> dict[str, Any]:
+    return {
+        "runs": report.runs,
+        "verdict": report.verdict,
+        "per_run_scores": report.per_run_scores,
+        "flipped": len(report.flipped_queries),
+        "consistent_failures": len(report.consistent_failures),
+        "queries": [
+            {
+                "query": q.query,
+                "verdicts": q.verdicts,
+                "pass_rate": round(q.pass_rate, 3),
+                "pass_at_k": q.pass_at_k,
+                "pass_pow_k": q.pass_pow_k,
+                "flipped": q.flipped,
+                "flip_source": q.flip_source.value if q.flip_source else None,
+                "flip_reason": q.flip_reason or None,
+                "answer_similarity": q.answer_similarity,
+                "cost_usd": q.cost_usd,
+                "latency_ms": q.latency_ms,
+            }
+            for q in report.queries
+        ],
+    }
 
 
 def _serialize_result(r: QueryResult) -> dict[str, Any]:
@@ -335,6 +457,7 @@ def _emit_html(
     results: list[QueryResult],
     spec_file: str,
     output_path: str,
+    stability: Optional["StabilityReport"] = None,
 ) -> None:
     """Render a self-contained HTML report and write it to *output_path*."""
     from datetime import datetime, timezone
@@ -383,6 +506,7 @@ def _emit_html(
         total_cost=total_cost if has_cost else None,
         results=view_results,
         version=version,
+        stability=stability,
     )
 
     Path(output_path).write_text(html, encoding="utf-8")
