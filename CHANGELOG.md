@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- **`expected_tools` now asserts by default**: a missing expected tool produces a WARN
+  (tool recall gates at 1.0 unless `min_tool_recall` explicitly loosens it). Previously,
+  without `min_tool_recall`, a recall of 0.0 displayed as PASS with a checkmark.
+- **`expected_tools: []` now asserts that no tools are called**: an explicit empty list
+  produces a WARN if the agent called any tool. Previously it was silently skipped.
+- `agentci doctor` no longer reports numpy as a required dependency (it was never used
+  by AgentCI, so every fresh install showed a false failure).
+
+### Docs
+- README: fixed the quickstart spec example (was missing the required `agent:` field),
+  added CI badge, "Check facts in code" section, docs index
+- Rewrote `docs/quickstart.md`, `docs/ci-cd.md`, `docs/cost-tracking.md`, and
+  `docs/golden-traces.md` to match the current `agentci test` workflow
+- Fixed dead clone URLs in CONTRIBUTING.md and quickstart
+- Removed unused demo GIF variants and cast recordings (6 files, ~2 MB)
+
 ## [0.6.0] - 2026-03-05
 
 ### Added

@@ -2382,7 +2382,7 @@ def doctor_cmd(config):
                         "Upgrade Python to 3.10+"))
 
     # 6. Key dependencies
-    for pkg in ["numpy", "pydantic", "click", "rich", "pyyaml"]:
+    for pkg in ["pydantic", "click", "rich", "pyyaml"]:
         import_name = "yaml" if pkg == "pyyaml" else pkg
         try:
             __import__(import_name)

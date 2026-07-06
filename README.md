@@ -3,6 +3,7 @@
 **Pytest-native regression testing for AI agents.** Catch routing changes, tool call drift, and cost spikes before production.
 
 [![PyPI](https://img.shields.io/pypi/v/ciagent)](https://pypi.org/project/ciagent/)
+[![CI](https://github.com/suniel12/AgentCI/actions/workflows/ci.yml/badge.svg)](https://github.com/suniel12/AgentCI/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![AGENTS.md](https://img.shields.io/badge/AGENTS.md-supported-blue)](AGENTS.md)
 
@@ -20,6 +21,7 @@ Write your golden queries — what should your agent handle, and what should it 
 
 ```yaml
 # agentci_spec.yaml
+agent: my-agent
 # runner: any function that takes a query string and returns a response
 runner: my_app.agent:run_for_agentci
 queries:
@@ -83,6 +85,17 @@ Answer: AgentCI currently does not specify a required Python version
 
 Don't have golden queries yet? `agentci init --generate` scans your code and generates a starter spec.
 
+## Check facts in code. Save the judge for judgment.
+
+Most agent failures that matter involve a hard fact — a product name, a price, a version number. Those are checkable deterministically, for free. And an LLM judge grading against the same context as your agent inherits your agent's blind spots: when retrieval comes up empty, the agent answers from nothing and the judge — reading the same nothing — passes it.
+
+So AgentCI runs deterministic checks first and treats the judge as the last resort, not the default:
+
+1. **Fact checks in code** — `expected_in_answer`, `not_in_answer`, `regex_match`, `json_schema`. Zero LLM calls, zero flakiness, same verdict every run.
+2. **Path checks** — did the agent call the tools it should have? A missing expected tool warns; a forbidden tool fails.
+3. **Cost budgets** — LLM calls, tokens, dollars per query.
+4. **LLM judge** (`llm_judge` rubrics, optional) — only for answers that genuinely need judgment, evaluated after every deterministic check has run.
+
 ## Demo
 
 Here's a RAG agent demo where someone "optimizes for latency" by reducing retriever docs from 8 to 1. AgentCI catches the correctness regression:
@@ -103,10 +116,24 @@ agentci record <test>          # Record golden baseline
 agentci diff                   # Diff against baseline
 agentci report -i results.json # Generate HTML report from JSON results
 ```
+## Docs
+
+- [Quickstart](docs/quickstart.md) — install to first green run
+- [Writing tests](docs/writing-tests.md) — the full spec reference
+- [Cost tracking](docs/cost-tracking.md) — budgets and spike detection
+- [Golden traces](docs/golden-traces.md) — record baselines, diff regressions
+- [CI/CD integration](docs/ci-cd.md) — GitHub Actions setup
+- [LangGraph](docs/langgraph.md) — graph-based agent support
+- [Metrics reference](docs/metrics_reference.md) — every metric, defined
+
+## Why not just an LLM judge?
+
+Judge-only evals are expensive, flaky, and blind to their own context. AgentCI is pytest-native regression testing: deterministic checks catch the factual failures, golden traces catch behavioral drift, cost budgets catch spend regressions — and the judge handles only what genuinely needs judgment. Mock mode (`agentci test --mock`) runs the whole suite with zero API keys and zero cost, so it can gate every PR.
+
 ## Contributing
 
-[GitHub Issues](https://github.com/suniel12/AgentCI/issues)
-[DemoAgents](https://github.com/suniel12/DemoAgents) — working examples for all three frameworks
+[GitHub Issues](https://github.com/suniel12/AgentCI/issues) ·
+[DemoAgents](https://github.com/suniel12/DemoAgents) — working examples for OpenAI, Anthropic, and LangGraph agents
 
 Apache 2.0. If you build an agent and test it with AgentCI, I'd love to hear about it.
 

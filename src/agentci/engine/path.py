@@ -76,14 +76,26 @@ def evaluate_path(
             pass_messages.append("No forbidden tools used")
 
     # ── 3. tool recall ───────────────────────────────────────────────────────
-    if spec.expected_tools:
+    if spec.expected_tools is not None and not spec.expected_tools:
+        # Explicit empty list: assert the agent called no tools at all
+        details["expected_no_tools"] = {"used": used_tools}
+        if used_tools:
+            warnings.append(
+                f"Expected no tool calls, but agent called: {sorted(set(used_tools))}"
+            )
+        else:
+            pass_messages.append("No tools called (as expected)")
+    elif spec.expected_tools:
         expected_set = set(spec.expected_tools)
         used_set = set(used_tools)
         recall = compute_tool_recall(expected_set, used_set)
         details["tool_recall"] = round(recall, 3)
-        if spec.min_tool_recall is not None and recall < spec.min_tool_recall:
+        # expected_tools means expected: recall gates at 1.0 unless loosened
+        min_recall = spec.min_tool_recall if spec.min_tool_recall is not None else 1.0
+        if recall < min_recall:
+            missing = sorted(expected_set - used_set)
             warnings.append(
-                f"Tool recall: {recall:.3f} < min {spec.min_tool_recall}"
+                f"Tool recall: {recall:.3f} < min {min_recall} — missing expected tools: {missing}"
             )
         else:
             expected_str = ", ".join(spec.expected_tools)
