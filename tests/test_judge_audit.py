@@ -12,12 +12,12 @@ from __future__ import annotations
 
 import pytest
 
-from agentci.engine.judge_audit import (
+from ciagent.engine.judge_audit import (
     load_answers_from_baselines,
     load_labels_file,
     run_judge_audit,
 )
-from agentci.schema.spec_models import (
+from ciagent.schema.spec_models import (
     AgentCISpec,
     CorrectnessSpec,
     GoldenQuery,
@@ -330,11 +330,11 @@ queries:
     def test_cli_detects_false_pass(self, project, monkeypatch):
         from click.testing import CliRunner
 
-        import agentci.engine.judge_audit as ja
-        from agentci.cli import cli
+        import ciagent.engine.judge_audit as ja
+        from ciagent.cli import cli
 
         monkeypatch.setattr(
-            "agentci.engine.judge.run_judge",
+            "ciagent.engine.judge.run_judge",
             lambda **kw: {"passed": True, "score": 5, "rationale": "sounds fine"},
         )
         runner = CliRunner()
@@ -353,10 +353,10 @@ queries:
 
         from click.testing import CliRunner
 
-        from agentci.cli import cli
+        from ciagent.cli import cli
 
         monkeypatch.setattr(
-            "agentci.engine.judge.run_judge",
+            "ciagent.engine.judge.run_judge",
             lambda **kw: {"passed": True, "score": 5, "rationale": ""},
         )
         runner = CliRunner()
@@ -373,7 +373,7 @@ queries:
     def test_cli_no_baselines_exits_2(self, tmp_path):
         from click.testing import CliRunner
 
-        from agentci.cli import cli
+        from ciagent.cli import cli
 
         spec = tmp_path / "agentci_spec.yaml"
         spec.write_text(

@@ -12,8 +12,8 @@ import os
 
 import pytest
 
-from agentci.engine.judge import run_judge
-from agentci.schema.spec_models import JudgeRubric
+from ciagent.engine.judge import run_judge
+from ciagent.schema.spec_models import JudgeRubric
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("AGENTCI_LIVE_TESTS") != "1",

@@ -13,14 +13,14 @@ from __future__ import annotations
 
 import pytest
 
-from agentci.engine.results import LayerResult, LayerStatus, QueryResult
-from agentci.engine.stability import (
+from ciagent.engine.results import LayerResult, LayerStatus, QueryResult
+from ciagent.engine.stability import (
     FlipSource,
     build_stability_report,
     _min_pairwise_similarity,
 )
-from agentci.models import Span, SpanKind, ToolCall, Trace
-from agentci.schema.spec_models import (
+from ciagent.models import Span, SpanKind, ToolCall, Trace
+from ciagent.schema.spec_models import (
     AgentCISpec,
     CorrectnessSpec,
     GoldenQuery,
@@ -351,7 +351,7 @@ queries:
     def _invoke(self, spec_file, args, env=None):
         from click.testing import CliRunner
 
-        from agentci.cli import cli
+        from ciagent.cli import cli
 
         runner = CliRunner()
         return runner.invoke(

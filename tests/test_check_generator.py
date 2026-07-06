@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import yaml
 
-from agentci.engine.check_generator import (
+from ciagent.engine.check_generator import (
     CandidateCheck,
     GenerationResult,
     collect_kb_text,
@@ -21,7 +21,7 @@ from agentci.engine.check_generator import (
     merge_candidates,
     validate_candidates,
 )
-from agentci.schema.spec_models import AgentCISpec, CorrectnessSpec, GoldenQuery
+from ciagent.schema.spec_models import AgentCISpec, CorrectnessSpec, GoldenQuery
 
 
 def make_spec(*queries: GoldenQuery) -> AgentCISpec:
@@ -241,13 +241,13 @@ queries:
     def _fake_extraction(monkeypatch, checks):
         payload = yaml.safe_dump([{"query": "what rate do you charge?", "checks": checks}])
         monkeypatch.setattr(
-            "agentci.engine.check_generator.default_llm", lambda prompt: payload,
+            "ciagent.engine.check_generator.default_llm", lambda prompt: payload,
         )
 
     def test_yes_applies_validated_checks(self, tmp_path, monkeypatch):
         from click.testing import CliRunner
 
-        from agentci.cli import cli
+        from ciagent.cli import cli
 
         project = self._project(tmp_path)
         self._fake_extraction(monkeypatch, [
@@ -269,7 +269,7 @@ queries:
     def test_brittle_check_rejected_and_not_written(self, tmp_path, monkeypatch):
         from click.testing import CliRunner
 
-        from agentci.cli import cli
+        from ciagent.cli import cli
 
         # Golden answer says "4.5 percent" — a literal-only "4.5%" check is brittle
         project = self._project(tmp_path, golden_answer="Our APR is 4.5 percent.")
@@ -288,7 +288,7 @@ queries:
     def test_dry_run_writes_nothing(self, tmp_path, monkeypatch):
         from click.testing import CliRunner
 
-        from agentci.cli import cli
+        from ciagent.cli import cli
 
         project = self._project(tmp_path)
         self._fake_extraction(monkeypatch, [
@@ -308,7 +308,7 @@ queries:
 
         from click.testing import CliRunner
 
-        from agentci.cli import cli
+        from ciagent.cli import cli
 
         project = self._project(tmp_path)
         shutil.rmtree(project / "golden")  # no known-good answers → ungated

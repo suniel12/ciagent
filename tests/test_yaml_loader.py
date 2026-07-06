@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 import yaml
 
-from agentci.exceptions import ConfigError
-from agentci.loader import filter_by_tags, load_spec
+from ciagent.exceptions import ConfigError
+from ciagent.loader import filter_by_tags, load_spec
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

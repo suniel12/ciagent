@@ -10,9 +10,9 @@ from unittest.mock import patch
 
 import pytest
 
-from agentci.engine.correctness import evaluate_correctness
-from agentci.engine.results import LayerStatus
-from agentci.schema.spec_models import CorrectnessSpec, JudgeRubric
+from ciagent.engine.correctness import evaluate_correctness
+from ciagent.engine.results import LayerStatus
+from ciagent.schema.spec_models import CorrectnessSpec, JudgeRubric
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -218,21 +218,21 @@ class TestLLMJudge:
     def test_judge_pass_returns_pass(self):
         rubric = JudgeRubric(rule="Response is helpful", threshold=0.6)
         s = spec(llm_judge=[rubric])
-        with patch("agentci.engine.correctness._run_judge_safe", return_value=judge_pass()):
+        with patch("ciagent.engine.correctness._run_judge_safe", return_value=judge_pass()):
             result = evaluate_correctness("Helpful answer", s)
         assert result.status == LayerStatus.PASS
 
     def test_judge_fail_returns_fail(self):
         rubric = JudgeRubric(rule="Response is helpful", threshold=0.6)
         s = spec(llm_judge=[rubric])
-        with patch("agentci.engine.correctness._run_judge_safe", return_value=judge_fail()):
+        with patch("ciagent.engine.correctness._run_judge_safe", return_value=judge_fail()):
             result = evaluate_correctness("Bad answer", s)
         assert result.status == LayerStatus.FAIL
 
     def test_judge_skipped_when_deterministic_already_failed(self):
         rubric = JudgeRubric(rule="Response is helpful", threshold=0.6)
         s = spec(expected_in_answer=["pip"], llm_judge=[rubric])
-        with patch("agentci.engine.correctness._run_judge_safe") as mock_judge:
+        with patch("ciagent.engine.correctness._run_judge_safe") as mock_judge:
             result = evaluate_correctness("No keyword here", s)
         mock_judge.assert_not_called()
         assert result.status == LayerStatus.FAIL
@@ -244,7 +244,7 @@ class TestLLMJudge:
         ]
         s = spec(llm_judge=rubrics)
         with patch(
-            "agentci.engine.correctness._run_judge_safe",
+            "ciagent.engine.correctness._run_judge_safe",
             side_effect=[judge_pass(), judge_fail()],
         ):
             result = evaluate_correctness("Answer", s)
@@ -258,21 +258,21 @@ class TestSafetyAndHallucinationChecks:
     def test_safety_check_pass(self):
         rubric = JudgeRubric(rule="Response is safe", threshold=0.8)
         s = spec(safety_check=rubric)
-        with patch("agentci.engine.correctness._run_judge_safe", return_value=judge_pass()):
+        with patch("ciagent.engine.correctness._run_judge_safe", return_value=judge_pass()):
             result = evaluate_correctness("Safe answer", s)
         assert result.status == LayerStatus.PASS
 
     def test_safety_check_fail(self):
         rubric = JudgeRubric(rule="Response is safe", threshold=0.8)
         s = spec(safety_check=rubric)
-        with patch("agentci.engine.correctness._run_judge_safe", return_value=judge_fail()):
+        with patch("ciagent.engine.correctness._run_judge_safe", return_value=judge_fail()):
             result = evaluate_correctness("Unsafe answer", s)
         assert result.status == LayerStatus.FAIL
 
     def test_hallucination_check_fail(self):
         rubric = JudgeRubric(rule="No hallucinations", threshold=0.8)
         s = spec(hallucination_check=rubric)
-        with patch("agentci.engine.correctness._run_judge_safe", return_value=judge_fail()):
+        with patch("ciagent.engine.correctness._run_judge_safe", return_value=judge_fail()):
             result = evaluate_correctness("Hallucinated answer", s)
         assert result.status == LayerStatus.FAIL
 
@@ -313,7 +313,7 @@ class TestRefutesPremise:
         """When refutes_premise=True, the built-in premise-correction rubric runs."""
         s = spec(refutes_premise=True)
         with patch(
-            "agentci.engine.correctness._run_judge_safe",
+            "ciagent.engine.correctness._run_judge_safe",
             return_value=judge_pass(),
         ) as mock_judge:
             result = evaluate_correctness("That feature doesn't exist; here's what does", s)
@@ -328,7 +328,7 @@ class TestRefutesPremise:
         """When the built-in rubric fails (vague deflection), result is FAIL."""
         s = spec(refutes_premise=True)
         with patch(
-            "agentci.engine.correctness._run_judge_safe",
+            "ciagent.engine.correctness._run_judge_safe",
             return_value=judge_fail(),
         ):
             result = evaluate_correctness("I'm not sure about that.", s)
@@ -339,7 +339,7 @@ class TestRefutesPremise:
         user_rubric = JudgeRubric(rule="Offers an alternative", threshold=0.6)
         s = spec(refutes_premise=True, llm_judge=[user_rubric])
         with patch(
-            "agentci.engine.correctness._run_judge_safe",
+            "ciagent.engine.correctness._run_judge_safe",
             return_value=judge_pass(),
         ) as mock_judge:
             result = evaluate_correctness("Feature X doesn't exist; try Feature Y", s)
@@ -352,7 +352,7 @@ class TestRefutesPremise:
         # Answer does NOT contain "pip install", but refutes_premise skips that check
         s = spec(refutes_premise=True, expected_in_answer=["pip install"])
         with patch(
-            "agentci.engine.correctness._run_judge_safe",
+            "ciagent.engine.correctness._run_judge_safe",
             return_value=judge_pass(),
         ):
             result = evaluate_correctness("That feature does not exist.", s)
@@ -364,7 +364,7 @@ class TestRefutesPremise:
         # Answer CONTAINS "error" which would normally fail not_in_answer
         s = spec(refutes_premise=True, not_in_answer=["error"])
         with patch(
-            "agentci.engine.correctness._run_judge_safe",
+            "ciagent.engine.correctness._run_judge_safe",
             return_value=judge_pass(),
         ):
             result = evaluate_correctness("There is an error in your premise.", s)
@@ -374,7 +374,7 @@ class TestRefutesPremise:
     def test_refutes_premise_false_default_no_change(self):
         """refutes_premise=False (default) → normal evaluation, no builtin rubric."""
         s = spec(refutes_premise=False, expected_in_answer=["pip"])
-        with patch("agentci.engine.correctness._run_judge_safe") as mock_judge:
+        with patch("ciagent.engine.correctness._run_judge_safe") as mock_judge:
             result = evaluate_correctness("no keyword here", s)
         # Normal flow: keyword check fails, judge not called
         mock_judge.assert_not_called()
@@ -384,7 +384,7 @@ class TestRefutesPremise:
         """refutes_premise: True adds 'refutes_premise': True to details."""
         s = spec(refutes_premise=True)
         with patch(
-            "agentci.engine.correctness._run_judge_safe",
+            "ciagent.engine.correctness._run_judge_safe",
             return_value=judge_pass(),
         ):
             result = evaluate_correctness("Correcting your premise...", s)
@@ -420,7 +420,7 @@ class TestDescriptivePassMessages:
     def test_llm_judge_describes_score(self):
         s = spec(llm_judge=[JudgeRubric(rule="Answer is helpful", threshold=0.7)])
         with patch(
-            "agentci.engine.correctness._run_judge_safe",
+            "ciagent.engine.correctness._run_judge_safe",
             return_value=judge_pass(),
         ):
             result = evaluate_correctness("helpful answer", s)
@@ -436,9 +436,9 @@ class TestMetadataFallbackIntegration:
 
     def test_keyword_check_passes_via_metadata(self):
         """evaluate_query should find keywords in metadata['final_output']."""
-        from agentci.engine.runner import evaluate_query
-        from agentci.models import Trace, Span
-        from agentci.schema.spec_models import GoldenQuery, CorrectnessSpec
+        from ciagent.engine.runner import evaluate_query
+        from ciagent.models import Trace, Span
+        from ciagent.schema.spec_models import GoldenQuery, CorrectnessSpec
 
         trace = Trace(
             spans=[Span(name="agent", output_data=None)],
@@ -454,9 +454,9 @@ class TestMetadataFallbackIntegration:
 
     def test_keyword_check_fails_without_metadata(self):
         """Without metadata fallback, empty output should fail keyword check."""
-        from agentci.engine.runner import evaluate_query
-        from agentci.models import Trace, Span
-        from agentci.schema.spec_models import GoldenQuery, CorrectnessSpec
+        from ciagent.engine.runner import evaluate_query
+        from ciagent.models import Trace, Span
+        from ciagent.schema.spec_models import GoldenQuery, CorrectnessSpec
 
         trace = Trace(
             spans=[Span(name="agent", output_data=None)],

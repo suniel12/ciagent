@@ -9,9 +9,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed — brand and story
 - **Brand: AgentCI → CIAgent** (display name), standardizing on the `ciagent`
-  package name. New `ciagent` CLI entry point; `agentci` kept as a compatibility
-  alias. Python API names (`agentci` module, `AgentCISpec`, `AGENTCI_MOCK_FLAKY`,
-  `agentci_spec.yaml`) unchanged.
+  package name. Spec/runner filenames (`agentci_spec.yaml`), `AGENTCI_*` env
+  vars, and `AgentCISpec`/`AgentCITraceProcessor` class names unchanged.
+- **BREAKING: Python module renamed `agentci` → `ciagent`** (`from ciagent
+  import ...`); the `agentci` CLI entry point is removed (`ciagent` is the
+  command), and the pytest plugin entry point is now `ciagent`. Flag-day, no
+  deprecation shim (pre-adoption). Motive is a verified collision: the
+  unrelated PyPI package `agentci` 0.1.1 (Agent-CI) installs a top-level
+  `agentci/` module and an `agentci` console script — installing both tools
+  in one environment broke ours.
 - **GitHub repo renamed** to `suniel12/ciagent` (old URLs redirect).
 - **Claude Code plugin identity renamed**: install is now
   `/plugin marketplace add suniel12/ciagent` + `/plugin install ciagent@ciagent`;

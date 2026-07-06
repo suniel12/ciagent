@@ -12,7 +12,7 @@ import pytest
 from unittest.mock import MagicMock, patch
 from datetime import datetime, timezone
 
-from agentci.engine.diff import (
+from ciagent.engine.diff import (
     DiffReport,
     MetricDelta,
     diff_baselines,
@@ -21,7 +21,7 @@ from agentci.engine.diff import (
     _extract_answer,
     _format_value,
 )
-from agentci.models import Trace, Span, ToolCall, LLMCall
+from ciagent.models import Trace, Span, ToolCall, LLMCall
 
 
 # ── Fixtures ───────────────────────────────────────────────────────────────────
@@ -193,7 +193,7 @@ class TestDiffBaselines:
         assert isinstance(report.legacy_diffs, list)
         # TOOLS_CHANGED should be in the legacy diffs since tool set changed
         diff_types = [d.diff_type for d in report.legacy_diffs]
-        from agentci.models import DiffType
+        from ciagent.models import DiffType
         assert DiffType.TOOLS_CHANGED in diff_types
 
     def test_missing_trace_key_handled(self):

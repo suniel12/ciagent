@@ -8,7 +8,7 @@ a specific invalid variant raises a ValidationError with a meaningful message.
 import pytest
 from pydantic import ValidationError
 
-from agentci.schema.spec_models import (
+from ciagent.schema.spec_models import (
     AgentCISpec,
     CorrectnessSpec,
     CostSpec,

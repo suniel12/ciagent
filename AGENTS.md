@@ -103,13 +103,13 @@ pytest                               # Via pytest directly (CIAgent auto-discove
 
 ```python
 # Data models
-from agentci.models import Trace, Span, LLMCall, ToolCall, SpanKind, DiffType
+from ciagent.models import Trace, Span, LLMCall, ToolCall, SpanKind, DiffType
 
 # Trace capture
-from agentci.capture import TraceContext
+from ciagent.capture import TraceContext
 
 # Assertions (used in agentci.yaml, evaluated by runner)
-from agentci.assertions import (
+from ciagent.assertions import (
     evaluate_assertion,
     assert_golden_match,
     assert_budget,
@@ -117,13 +117,13 @@ from agentci.assertions import (
 )
 
 # Mocks for zero-cost testing
-from agentci.mocks import MockTool, MockToolkit, AnthropicMocker, OpenAIMocker
+from ciagent.mocks import MockTool, MockToolkit, AnthropicMocker, OpenAIMocker
 
 # Diff engine
-from agentci.diff_engine import diff_traces, DiffReport
+from ciagent.diff_engine import diff_traces, DiffReport
 
 # Public API (top-level)
-from agentci import TraceContext, test, diff, load_baseline
+from ciagent import TraceContext, test, diff, load_baseline
 ```
 
 ## Writing Tests
@@ -131,7 +131,7 @@ from agentci import TraceContext, test, diff, load_baseline
 ### Trace Capture
 
 ```python
-from agentci.capture import TraceContext
+from ciagent.capture import TraceContext
 
 with TraceContext(agent_name="my_agent", test_name="test_routing") as ctx:
     result = my_agent.run("I need help with billing")
@@ -177,11 +177,11 @@ assert "confirmation" in str(trace.spans[-1].output_data)
 assert trace.agents_involved == ["Triage Agent", "Billing Agent"]
 
 # Golden trace comparison
-from agentci.assertions import assert_golden_match
+from ciagent.assertions import assert_golden_match
 assert_golden_match(trace, "golden_traces/test_routing.json")
 
 # Budget decorator
-from agentci.assertions import assert_budget
+from ciagent.assertions import assert_budget
 
 @assert_budget(max_cost=0.10, max_tokens=50000)
 def test_my_agent():
@@ -241,7 +241,7 @@ tests:
 
 ```python
 # Anthropic mock
-from agentci.mocks import AnthropicMocker
+from ciagent.mocks import AnthropicMocker
 
 mocker = AnthropicMocker(mock_responses=[
     {"tool": "search_flights", "input": {"origin": "SFO"}},
@@ -251,7 +251,7 @@ mocker = AnthropicMocker(mock_responses=[
 my_agent.client = mocker.client
 
 # OpenAI mock
-from agentci.mocks import OpenAIMocker
+from ciagent.mocks import OpenAIMocker
 
 mocker = OpenAIMocker(mock_responses=[
     {"tool": "search_flights", "arguments": {"origin": "SFO"}},
@@ -260,7 +260,7 @@ mocker = OpenAIMocker(mock_responses=[
 # Inject: mocker.client.chat.completions.create or mocker.client.responses.create
 
 # YAML-based toolkit
-from agentci.mocks import MockToolkit
+from ciagent.mocks import MockToolkit
 
 toolkit = MockToolkit.from_yaml("tests/mocks.yaml")
 tool = toolkit.get("search_flights")
@@ -303,7 +303,7 @@ my-agent-project/
 ### OpenAI Agents SDK
 
 ```python
-from agentci.adapters.openai_agents import AgentCITraceProcessor
+from ciagent.adapters.openai_agents import AgentCITraceProcessor
 from agents.tracing import add_trace_processor
 
 add_trace_processor(AgentCITraceProcessor())
@@ -312,7 +312,7 @@ add_trace_processor(AgentCITraceProcessor())
 ### LangGraph / LangChain
 
 ```python
-from agentci.capture import TraceContext
+from ciagent.capture import TraceContext
 
 with TraceContext(agent_name="rag_agent") as ctx:
     result = graph.invoke({"messages": [("user", query)]})
@@ -323,7 +323,7 @@ with TraceContext(agent_name="rag_agent") as ctx:
 ### Raw Anthropic
 
 ```python
-from agentci.mocks import AnthropicMocker
+from ciagent.mocks import AnthropicMocker
 
 mocker = AnthropicMocker(mock_responses=[...])
 # AnthropicMocker patches anthropic.Anthropic.messages.create
