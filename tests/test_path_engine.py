@@ -1,7 +1,7 @@
 """
 Unit tests for the Path Engine (Layer 2 — Soft Warning).
 
-Builds Trace objects using the existing agentci.models classes.
+Builds Trace objects using the existing ciagent.models classes.
 No mocks needed — all tests are deterministic.
 """
 
@@ -9,10 +9,10 @@ from __future__ import annotations
 
 import pytest
 
-from agentci.engine.path import _evaluate_match_mode, evaluate_path
-from agentci.engine.results import LayerStatus
-from agentci.models import Span, SpanKind, Trace, ToolCall
-from agentci.schema.spec_models import MatchMode, PathSpec
+from ciagent.engine.path import _evaluate_match_mode, evaluate_path
+from ciagent.engine.results import LayerStatus
+from ciagent.models import Span, SpanKind, Trace, ToolCall
+from ciagent.schema.spec_models import MatchMode, PathSpec
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

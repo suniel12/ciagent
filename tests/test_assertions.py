@@ -1,8 +1,8 @@
 """
 Tests for assertions.
 """
-from agentci.assertions import evaluate_assertion
-from agentci.models import Assertion, Trace
+from ciagent.assertions import evaluate_assertion
+from ciagent.models import Assertion, Trace
 
 def test_basic_assertion():
     t = Trace()

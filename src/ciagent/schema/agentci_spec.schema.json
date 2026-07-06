@@ -1,0 +1,754 @@
+{
+  "$defs": {
+    "CorrectnessSpec": {
+      "description": "Layer 1: Hard pass/fail. Any failure blocks the CI pipeline.",
+      "properties": {
+        "expected_in_answer": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Strings that must ALL appear in the answer (case-insensitive, AND logic)",
+          "title": "Expected In Answer"
+        },
+        "any_expected_in_answer": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "At least ONE of these strings must appear in the answer (case-insensitive, OR logic)",
+          "title": "Any Expected In Answer"
+        },
+        "not_in_answer": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Strings that must NOT appear in the answer",
+          "title": "Not In Answer"
+        },
+        "exact_match": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Answer must equal this string exactly (after stripping whitespace)",
+          "title": "Exact Match"
+        },
+        "regex_match": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Answer must match this regex pattern",
+          "title": "Regex Match"
+        },
+        "json_schema": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Answer must parse as JSON conforming to this schema",
+          "title": "Json Schema"
+        },
+        "llm_judge": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/JudgeRubric"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "LLM-as-a-judge rubrics; evaluated after deterministic checks",
+          "title": "Llm Judge"
+        },
+        "safety_check": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JudgeRubric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Safety evaluation rubric (treated as correctness-tier hard fail)"
+        },
+        "hallucination_check": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JudgeRubric"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Hallucination / grounding evaluation rubric"
+        },
+        "refutes_premise": {
+          "default": false,
+          "description": "When True, the agent is expected to correct a false premise in the query. Skips expected_in_answer/not_in_answer checks (they don't apply to refutals) and injects a built-in 'false premise correction' rubric into llm_judge.",
+          "title": "Refutes Premise",
+          "type": "boolean"
+        }
+      },
+      "title": "CorrectnessSpec",
+      "type": "object"
+    },
+    "CostSpec": {
+      "description": "Layer 3: Efficiency budget. Exceedances produce warnings, not failures.",
+      "properties": {
+        "max_cost_multiplier": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Max allowed cost as a multiple of the golden baseline (e.g. 2.0 = 2\u00d7)",
+          "title": "Max Cost Multiplier"
+        },
+        "max_total_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum total tokens (input + output) across all LLM calls",
+          "title": "Max Total Tokens"
+        },
+        "max_llm_calls": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum number of LLM API calls",
+          "title": "Max Llm Calls"
+        },
+        "max_latency_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum wall-clock latency in milliseconds",
+          "title": "Max Latency Ms"
+        },
+        "max_cost_usd": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum absolute cost in USD",
+          "title": "Max Cost Usd"
+        }
+      },
+      "title": "CostSpec",
+      "type": "object"
+    },
+    "GoldenQuery": {
+      "description": "A single test case in the AgentCI spec.",
+      "properties": {
+        "query": {
+          "description": "The input stimulus sent to the agent",
+          "title": "Query",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Human-readable description of what this test validates",
+          "title": "Description"
+        },
+        "tags": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tags for test filtering (e.g. ['smoke', 'edge-case'])",
+          "title": "Tags"
+        },
+        "correctness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CorrectnessSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "path": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PathSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "cost": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CostSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "span_assertions": {
+          "description": "Span-level assertions evaluated against trace data. Hard-fails on any assertion failure (like Correctness layer). Use to assert on data flowing between nodes/tools.",
+          "items": {
+            "$ref": "#/$defs/SpanAssertionSpec"
+          },
+          "title": "Span Assertions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "query"
+      ],
+      "title": "GoldenQuery",
+      "type": "object"
+    },
+    "JudgeRubric": {
+      "description": "Structured rubric for LLM-as-a-judge evaluation.",
+      "properties": {
+        "rule": {
+          "description": "Natural language evaluation criterion",
+          "title": "Rule",
+          "type": "string"
+        },
+        "scale": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Score anchors, e.g. ['1: Off-topic', '2: Partially relevant', '3: Fully correct']",
+          "title": "Scale"
+        },
+        "threshold": {
+          "default": 0.5,
+          "description": "Minimum passing score normalised to [0, 1]",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Threshold",
+          "type": "number"
+        },
+        "few_shot_examples": {
+          "anyOf": [
+            {
+              "items": {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Example input/output/score triples for calibration",
+          "title": "Few Shot Examples"
+        },
+        "context_file": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Path to a reference document used as ground truth for this rubric. The judge is instructed to evaluate the answer ONLY against this file's contents, ignoring prior training knowledge. Path is resolved relative to the spec file location.",
+          "title": "Context File"
+        }
+      },
+      "required": [
+        "rule"
+      ],
+      "title": "JudgeRubric",
+      "type": "object"
+    },
+    "MatchMode": {
+      "description": "How to compare the agent's tool sequence against the golden baseline.",
+      "enum": [
+        "strict",
+        "unordered",
+        "subset",
+        "superset"
+      ],
+      "title": "MatchMode",
+      "type": "string"
+    },
+    "PathSpec": {
+      "description": "Layer 2: Trajectory evaluation. Exceedances produce warnings, not failures.",
+      "properties": {
+        "max_tool_calls": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum number of tool calls allowed",
+          "title": "Max Tool Calls"
+        },
+        "expected_tools": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tools that should be called (used for recall calculation)",
+          "title": "Expected Tools"
+        },
+        "forbidden_tools": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tools that must NOT be called (safety boundary \u2014 hard fail if violated)",
+          "title": "Forbidden Tools"
+        },
+        "max_loops": {
+          "default": 3,
+          "description": "Maximum consecutive repeated tool invocations (loop detection). Default 3.",
+          "minimum": 1,
+          "title": "Max Loops",
+          "type": "integer"
+        },
+        "match_mode": {
+          "$ref": "#/$defs/MatchMode",
+          "default": "subset",
+          "description": "How to compare tool sequences against the golden baseline"
+        },
+        "min_tool_recall": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "|expected \u2229 used| / |expected|",
+          "title": "Min Tool Recall"
+        },
+        "min_tool_precision": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "|expected \u2229 used| / |used|",
+          "title": "Min Tool Precision"
+        },
+        "min_sequence_similarity": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum normalised LCS similarity (0=disjoint, 1=identical order)",
+          "title": "Min Sequence Similarity"
+        },
+        "expected_tool_sequence": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Expected tool call sequence (ordered list). Mismatch produces WARN, not hard fail. Example: ['retrieve_docs', 'rerank', 'generate_answer']",
+          "title": "Expected Tool Sequence"
+        },
+        "expected_handoff": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Expected handoff target agent name",
+          "title": "Expected Handoff"
+        },
+        "expected_handoffs_available": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "All agents that should be reachable as handoff targets",
+          "title": "Expected Handoffs Available"
+        },
+        "max_handoff_count": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Maximum number of handoffs allowed",
+          "title": "Max Handoff Count"
+        }
+      },
+      "title": "PathSpec",
+      "type": "object"
+    },
+    "SpanAssert": {
+      "description": "A single assertion on a field within a matched span.",
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/SpanAssertType",
+          "description": "Assertion type: contains, not_contains, regex, equals, or llm_judge"
+        },
+        "field": {
+          "description": "Dotted path to the span field to extract, e.g. 'attributes.tool.args.query' or 'output_data'",
+          "title": "Field",
+          "type": "string"
+        },
+        "rule": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Natural language rule for llm_judge assertions",
+          "title": "Rule"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Expected value for contains, not_contains, regex, or equals assertions",
+          "title": "Value"
+        },
+        "threshold": {
+          "default": 0.8,
+          "description": "Minimum passing score for llm_judge assertions (normalised 0\u20131)",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Threshold",
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "field"
+      ],
+      "title": "SpanAssert",
+      "type": "object"
+    },
+    "SpanAssertType": {
+      "description": "The type of assertion to perform on a span field.",
+      "enum": [
+        "llm_judge",
+        "contains",
+        "not_contains",
+        "regex",
+        "equals"
+      ],
+      "title": "SpanAssertType",
+      "type": "string"
+    },
+    "SpanAssertionSpec": {
+      "description": "Span-level assertion: select one or more spans and assert on their fields.",
+      "properties": {
+        "selector": {
+          "$ref": "#/$defs/SpanSelector",
+          "description": "Selects which span(s) to assert against"
+        },
+        "asserts": {
+          "description": "One or more assertions to run against each matched span",
+          "items": {
+            "$ref": "#/$defs/SpanAssert"
+          },
+          "minItems": 1,
+          "title": "Asserts",
+          "type": "array"
+        }
+      },
+      "required": [
+        "selector",
+        "asserts"
+      ],
+      "title": "SpanAssertionSpec",
+      "type": "object"
+    },
+    "SpanKindSelector": {
+      "description": "Which type of span to target in span assertions.",
+      "enum": [
+        "TOOL",
+        "NODE",
+        "HANDOFF",
+        "GUARDRAIL",
+        "LLM"
+      ],
+      "title": "SpanKindSelector",
+      "type": "string"
+    },
+    "SpanSelector": {
+      "description": "Selects a span from the trace by kind and name.",
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/SpanKindSelector",
+          "description": "Type of span to target (TOOL, NODE, HANDOFF, GUARDRAIL, LLM)"
+        },
+        "name": {
+          "description": "Name of the tool, node, or agent to match",
+          "title": "Name",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "name"
+      ],
+      "title": "SpanSelector",
+      "type": "object"
+    }
+  },
+  "description": "Root schema for agentci_spec.yaml.",
+  "properties": {
+    "version": {
+      "default": 1,
+      "description": "Schema version for forward compatibility",
+      "title": "Version",
+      "type": "integer"
+    },
+    "agent": {
+      "description": "Agent identifier (e.g. 'rag-agent', 'support-router')",
+      "title": "Agent",
+      "type": "string"
+    },
+    "baseline_dir": {
+      "default": "./golden",
+      "description": "Path to the directory where versioned baseline JSON files are stored.",
+      "title": "Baseline Dir",
+      "type": "string"
+    },
+    "runner": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Python dotted path to the agent runner callable, e.g. 'myagent.run:run_agent'. The function must accept (query: str) and return an ciagent.models.Trace. When set, 'agentci test' can invoke the agent directly without pytest.",
+      "title": "Runner"
+    },
+    "defaults": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Default correctness/path/cost settings applied to all queries unless overridden",
+      "title": "Defaults"
+    },
+    "judge_config": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Global LLM judge settings: model, temperature, ensemble, structured_output",
+      "title": "Judge Config"
+    },
+    "queries": {
+      "description": "Test cases to evaluate",
+      "items": {
+        "$ref": "#/$defs/GoldenQuery"
+      },
+      "minItems": 1,
+      "title": "Queries",
+      "type": "array"
+    }
+  },
+  "required": [
+    "agent",
+    "queries"
+  ],
+  "title": "AgentCISpec",
+  "type": "object"
+}

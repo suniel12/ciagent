@@ -1,7 +1,7 @@
 ---
 name: check
 description: Run CIAgent regression checks after changing an AI agent's code, prompts, or knowledge base in a repo that has agentci_spec.yaml, and interpret the results. Use after editing agent logic, before committing agent changes, or when the user asks whether the agent still works.
-allowed-tools: Bash(agentci *), Bash(ciagent *)
+allowed-tools: Bash(ciagent *)
 ---
 
 # Run CIAgent checks on this repo's agent

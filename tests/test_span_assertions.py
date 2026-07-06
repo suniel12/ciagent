@@ -10,14 +10,14 @@ from unittest.mock import patch
 
 import pytest
 
-from agentci.engine.span_assertions import (
+from ciagent.engine.span_assertions import (
     _resolve_field,
     _select_spans,
     evaluate_span_assertions,
 )
-from agentci.engine.results import LayerStatus
-from agentci.models import Span, SpanKind, Trace, ToolCall
-from agentci.schema.spec_models import (
+from ciagent.engine.results import LayerStatus
+from ciagent.models import Span, SpanKind, Trace, ToolCall
+from ciagent.schema.spec_models import (
     SpanAssert,
     SpanAssertionSpec,
     SpanAssertType,
@@ -239,7 +239,7 @@ class TestLLMJudgeAssertion:
             threshold=0.7,
         )
         spec = [make_spec(asserts=[sa])]
-        with patch("agentci.engine.judge.run_judge", return_value=judge_pass()):
+        with patch("ciagent.engine.judge.run_judge", return_value=judge_pass()):
             result = evaluate_span_assertions(spec, trace)
         assert result.status == LayerStatus.PASS
 
@@ -253,7 +253,7 @@ class TestLLMJudgeAssertion:
             threshold=0.7,
         )
         spec = [make_spec(asserts=[sa])]
-        with patch("agentci.engine.judge.run_judge", return_value=judge_fail()):
+        with patch("ciagent.engine.judge.run_judge", return_value=judge_fail()):
             result = evaluate_span_assertions(spec, trace)
         assert result.status == LayerStatus.FAIL
 
@@ -268,7 +268,7 @@ class TestLLMJudgeAssertion:
             threshold=0.7,
         )
         spec = [make_spec(asserts=[sa])]
-        with patch("agentci.engine.judge.run_judge", return_value=judge_pass()) as mock_judge:
+        with patch("ciagent.engine.judge.run_judge", return_value=judge_pass()) as mock_judge:
             evaluate_span_assertions(spec, trace)
         call_kwargs = mock_judge.call_args
         assert call_kwargs[1]["answer"] == "field content to judge"
@@ -416,8 +416,8 @@ class TestDetailsPopulated:
 class TestRunnerIntegration:
     def test_span_assertion_failure_escalates_correctness(self):
         """A span assertion FAIL escalates to a correctness FAIL in evaluate_query."""
-        from agentci.engine.runner import evaluate_query
-        from agentci.schema.spec_models import GoldenQuery
+        from ciagent.engine.runner import evaluate_query
+        from ciagent.schema.spec_models import GoldenQuery
 
         span = make_tool_span(name="retrieve_docs", output_data="no relevant content")
         trace = make_trace(span)
@@ -443,8 +443,8 @@ class TestRunnerIntegration:
 
     def test_span_assertion_pass_does_not_affect_existing_pass(self):
         """A passing span assertion keeps correctness PASS."""
-        from agentci.engine.runner import evaluate_query
-        from agentci.schema.spec_models import GoldenQuery
+        from ciagent.engine.runner import evaluate_query
+        from ciagent.schema.spec_models import GoldenQuery
 
         span = make_tool_span(name="retrieve_docs", output_data="AgentCI documentation")
         trace = make_trace(span)

@@ -8,10 +8,10 @@ from __future__ import annotations
 
 import pytest
 
-from agentci.engine.cost import evaluate_cost
-from agentci.engine.results import LayerStatus
-from agentci.models import LLMCall, Span, SpanKind, Trace
-from agentci.schema.spec_models import CostSpec
+from ciagent.engine.cost import evaluate_cost
+from ciagent.engine.results import LayerStatus
+from ciagent.models import LLMCall, Span, SpanKind, Trace
+from ciagent.schema.spec_models import CostSpec
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

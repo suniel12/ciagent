@@ -1,6 +1,6 @@
 import time
-from agentci.capture import _active_span
-from agentci.models import ToolCall
+from ciagent.capture import _active_span
+from ciagent.models import ToolCall
 
 def run_agent(input_text: str):
     """

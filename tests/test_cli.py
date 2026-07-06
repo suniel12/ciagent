@@ -6,7 +6,7 @@ import os
 from pathlib import Path
 
 from click.testing import CliRunner
-from agentci.cli import (
+from ciagent.cli import (
     cli,
     _scan_project,
     _detect_agent_type,
@@ -59,7 +59,7 @@ def test_bootstrap_command_interactive(tmp_path):
         # Create a dummy runner
         with open("dummy.py", "w") as f:
             f.write("""
-from agentci.models import Trace, Span, SpanKind, ToolCall
+from ciagent.models import Trace, Span, SpanKind, ToolCall
 def run(query: str) -> Trace:
     trace = Trace(test_name="test", agent_name="dummy")
     span = Span(kind=SpanKind.AGENT, name="dummy")
@@ -96,7 +96,7 @@ queries:
 """)
         with open("dummy.py", "w") as f:
             f.write("""
-from agentci.models import Trace
+from ciagent.models import Trace
 def run(query: str) -> Trace:
     return Trace(test_name="test", agent_name="dummy")
 """)
@@ -545,7 +545,7 @@ class TestCalibrateSpecFromTraces:
 
     def _make_trace(self, llm_call_count: int):
         """Create a Trace with the given number of LLM calls."""
-        from agentci.models import Trace, Span, LLMCall
+        from ciagent.models import Trace, Span, LLMCall
         span = Span(
             name="agent",
             llm_calls=[LLMCall(model="test", input_tokens=10, output_tokens=10)
@@ -663,7 +663,7 @@ class TestCalibrateCommand:
         return spec_path
 
     def _make_trace(self, llm_calls=4, tool_calls=2, tokens=500, cost=0.01):
-        from agentci.models import Trace, Span, LLMCall, ToolCall as TC
+        from ciagent.models import Trace, Span, LLMCall, ToolCall as TC
         span = Span(
             name="agent",
             llm_calls=[
@@ -686,7 +686,7 @@ class TestCalibrateCommand:
 
         mock_trace = self._make_trace()
 
-        with patch("agentci.engine.parallel.resolve_runner",
+        with patch("ciagent.engine.parallel.resolve_runner",
                     return_value=lambda q: mock_trace):
             runner = CliRunner()
             result = runner.invoke(cli, [
@@ -704,7 +704,7 @@ class TestCalibrateCommand:
         spec_path = self._write_spec(tmp_path)
         mock_trace = self._make_trace(llm_calls=6)
 
-        with patch("agentci.engine.parallel.resolve_runner",
+        with patch("ciagent.engine.parallel.resolve_runner",
                     return_value=lambda q: mock_trace):
             runner = CliRunner()
             result = runner.invoke(cli, [
@@ -736,7 +736,7 @@ class TestCalibrateCommand:
         spec_path = self._write_spec(tmp_path)
         mock_trace = self._make_trace()
 
-        with patch("agentci.engine.parallel.resolve_runner",
+        with patch("ciagent.engine.parallel.resolve_runner",
                     return_value=lambda q: mock_trace):
             runner = CliRunner()
             result = runner.invoke(cli, [

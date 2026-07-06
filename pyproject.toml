@@ -41,22 +41,21 @@ all = ["ciagent[openai,anthropic,langgraph,jsonschema]"]
 dev = ["pytest>=8.0", "ruff", "mypy"]
 
 [project.scripts]
-agentci = "agentci.cli:cli"
-ciagent = "agentci.cli:cli"
+ciagent = "ciagent.cli:cli"
 
 [project.entry-points.pytest11]
-agentci = "agentci.pytest_plugin"
+ciagent = "ciagent.pytest_plugin"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/agentci"]
+packages = ["src/ciagent"]
 
 [tool.hatch.build.targets.sdist]
 include = [
-  "src/agentci",
+  "src/ciagent",
   "LICENSE",
   "README.md",
   "CHANGELOG.md",
@@ -64,12 +63,12 @@ include = [
 
 [tool.hatch.build]
 include = [
-  "src/agentci/templates/**/*",
-  "src/agentci/examples/**/*",
+  "src/ciagent/templates/**/*",
+  "src/ciagent/examples/**/*",
 ]
 
 [tool.setuptools.package-data]
-agentci = ["templates/*.j2", "examples/*.yaml"]
+ciagent = ["templates/*.j2", "examples/*.yaml"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

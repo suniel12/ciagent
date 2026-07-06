@@ -13,8 +13,8 @@ from unittest.mock import patch
 
 import pytest
 
-from agentci.engine.reporter import MAX_INLINE_ANNOTATIONS, report_results
-from agentci.engine.results import LayerResult, LayerStatus, QueryResult
+from ciagent.engine.reporter import MAX_INLINE_ANNOTATIONS, report_results
+from ciagent.engine.results import LayerResult, LayerStatus, QueryResult
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────

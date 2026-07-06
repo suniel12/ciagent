@@ -3,7 +3,7 @@ Tests for the agentci doctor command.
 """
 import os
 from click.testing import CliRunner
-from agentci.cli import cli
+from ciagent.cli import cli
 
 
 class TestDoctorCommand:
