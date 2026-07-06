@@ -39,3 +39,15 @@ pytest
 ## Code Style
 
 We use `ruff` for linting and formatting. Please ensure your code passes checks before submitting a PR.
+
+## Releasing (maintainers)
+
+Releases are tag-driven — never upload to PyPI by hand:
+
+1. Bump `version` in `pyproject.toml` and move the `[Unreleased]` CHANGELOG section
+   under the new version heading (in a normal PR).
+2. After merge: `git tag vX.Y.Z && git push --tags`
+
+The release workflow builds the package, refuses to publish if the tag doesn't match
+`pyproject.toml`, runs the test suite against the built wheel, publishes to PyPI via
+trusted publishing, and creates the GitHub release with the built artifacts attached.
