@@ -9,6 +9,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+#### Judge Audit — `agentci judge-audit`
+Meta-evaluation of the LLM judge against ground truth you already have,
+re-scoring recorded golden baselines (the agent is never re-run):
+
+- **Mode 1 — judge vs. deterministic checks**: independent verdicts on the
+  same recorded answer; reports the disagreement matrix. The killer row:
+  answers the judge PASSED that a deterministic fact-check FAILED
+  (shared-context judge blindness, detected automatically)
+- **Mode 2 — retest stability** (`--repeats K`, default 3): same answer
+  judged K times; verdict flips on identical input are the judge's noise floor
+- **Mode 3 — hand labels** (`--labels FILE`): agreement + Cohen's κ against
+  human review, with standard trust thresholds
+- Scoped claim stated in the report itself: measured on fact-checkable
+  queries; one-directional (disqualifying) signal for judgment-only queries
+- Verdicts: TRUSTWORTHY / NEEDS CALIBRATION / UNRELIABLE (exit 1) /
+  ERROR when the judge never ran (exit 2 — a judge that couldn't run is
+  never scored)
+- `--sample N` cost cap; console + JSON output
+- New module `agentci.engine.judge_audit`; 27 new tests
+
 #### Stability Report — `agentci test --runs N`
 A stable suite score can hide per-query verdict flips: the aggregate holds
 because the errors move around. `--runs N` executes the whole suite N times

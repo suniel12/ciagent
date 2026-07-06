@@ -124,6 +124,27 @@ Flaky-but-passing exits 0 so adoption won't break your CI; add `--fail-on-flaky`
 you're ready to gate on it. Try it with zero API keys:
 `AGENTCI_MOCK_FLAKY=1 agentci test --mock --runs 3`. Details: [docs/stability.md](docs/stability.md).
 
+## Audit the judge itself
+
+An LLM judge that shares your agent's context inherits your agent's blind spots: when
+retrieval comes up empty, the agent answers from nothing — and the judge, reading the same
+nothing, passes it. `judge-audit` measures your judge against ground truth you already have,
+by re-scoring recorded baselines (the agent is never re-run):
+
+```bash
+agentci judge-audit
+```
+
+1. **Judge vs. deterministic checks** — the disagreement matrix. The row that matters:
+   answers the judge PASSED that a hard fact-check FAILED.
+2. **Retest stability** — the same answer judged `--repeats` times; flips on identical
+   input are the judge's own noise floor.
+3. **Hand labels** (`--labels`) — agreement + Cohen's κ against your own review.
+
+The claim is deliberately one-directional: a judge that fails where you *can* check it
+shouldn't be trusted where you can't. Verdict: `TRUSTWORTHY` / `NEEDS CALIBRATION` /
+`UNRELIABLE`. Details: [docs/judge-audit.md](docs/judge-audit.md).
+
 ## Check facts in code. Save the judge for judgment.
 
 Most agent failures that matter involve a hard fact — a product name, a price, a version number. Those are checkable deterministically, for free. And an LLM judge grading against the same context as your agent inherits your agent's blind spots: when retrieval comes up empty, the agent answers from nothing and the judge — reading the same nothing — passes it.
@@ -149,6 +170,7 @@ agentci init                   # Generate GitHub Actions workflow + pre-push hoo
 agentci test --mock --yes      # Zero-cost synthetic traces, CI-friendly (no keys, no prompts)
 agentci test                   # Run 3-layer evaluation (correctness → path → cost)
 agentci test --runs 3          # Stability report: verdict flips + flip-source attribution
+agentci judge-audit            # Audit the LLM judge against checks, retests, hand labels
 agentci test --format html -o report.html  # HTML report with per-query details
 agentci calibrate              # Measure real agent metrics, auto-tune spec budgets
 agentci doctor                 # Health check: spec, deps, API keys
@@ -160,6 +182,7 @@ agentci report -i results.json # Generate HTML report from JSON results
 
 - [Quickstart](docs/quickstart.md) — install to first green run
 - [Stability testing](docs/stability.md) — `--runs N`, flip-source attribution
+- [Judge audit](docs/judge-audit.md) — is your LLM judge lying to you?
 - [Writing tests](docs/writing-tests.md) — the full spec reference
 - [Cost tracking](docs/cost-tracking.md) — budgets and spike detection
 - [Golden traces](docs/golden-traces.md) — record baselines, diff regressions

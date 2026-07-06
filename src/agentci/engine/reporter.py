@@ -350,6 +350,120 @@ def _print_layer(
             print(f"       • {msg}")
 
 
+# ── Judge Audit Output ─────────────────────────────────────────────────────────
+
+
+def emit_judge_audit_console(report: Any) -> None:
+    """Print the judge audit report (JudgeAuditReport)."""
+    print(f"\n{'─' * 60}")
+    print("Judge Audit")
+    print(f"{'─' * 60}")
+
+    checkable = report.checkable_queries
+    print(
+        f"Judged queries: {len(report.judged)}  │  fact-checkable: {len(checkable)}"
+        f"  │  judgment-only: {report.judgment_only_count}  │  repeats: {report.repeats}"
+    )
+
+    if report.all_judge_calls_errored:
+        print("\n❌ Every judge call errored — the judge never actually ran.")
+        first = report.judged[0].judge_rationales[0] if report.judged else ""
+        if first:
+            print(f"   First error: {first[:120]}")
+        print("   Set ANTHROPIC_API_KEY or OPENAI_API_KEY (or judge_config.model) and retry.")
+        print("\nJudge verdict: ERROR (no honest verdict possible)")
+        return
+    if report.total_judge_errors:
+        print(f"\n⚠️  {report.total_judge_errors} judge call(s) errored and were "
+              f"counted as fails — rates below include them.")
+
+    # Mode 1 — disagreement matrix
+    if checkable:
+        agree = report.agreement_rate
+        print(f"\nJudge vs. deterministic checks (agreement: {agree:.0%}):")
+        both_pass = sum(1 for q in checkable if q.judge_verdict and q.det_verdict)
+        both_fail = sum(1 for q in checkable if not q.judge_verdict and not q.det_verdict)
+        print(f"   both pass: {both_pass}   both fail: {both_fail}   "
+              f"judge-only fail: {len(report.false_alarms)}   "
+              f"judge PASS / check FAIL: {len(report.false_passes)}")
+        if report.false_passes:
+            print("\n❌ Judge PASSED answers a deterministic fact-check FAILED:")
+            for q in report.false_passes:
+                print(f"   • {_short(q.query, 70)}")
+                if q.judge_rationales and q.judge_rationales[0]:
+                    print(f"     judge said: {q.judge_rationales[0][:100]}")
+    else:
+        print("\nNo queries have BOTH deterministic checks and judge rubrics —")
+        print("Mode 1 (judge vs. checks) has nothing to compare. Add fact checks")
+        print("to judged queries, or provide --labels for direct measurement.")
+
+    # Mode 2 — retest stability
+    if report.flip_rate is not None:
+        flipped = [q for q in report.judged if q.judge_flipped]
+        print(f"\nJudge retest stability across {report.repeats} repeats: "
+              f"{report.flip_rate:.0%} of queries flipped")
+        for q in flipped:
+            verdicts = "".join("✅" if v else "❌" for v in q.judge_verdicts)
+            print(f"   {_short(q.query, 56):<58} {verdicts}  (same answer every time)")
+
+    # Mode 3 — hand labels
+    if report.label_agreement is not None:
+        kappa = report.cohens_kappa
+        kappa_str = f", Cohen's κ = {kappa:.2f}" if kappa is not None else ""
+        print(f"\nJudge vs. hand labels ({len(report.labeled_queries)} labeled): "
+              f"agreement {report.label_agreement:.0%}{kappa_str}")
+        if kappa is not None and kappa < 0.75:
+            print("   κ < 0.75 — below the standard trust floor for judge adoption")
+
+    print(f"\n{report.scope_note}")
+    print(f"\nJudge verdict: {report.verdict}")
+
+
+def _serialize_judge_audit(report: Any) -> dict[str, Any]:
+    return {
+        "verdict": report.verdict,
+        "repeats": report.repeats,
+        "judged": len(report.judged),
+        "checkable": len(report.checkable_queries),
+        "judgment_only": report.judgment_only_count,
+        "agreement_rate": report.agreement_rate,
+        "false_pass_rate": report.false_pass_rate,
+        "flip_rate": report.flip_rate,
+        "label_agreement": report.label_agreement,
+        "cohens_kappa": report.cohens_kappa,
+        "low_sample": report.low_sample,
+        "judge_errors": report.total_judge_errors,
+        "scope_note": report.scope_note,
+        "queries": [
+            {
+                "query": q.query,
+                "det_verdict": q.det_verdict,
+                "judge_verdict": q.judge_verdict,
+                "judge_verdicts": q.judge_verdicts,
+                "judge_flipped": q.judge_flipped,
+                "false_pass": q.false_pass,
+                "label": q.label,
+                "rationales": q.judge_rationales,
+            }
+            for q in report.queries
+        ],
+    }
+
+
+def report_judge_audit(report: Any, format: str = "console") -> int:
+    """Render a judge audit and return an exit code.
+
+    0 = TRUSTWORTHY / NEEDS CALIBRATION, 1 = UNRELIABLE, 2 = judge never ran.
+    """
+    if format == "json":
+        print(json.dumps(_serialize_judge_audit(report), indent=2))
+    else:
+        emit_judge_audit_console(report)
+    if report.verdict == "ERROR":
+        return 2
+    return 1 if report.verdict == "UNRELIABLE" else 0
+
+
 # ── JSON Output ────────────────────────────────────────────────────────────────
 
 

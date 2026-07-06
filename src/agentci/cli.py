@@ -2425,6 +2425,123 @@ def doctor_cmd(config):
     sys.exit(1 if failed > 0 else 0)
 
 
+@cli.command(name="judge-audit")
+@click.option('--config', '-c', default='agentci_spec.yaml',
+              help='Path to agentci_spec.yaml', show_default=True)
+@click.option('--baseline-dir', default=None,
+              help='Directory of recorded golden baselines (default: spec baseline_dir)')
+@click.option('--repeats', '-r', default=3, show_default=True, type=int,
+              help='Judge calls per query — measures retest flip rate')
+@click.option('--labels', 'labels_path', default=None, type=click.Path(exists=True),
+              help='Hand-labels file (YAML/JSON: query → pass|fail) for agreement + Cohen\'s κ')
+@click.option('--sample', default=None, type=int,
+              help='Audit only the first N judged queries (cost control)')
+@click.option('--format', 'fmt', type=click.Choice(['console', 'json']),
+              default='console', show_default=True)
+@click.option('--yes', '-y', is_flag=True, help='Skip cost confirmation')
+def judge_audit_cmd(config, baseline_dir, repeats, labels_path, sample, fmt, yes):
+    """Audit your LLM judge against ground truth you already have.
+
+    Re-scores RECORDED answers (golden baselines) — the agent is never re-run.
+
+    \b
+    Three measurements:
+      1. Judge vs. deterministic checks — the disagreement matrix. The row
+         that matters: answers the judge PASSED that a fact-check FAILED.
+      2. Retest stability — same answer judged --repeats times; flips on
+         identical input are the judge's own noise floor.
+      3. Judge vs. hand labels (--labels) — agreement + Cohen's κ.
+
+    A judge that fails where you CAN check it should not be trusted where
+    you can't. The reverse does not hold: passing this audit is a smoke
+    test, not a guarantee, for judgment-only queries.
+
+    \b
+    Exit codes:
+        0 — verdict TRUSTWORTHY or NEEDS CALIBRATION
+        1 — verdict UNRELIABLE
+        2 — configuration / infrastructure error
+    """
+    from .engine.judge_audit import (
+        load_answers_from_baselines,
+        load_labels_file,
+        run_judge_audit,
+    )
+    from .engine.reporter import report_judge_audit
+    from .exceptions import ConfigError
+    from .loader import load_spec
+
+    try:
+        spec = load_spec(config)
+    except ConfigError as e:
+        console.print(f"[bold red]Config error:[/] {e}")
+        sys.exit(2)
+
+    effective_baseline_dir = baseline_dir or spec.baseline_dir
+    answers = load_answers_from_baselines(effective_baseline_dir)
+    if not answers:
+        console.print(
+            f"[bold red]No recorded answers found in '{effective_baseline_dir}'.[/]\n"
+            "The audit re-scores recorded baselines. Record some first:\n"
+            "  [cyan]agentci record <test>[/]  or  [cyan]agentci test --format json[/]"
+        )
+        sys.exit(2)
+
+    labels = None
+    if labels_path:
+        try:
+            labels = load_labels_file(labels_path)
+        except (ValueError, OSError) as e:
+            console.print(f"[bold red]Labels file error:[/] {e}")
+            sys.exit(2)
+
+    # Which queries will actually be judged (have rubrics AND a recorded answer)?
+    from .engine.judge_audit import _judge_rubrics
+    judged_queries = []
+    for q in spec.queries:
+        if q.correctness is None or q.query not in answers:
+            continue
+        if _judge_rubrics(q.correctness):
+            judged_queries.append(q)
+    if sample is not None:
+        judged_queries = judged_queries[:sample]
+    if not judged_queries:
+        console.print(
+            "[bold red]No auditable queries:[/] none of the spec's queries have "
+            "judge rubrics with a recorded baseline answer."
+        )
+        sys.exit(2)
+
+    n_calls = sum(
+        len(_judge_rubrics(q.correctness)) for q in judged_queries
+    ) * max(1, repeats)
+    console.print(
+        f"[bold blue]AgentCI v{__version__}[/] │ judge-audit │ agent: [cyan]{spec.agent}[/] │ "
+        f"queries: [cyan]{len(judged_queries)}[/] │ repeats: [cyan]{repeats}[/] │ "
+        f"judge calls: [cyan]~{n_calls}[/]"
+    )
+    if not yes and fmt == "console":
+        from rich.prompt import Confirm
+        if not Confirm.ask(f"Proceed with ~{n_calls} judge calls? [Y/n]", default=True):
+            console.print("[yellow]Aborted.[/]")
+            sys.exit(0)
+
+    def _progress(q: str) -> None:
+        if fmt == "console":
+            console.print(f"  [dim]audited:[/] {q[:70]}")
+
+    try:
+        report = run_judge_audit(
+            spec, answers, repeats=repeats, labels=labels,
+            sample=sample, progress=_progress,
+        )
+    except Exception as e:  # noqa: BLE001
+        console.print(f"[bold red]Audit error:[/] {e}")
+        sys.exit(2)
+
+    sys.exit(report_judge_audit(report, format=fmt))
+
+
 def _finish_stability_session(fmt, config, output, run_results, stability, fail_on_flaky):
     """Render a multi-run stability session and exit with the right code.
 
