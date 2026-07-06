@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — `ciagent simulate` Phase 1: scripted multi-turn scenarios (F6)
+- New `scenarios:` spec block: `turns:` (scripted user messages), `max_turns`,
+  `per_turn:` checks (evaluated on every turn), `outcome:` checks (evaluated
+  once at the END as the verdict — never a stop condition), and explicit
+  `stop_when: {tool_called: X}` early exit. Termination is deterministic only:
+  script exhausted, max_turns, or the stop_when event — no judge, no keywords
+- New `conversation_runner:` spec key — `(messages: list[{role, content}]) →
+  str | Trace`, history passed explicitly, same capture/coercion as `test`
+- `ciagent simulate` CLI: `--mock` runs scenarios on synthetic traces with
+  zero API keys (the CI path); live runs confirm turn count first. Exit codes:
+  0 pass / 1 outcome or per-turn correctness failure / 2 config or agent error
+- Agent exception mid-conversation marks the scenario `infra-error` and keeps
+  the completed turns; conversations convert to schema_version-2 envelopes
+- Spec change: `queries:` is no longer required when `scenarios:` is present
+  (at least one of the two must exist)
+- 18 new tests, incl. the ADR checklist items: both termination causes,
+  agent-raises-mid-conversation, per_turn + outcome evaluation, and
+  outcome-never-stops (a turn-1 keyword match must not end the scenario)
+
+### Added — schema_version + conversation envelope (F6 Phase 0)
+- `schema_version: 1` written into new single-trace baselines; unversioned
+  files read as legacy; envelopes are `schema_version: 2`; newer-than-reader
+  files rejected by name. `ConversationEnvelope`: one loader for envelope,
+  wrapper, and bare-trace shapes (single-turn = 1-turn degenerate case)
+
 ### Changed — brand and story
 - **Brand: AgentCI → CIAgent** (display name), standardizing on the `ciagent`
   package name. Spec/runner filenames (`agentci_spec.yaml`), `AGENTCI_*` env

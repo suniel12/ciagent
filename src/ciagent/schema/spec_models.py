@@ -20,7 +20,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ── Enums ──────────────────────────────────────────────────────────────────────
@@ -325,6 +325,78 @@ class GoldenQuery(BaseModel):
         return v
 
 
+class StopWhen(BaseModel):
+    """Explicit early-exit condition for a scenario.
+
+    Termination is deterministic and event-based only (eng review, binding):
+    never judge-based, never keyword-triggered. A scenario stops early when the
+    named concrete event is observed in a turn's trace.
+    """
+    tool_called: Optional[str] = Field(
+        None,
+        description="Stop after a turn in which the agent called this tool",
+    )
+
+
+class TurnChecks(BaseModel):
+    """Layer checks applied inside a scenario (per-turn or as the outcome)."""
+    correctness: Optional[CorrectnessSpec] = None
+    path: Optional[PathSpec] = None
+    cost: Optional[CostSpec] = None
+
+
+class ScenarioSpec(BaseModel):
+    """A multi-turn conversation scenario for `ciagent simulate`.
+
+    Scripted mode (`turns:` given) is deterministic and needs no persona LLM —
+    it is the CI / zero-key path. Generative personas (persona/goal without
+    turns) are the finder path and ship in a later 0.9 phase.
+    """
+    name: Optional[str] = Field(None, description="Scenario identifier for reports")
+    persona: Optional[str] = Field(
+        None, description="Simulated-user persona (generative mode)"
+    )
+    goal: Optional[str] = Field(
+        None, description="What the simulated user is trying to accomplish"
+    )
+    max_turns: int = Field(8, ge=1, description="Hard cap on conversation turns")
+    turns: Optional[list[str]] = Field(
+        None,
+        description="Scripted user messages (deterministic mode); the conversation "
+                    "ends when these are exhausted or max_turns is reached",
+    )
+    per_turn: Optional[TurnChecks] = Field(
+        None, description="Checks evaluated on EVERY turn's trace"
+    )
+    outcome: Optional[TurnChecks] = Field(
+        None,
+        description="Checks evaluated once at the END of the conversation as the "
+                    "verdict — never as a stop condition",
+    )
+    stop_when: Optional[StopWhen] = Field(
+        None, description="Explicit deterministic early-exit event"
+    )
+
+    @field_validator("turns")
+    @classmethod
+    def turns_not_empty_strings(cls, v: Optional[list[str]]) -> Optional[list[str]]:
+        if v is not None:
+            if not v:
+                raise ValueError("turns must contain at least one user message")
+            if any(not t.strip() for t in v):
+                raise ValueError("turns must not contain empty messages")
+        return v
+
+    def display_name(self) -> str:
+        if self.name:
+            return self.name
+        if self.persona:
+            return self.persona[:60]
+        if self.turns:
+            return self.turns[0][:60]
+        return "scenario"
+
+
 class AgentCISpec(BaseModel):
     """Root schema for agentci_spec.yaml."""
     version: int = Field(1, description="Schema version for forward compatibility")
@@ -341,6 +413,16 @@ class AgentCISpec(BaseModel):
             "When set, 'ciagent test' can invoke the agent directly without pytest."
         ),
     )
+    conversation_runner: Optional[str] = Field(
+        None,
+        description=(
+            "Python dotted path to the multi-turn runner callable for `ciagent "
+            "simulate`, e.g. 'myagent.run:respond'. The function must accept "
+            "(messages: list[dict]) with {'role', 'content'} entries and return "
+            "the assistant's reply as a str (or a ciagent.models.Trace). Fresh "
+            "state per scenario; history is passed explicitly."
+        ),
+    )
     defaults: Optional[dict[str, Any]] = Field(
         None,
         description=(
@@ -352,7 +434,18 @@ class AgentCISpec(BaseModel):
         description="Global LLM judge settings: model, temperature, ensemble, structured_output",
     )
     queries: list[GoldenQuery] = Field(
-        ...,
-        min_length=1,
-        description="Test cases to evaluate",
+        default_factory=list,
+        description="Single-turn test cases to evaluate",
     )
+    scenarios: list[ScenarioSpec] = Field(
+        default_factory=list,
+        description="Multi-turn conversation scenarios for `ciagent simulate`",
+    )
+
+    @model_validator(mode="after")
+    def _spec_has_content(self) -> "AgentCISpec":
+        # queries was required min_length=1 before scenarios existed; a spec
+        # must still declare at least one of the two
+        if not self.queries and not self.scenarios:
+            raise ValueError("spec must declare at least one query or scenario")
+        return self

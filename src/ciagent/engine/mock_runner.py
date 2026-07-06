@@ -127,3 +127,44 @@ def run_mock_spec(
             flaky_break = flaky and (i % 2 == 0) and (run_index % 2 == 1)
         traces[q.query] = mock_run(q.query, query_dict, flaky_break=flaky_break)
     return traces
+
+
+def mock_conversation_runner(scenario):
+    """Build a mock ConversationRunner for a scripted scenario.
+
+    Each turn's synthetic trace satisfies the scenario's per_turn checks; the
+    final scripted turn additionally satisfies the outcome checks — so a
+    well-formed scenario passes end-to-end with zero API keys, mirroring what
+    `ciagent test --mock` does for single-turn queries.
+    """
+    n_turns = min(len(scenario.turns or []), scenario.max_turns)
+
+    def _merged_spec(is_last: bool) -> dict:
+        blocks = [scenario.per_turn]
+        if is_last:
+            blocks.append(scenario.outcome)
+        correctness: dict = {}
+        path: dict = {}
+        cost: dict = {}
+        for b in blocks:
+            if b is None:
+                continue
+            if b.correctness is not None:
+                c = b.correctness
+                if c.expected_in_answer:
+                    correctness.setdefault("expected_in_answer", []).extend(c.expected_in_answer)
+                if c.any_expected_in_answer:
+                    correctness.setdefault("any_expected_in_answer", []).extend(c.any_expected_in_answer)
+            if b.path is not None and b.path.expected_tools:
+                seen = path.setdefault("expected_tools", [])
+                seen.extend(t for t in b.path.expected_tools if t not in seen)
+            if b.cost is not None and b.cost.max_llm_calls:
+                cost["max_llm_calls"] = b.cost.max_llm_calls
+        return {"correctness": correctness or None, "path": path or None, "cost": cost or None}
+
+    def run(messages: list[dict]) -> Trace:
+        user_turns = sum(1 for m in messages if m.get("role") == "user")
+        is_last = user_turns >= n_turns
+        return mock_run(messages[-1]["content"], _merged_spec(is_last))
+
+    return run

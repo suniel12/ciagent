@@ -3112,6 +3112,193 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
         exit_code = report_results(results, format=fmt, spec_file=config, output_path=output)
     sys.exit(exit_code)
 
+@cli.command(name="simulate")
+@click.option('--config', '-c', default='agentci_spec.yaml',
+              help='Path to agentci_spec.yaml', show_default=True)
+@click.option('--mock', is_flag=True,
+              help='Synthetic conversations, zero API calls: each turn satisfies '
+                   'the scenario checks. Validates scenario structure.')
+@click.option('--yes', '-y', is_flag=True, help='Skip the live-run confirmation')
+@click.option('--format', 'fmt', type=click.Choice(['console', 'json']),
+              default='console', show_default=True, help='Output format')
+def simulate_cmd(config, mock, yes, fmt):
+    """Drive multi-turn conversation scenarios against your agent.
+
+    Phase 1: scripted scenarios (a `turns:` list of user messages) run
+    deterministically — the CI path. Generative personas, replay mode, and
+    cost guardrails arrive in later 0.9 releases.
+
+    \b
+    Spec additions:
+        conversation_runner: "myagent.run:respond"   # (messages) -> str | Trace
+        scenarios:
+          - turns: ["hi", "i want a refund for order #123"]
+            max_turns: 8
+            per_turn:
+              path: {expected_tools: [search_kb]}
+            outcome:
+              correctness: {any_expected_in_answer: ["refund", "5-7 business days"]}
+
+    \b
+    Termination is deterministic: scripted turns exhausted, max_turns, or an
+    explicit stop_when event. Outcome checks are the END-of-conversation
+    verdict, never a stop condition.
+
+    \b
+    Exit codes:
+        0 — every scenario's checks passed
+        1 — a scenario failed its outcome or a per-turn correctness check
+        2 — config error, or a scenario aborted on an agent exception
+    """
+    import json as _json
+    from pathlib import Path
+
+    from .engine.simulate import run_scenario
+    from .exceptions import ConfigError
+    from .loader import load_spec
+
+    try:
+        spec = load_spec(config)
+    except ConfigError as e:
+        console.print(f"[bold red]Config error:[/] {e}")
+        sys.exit(2)
+
+    if not spec.scenarios:
+        console.print(
+            "[bold red]No scenarios in spec.[/] Add a [cyan]scenarios:[/] block — "
+            "see [cyan]ciagent simulate --help[/] for the shape."
+        )
+        sys.exit(2)
+
+    unscripted = [s.display_name() for s in spec.scenarios if not s.turns]
+    if unscripted:
+        console.print(
+            f"[bold red]{len(unscripted)} scenario(s) have no scripted turns[/] "
+            f"(e.g. '{unscripted[0]}'). Generative personas are not available yet — "
+            "each scenario needs a [cyan]turns:[/] list."
+        )
+        sys.exit(2)
+
+    console.print(
+        f"[bold blue]CIAgent v{__version__}[/] │ simulate │ agent: [cyan]{spec.agent}[/] │ "
+        f"scenarios: [cyan]{len(spec.scenarios)}[/] │ mode: [cyan]{'mock' if mock else 'live'}[/]"
+    )
+
+    # Resolve the conversation runner (mock synthesizes one per scenario)
+    conv_runner_for = None
+    if mock:
+        from .engine.mock_runner import mock_conversation_runner
+
+        console.print("[dim]Running with synthetic traces — zero API cost[/]\n")
+        conv_runner_for = mock_conversation_runner
+    else:
+        if not spec.conversation_runner:
+            console.print(
+                "[bold red]No conversation_runner in spec.[/] Add one to run live:\n\n"
+                "  [cyan]conversation_runner: \"myagent.run:respond\"[/]\n\n"
+                "The function must accept [bold](messages: list[dict]) → str | Trace[/].\n"
+                "Or use [cyan]ciagent simulate --mock[/] to validate scenarios without API calls."
+            )
+            sys.exit(2)
+        from .engine.parallel import resolve_runner
+
+        try:
+            live_runner = resolve_runner(spec.conversation_runner)
+        except (ImportError, AttributeError, ValueError) as e:
+            console.print(f"[bold red]Runner error:[/] {e}")
+            sys.exit(2)
+        total_turns = sum(min(len(s.turns or []), s.max_turns) for s in spec.scenarios)
+        if not yes and fmt == "console":
+            from rich.prompt import Confirm
+
+            console.print(
+                f"[dim]Live run: up to {total_turns} agent turns across "
+                f"{len(spec.scenarios)} scenario(s), on your agent's API keys.[/]"
+            )
+            if not Confirm.ask("Proceed?", default=True):
+                console.print("[yellow]Aborted.[/]")
+                sys.exit(0)
+        conv_runner_for = lambda scenario: live_runner  # noqa: E731
+
+    results = []
+    for scenario in spec.scenarios:
+        try:
+            r = run_scenario(
+                scenario,
+                conv_runner_for(scenario),
+                agent_name=spec.agent,
+                judge_config=spec.judge_config,
+                spec_dir=str(Path(config).parent) if config else None,
+            )
+        except Exception as e:  # noqa: BLE001
+            console.print(f"[bold red]Simulation error:[/] {e}")
+            sys.exit(2)
+        results.append(r)
+
+    # ── Report ────────────────────────────────────────────────────────────────
+    if fmt == "json":
+        from .engine.reporter import _serialize_result
+
+        payload = {
+            "scenarios": [
+                {
+                    "name": r.scenario.display_name(),
+                    "termination": r.termination,
+                    "error": r.error,
+                    "hard_fail": r.hard_fail,
+                    "turns": [
+                        {
+                            "turn_index": t.turn_index,
+                            "user_message": t.user_message,
+                            "answer": (t.trace.metadata or {}).get("final_output"),
+                            "checks": _serialize_result(t.checks) if t.checks else None,
+                        }
+                        for t in r.turns
+                    ],
+                    "outcome": _serialize_result(r.outcome) if r.outcome else None,
+                }
+                for r in results
+            ],
+            "summary": {
+                "total": len(results),
+                "passed": sum(1 for r in results if not r.hard_fail and not r.is_infra_error),
+                "failed": sum(1 for r in results if r.hard_fail),
+                "infra_errors": sum(1 for r in results if r.is_infra_error),
+            },
+        }
+        print(_json.dumps(payload, indent=2))
+    else:
+        for r in results:
+            icon = "❌" if r.hard_fail else ("⚠️ " if r.is_infra_error else "✅")
+            console.print(
+                f"\n{icon} [bold]{r.scenario.display_name()}[/] — "
+                f"{len(r.turns)} turn(s), ended: [cyan]{r.termination}[/]"
+            )
+            if r.error:
+                console.print(f"   [red]{r.error}[/]")
+            for t in r.turns:
+                mark = ""
+                if t.checks is not None:
+                    mark = " ❌" if t.checks.hard_fail else " ✅"
+                answer = ((t.trace.metadata or {}).get("final_output") or "")[:70]
+                console.print(f"   [dim]turn {t.turn_index + 1}:[/] {t.user_message[:50]!r} → {answer!r}{mark}")
+            if r.outcome is not None:
+                status = "FAIL" if r.outcome.hard_fail else "PASS"
+                color = "red" if r.outcome.hard_fail else "green"
+                console.print(f"   outcome: [{color}]{status}[/] {'; '.join(r.outcome.correctness.messages[:2])}")
+        passed = sum(1 for r in results if not r.hard_fail and not r.is_infra_error)
+        console.print(
+            f"\nScenarios: {passed}/{len(results)} passed"
+            + (f"  |  {sum(1 for r in results if r.is_infra_error)} infra-error" if any(r.is_infra_error for r in results) else "")
+        )
+
+    if any(r.hard_fail for r in results):
+        sys.exit(1)
+    if any(r.is_infra_error for r in results):
+        sys.exit(2)
+    sys.exit(0)
+
+
 @cli.command(name="eval")
 @click.option('--config', '-c', default='agentci_spec.yaml',
               help='Path to agentci_spec.yaml', show_default=True)
