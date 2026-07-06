@@ -15,7 +15,7 @@ from __future__ import annotations
 from ..models import Trace, Span, SpanKind, ToolCall, LLMCall
 
 
-def mock_run(query: str, query_spec: dict) -> Trace:
+def mock_run(query: str, query_spec: dict, flaky_break: bool = False) -> Trace:
     """Generate a synthetic trace that matches the spec's expectations.
 
     Parameters
@@ -25,6 +25,9 @@ def mock_run(query: str, query_spec: dict) -> Trace:
     query_spec : dict
         The query's spec dict (from GoldenQuery.model_dump()), containing
         path, correctness, and cost expectations.
+    flaky_break : bool
+        When True, produce an answer that omits the expected keywords —
+        simulates agent-variance for multi-run stability testing.
 
     Returns
     -------
@@ -56,7 +59,9 @@ def mock_run(query: str, query_spec: dict) -> Trace:
     if any_expected_keywords:
         keywords_to_inject.append(any_expected_keywords[0])
 
-    if keywords_to_inject:
+    if flaky_break:
+        output_text = "[Mock flaky variant — simulated agent variance, keywords omitted]"
+    elif keywords_to_inject:
         output_text = f"Based on our documentation: {', '.join(keywords_to_inject)}."
     else:
         output_text = "[Mock response — no expected keywords defined]"
@@ -77,13 +82,21 @@ def mock_run(query: str, query_spec: dict) -> Trace:
     return trace
 
 
-def run_mock_spec(spec, **_kwargs) -> dict[str, Trace]:
+def run_mock_spec(spec, run_index: int = 0, flaky: bool = False, **_kwargs) -> dict[str, Trace]:
     """Run all queries in a spec using mock traces.
 
     Parameters
     ----------
     spec : AgentCISpec
         The loaded spec with queries.
+    run_index : int
+        Which run this is (0-based) in a multi-run stability session.
+    flaky : bool
+        Simulate deterministic pseudo-flakiness for stability testing:
+        even-indexed queries produce a broken answer on odd run indices
+        (agent-variance). Judge-flake cannot be simulated here — identical
+        answers cannot flip deterministic checks by construction; that path
+        is covered by unit tests constructing results directly.
 
     Returns
     -------
@@ -91,7 +104,8 @@ def run_mock_spec(spec, **_kwargs) -> dict[str, Trace]:
         Mapping of query string to synthetic trace.
     """
     traces: dict[str, Trace] = {}
-    for q in spec.queries:
+    for i, q in enumerate(spec.queries):
         query_dict = q.model_dump() if hasattr(q, "model_dump") else {}
-        traces[q.query] = mock_run(q.query, query_dict)
+        flaky_break = flaky and (i % 2 == 0) and (run_index % 2 == 1)
+        traces[q.query] = mock_run(q.query, query_dict, flaky_break=flaky_break)
     return traces

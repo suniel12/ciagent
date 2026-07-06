@@ -104,7 +104,53 @@
     <div class="label">Total Cost</div>
   </div>
   {% endif %}
+  {% if stability %}
+  <div class="stat {% if stability.is_stable %}pass{% else %}warn{% endif %}">
+    <div class="value">{{ stability.verdict }}</div>
+    <div class="label">Stability ({{ stability.runs }} runs)</div>
+  </div>
+  {% endif %}
 </div>
+
+{% if stability %}
+<!-- Stability Report -->
+<div class="query-card open">
+  <div class="query-header">
+    {% if stability.is_stable %}
+    <span class="badge pass">STABLE</span>
+    {% else %}
+    <span class="badge warn">FLAKY</span>
+    {% endif %}
+    <span>Stability across {{ stability.runs }} runs — suite score:
+      {% for s in stability.per_run_scores %}{{ "%.0f"|format(s * 100) }}%{% if not loop.last %} / {% endif %}{% endfor %}
+    </span>
+  </div>
+  <div class="query-body" style="display:block">
+    {% if stability.flipped_queries %}
+    <p>{{ stability.flipped_queries|length }}/{{ stability.total_queries }} queries flipped verdicts across runs:</p>
+    <table style="width:100%; border-collapse:collapse; font-size:0.85rem">
+      <tr style="text-align:left; color:var(--muted)">
+        <th style="padding:0.3rem">Query</th><th>Verdicts</th><th>Pass rate</th><th>pass^k</th><th>Source</th>
+      </tr>
+      {% for q in stability.flipped_queries %}
+      <tr>
+        <td style="padding:0.3rem">{{ q.query[:70] }}</td>
+        <td>{{ q.verdict_string }}</td>
+        <td>{{ "%.2f"|format(q.pass_rate) }}</td>
+        <td>{{ "%.2f"|format(q.pass_pow_k) }}</td>
+        <td>{{ q.flip_source.value if q.flip_source else "—" }} ({{ q.flip_reason }})</td>
+      </tr>
+      {% endfor %}
+    </table>
+    {% else %}
+    <p>All {{ stability.total_queries }} queries returned the same verdict in every run.</p>
+    {% endif %}
+    {% if stability.consistent_failures %}
+    <p>{{ stability.consistent_failures|length }} query(ies) failed in every run (consistent failures, not flakiness).</p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
 
 <!-- Query Cards -->
 {% for r in results %}

@@ -1,6 +1,6 @@
 [project]
 name = "ciagent"
-version = "0.6.0"
+version = "0.7.0"
 description = "Continuous Integration for AI Agents. Catch cost spikes and logic regressions before production."
 readme = "README.md"
 license = {text = "Apache-2.0"}

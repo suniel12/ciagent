@@ -202,7 +202,11 @@ class PathSpec(BaseModel):
     )
     expected_tools: Optional[list[str]] = Field(
         None,
-        description="Tools that should be called (used for recall calculation)",
+        description=(
+            "Tools that should be called. A missing expected tool produces a WARN "
+            "(recall gates at 1.0 unless min_tool_recall loosens it). An explicit "
+            "empty list asserts that NO tools are called."
+        ),
     )
     forbidden_tools: Optional[list[str]] = Field(
         None,
@@ -221,7 +225,7 @@ class PathSpec(BaseModel):
         None,
         ge=0.0,
         le=1.0,
-        description="|expected ∩ used| / |expected|",
+        description="|expected ∩ used| / |expected|. Defaults to 1.0 when expected_tools is set.",
     )
     min_tool_precision: Optional[float] = Field(
         None,

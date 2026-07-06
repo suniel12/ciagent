@@ -129,6 +129,41 @@ class TestToolRecallAndPrecision:
         result = evaluate_path(trace, path(expected_tools=["a", "b"]))
         assert "tool_recall" in result.details
 
+    def test_missing_expected_tool_warns_without_explicit_min(self):
+        # expected_tools alone must gate: recall defaults to 1.0
+        trace = make_trace("a")
+        result = evaluate_path(trace, path(expected_tools=["a", "b"]))
+        assert result.status == LayerStatus.WARN
+        assert any("missing expected tools" in m for m in result.messages)
+
+    def test_full_recall_passes_without_explicit_min(self):
+        trace = make_trace("a", "b")
+        result = evaluate_path(trace, path(expected_tools=["a", "b"]))
+        assert result.status == LayerStatus.PASS
+
+    def test_explicit_min_recall_loosens_default_gate(self):
+        # recall 0.5 passes when the user explicitly allows it
+        trace = make_trace("a")
+        result = evaluate_path(trace, path(expected_tools=["a", "b"], min_tool_recall=0.5))
+        assert result.status == LayerStatus.PASS
+
+    def test_empty_expected_tools_warns_when_tools_called(self):
+        trace = make_trace("a")
+        result = evaluate_path(trace, path(expected_tools=[]))
+        assert result.status == LayerStatus.WARN
+        assert any("Expected no tool calls" in m for m in result.messages)
+
+    def test_empty_expected_tools_passes_when_no_tools_used(self):
+        trace = make_trace()
+        result = evaluate_path(trace, path(expected_tools=[]))
+        assert result.status == LayerStatus.PASS
+
+    def test_unset_expected_tools_skips_recall_check(self):
+        trace = make_trace("a")
+        result = evaluate_path(trace, path())
+        assert result.status == LayerStatus.PASS
+        assert "tool_recall" not in result.details
+
 
 # ── sequence similarity ────────────────────────────────────────────────────────
 

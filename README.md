@@ -3,6 +3,7 @@
 **Pytest-native regression testing for AI agents.** Catch routing changes, tool call drift, and cost spikes before production.
 
 [![PyPI](https://img.shields.io/pypi/v/ciagent)](https://pypi.org/project/ciagent/)
+[![CI](https://github.com/suniel12/AgentCI/actions/workflows/ci.yml/badge.svg)](https://github.com/suniel12/AgentCI/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![AGENTS.md](https://img.shields.io/badge/AGENTS.md-supported-blue)](AGENTS.md)
 
@@ -20,6 +21,7 @@ Write your golden queries — what should your agent handle, and what should it 
 
 ```yaml
 # agentci_spec.yaml
+agent: my-agent
 # runner: any function that takes a query string and returns a response
 runner: my_app.agent:run_for_agentci
 queries:
@@ -83,6 +85,88 @@ Answer: AgentCI currently does not specify a required Python version
 
 Don't have golden queries yet? `agentci init --generate` scans your code and generates a starter spec.
 
+## A stable score is not a stable system
+
+Run the identical eval three times and you can get 96% / 95% / 96% — rock solid — while
+individual queries flip verdicts every run. The aggregate holds because the errors move
+around. `--runs N` shows what a single run can't:
+
+```bash
+agentci test --runs 3
+```
+
+```
+Run 1/3: 18/19 passed
+Run 2/3: 18/19 passed
+Run 3/3: 18/19 passed
+
+────────────────────────────────────────────────────────────
+Stability Report
+────────────────────────────────────────────────────────────
+Suite score across 3 runs: 95%  /  95%  /  95%
+
+⚠️  FLAKY — 2/19 queries flipped verdicts across runs:
+   "What's your return window?"    ✅❌✅  pass_rate=0.67  pass^3=0.30  source: agent-variance (answer changed)
+   "Do you sell gift cards?"       ❌✅✅  pass_rate=0.67  pass^3=0.30  source: judge-flake (same answer, verdict flipped)
+
+   Flip sources: 1 agent-variance (fix the agent) │ 1 judge-flake (fix the eval) │ 0 mixed
+
+Stability verdict: FLAKY
+```
+
+Every flip is attributed to its source, so it's a routed work item, not a scary number:
+**agent-variance** means the agent produced different output (fix the prompt, retrieval, or
+temperature); **judge-flake** means the output was identical but the LLM judge changed its
+mind (fix the rubric — or replace the judge with a deterministic check). Attribution is
+structural, not guessed: deterministic checks cannot flip on identical output.
+
+Flaky-but-passing exits 0 so adoption won't break your CI; add `--fail-on-flaky` when
+you're ready to gate on it. Try it with zero API keys:
+`AGENTCI_MOCK_FLAKY=1 agentci test --mock --runs 3`. Details: [docs/stability.md](docs/stability.md).
+
+## Audit the judge itself
+
+An LLM judge that shares your agent's context inherits your agent's blind spots: when
+retrieval comes up empty, the agent answers from nothing — and the judge, reading the same
+nothing, passes it. `judge-audit` measures your judge against ground truth you already have,
+by re-scoring recorded baselines (the agent is never re-run):
+
+```bash
+agentci judge-audit
+```
+
+1. **Judge vs. deterministic checks** — the disagreement matrix. The row that matters:
+   answers the judge PASSED that a hard fact-check FAILED.
+2. **Retest stability** — the same answer judged `--repeats` times; flips on identical
+   input are the judge's own noise floor.
+3. **Hand labels** (`--labels`) — agreement + Cohen's κ against your own review.
+
+The claim is deliberately one-directional: a judge that fails where you *can* check it
+shouldn't be trusted where you can't. Verdict: `TRUSTWORTHY` / `NEEDS CALIBRATION` /
+`UNRELIABLE`. Details: [docs/judge-audit.md](docs/judge-audit.md).
+
+## Check facts in code. Save the judge for judgment.
+
+Most agent failures that matter involve a hard fact — a product name, a price, a version number. Those are checkable deterministically, for free. And an LLM judge grading against the same context as your agent inherits your agent's blind spots: when retrieval comes up empty, the agent answers from nothing and the judge — reading the same nothing — passes it.
+
+So AgentCI runs deterministic checks first and treats the judge as the last resort, not the default:
+
+1. **Fact checks in code** — `expected_in_answer`, `not_in_answer`, `regex_match`, `json_schema`. Zero LLM calls, zero flakiness, same verdict every run.
+2. **Path checks** — did the agent call the tools it should have? A missing expected tool warns; a forbidden tool fails.
+3. **Cost budgets** — LLM calls, tokens, dollars per query.
+4. **LLM judge** (`llm_judge` rubrics, optional) — only for answers that genuinely need judgment, evaluated after every deterministic check has run.
+
+Don't write the fact checks by hand — mine them from your knowledge base:
+
+```bash
+agentci generate-checks
+```
+
+It extracts hard facts (prices, rates, SKUs, "30 days") as variant-set assertions, and
+**validates every candidate against your recorded golden answers first** — a check that
+would fail a known-good answer is rejected before you ever see it. One LLM call at
+authoring time; the checks run free forever. Details: [docs/generate-checks.md](docs/generate-checks.md).
+
 ## Demo
 
 Here's a RAG agent demo where someone "optimizes for latency" by reducing retriever docs from 8 to 1. AgentCI catches the correctness regression:
@@ -96,6 +180,9 @@ agentci init --generate        # Scan project, generate test spec
 agentci init                   # Generate GitHub Actions workflow + pre-push hook
 agentci test --mock --yes      # Zero-cost synthetic traces, CI-friendly (no keys, no prompts)
 agentci test                   # Run 3-layer evaluation (correctness → path → cost)
+agentci test --runs 3          # Stability report: verdict flips + flip-source attribution
+agentci judge-audit            # Audit the LLM judge against checks, retests, hand labels
+agentci generate-checks        # Mine KB facts into deterministic assertions (gated)
 agentci test --format html -o report.html  # HTML report with per-query details
 agentci calibrate              # Measure real agent metrics, auto-tune spec budgets
 agentci doctor                 # Health check: spec, deps, API keys
@@ -103,10 +190,27 @@ agentci record <test>          # Record golden baseline
 agentci diff                   # Diff against baseline
 agentci report -i results.json # Generate HTML report from JSON results
 ```
+## Docs
+
+- [Quickstart](docs/quickstart.md) — install to first green run
+- [Stability testing](docs/stability.md) — `--runs N`, flip-source attribution
+- [Judge audit](docs/judge-audit.md) — is your LLM judge lying to you?
+- [Generate checks](docs/generate-checks.md) — mine KB facts into gated assertions
+- [Writing tests](docs/writing-tests.md) — the full spec reference
+- [Cost tracking](docs/cost-tracking.md) — budgets and spike detection
+- [Golden traces](docs/golden-traces.md) — record baselines, diff regressions
+- [CI/CD integration](docs/ci-cd.md) — GitHub Actions setup
+- [LangGraph](docs/langgraph.md) — graph-based agent support
+- [Metrics reference](docs/metrics_reference.md) — every metric, defined
+
+## Why not just an LLM judge?
+
+Judge-only evals are expensive, flaky, and blind to their own context. AgentCI is pytest-native regression testing: deterministic checks catch the factual failures, golden traces catch behavioral drift, cost budgets catch spend regressions — and the judge handles only what genuinely needs judgment. Mock mode (`agentci test --mock`) runs the whole suite with zero API keys and zero cost, so it can gate every PR.
+
 ## Contributing
 
-[GitHub Issues](https://github.com/suniel12/AgentCI/issues)
-[DemoAgents](https://github.com/suniel12/DemoAgents) — working examples for all three frameworks
+[GitHub Issues](https://github.com/suniel12/AgentCI/issues) ·
+[DemoAgents](https://github.com/suniel12/DemoAgents) — working examples for OpenAI, Anthropic, and LangGraph agents
 
 Apache 2.0. If you build an agent and test it with AgentCI, I'd love to hear about it.
 

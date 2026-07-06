@@ -5,6 +5,87 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-07-05
+
+### Added
+
+#### KB-Derived Fact Checks — `agentci generate-checks`
+Mines the knowledge base for hard facts (prices, rates, SKUs, versions,
+explicit quantities) and proposes them as deterministic assertions on
+existing spec queries. One LLM call at authoring time; the checks run
+deterministically forever at zero cost.
+
+- **Brittleness gate**: every candidate is validated against recorded golden
+  answers before it is offered — a check that would fail a known-good answer
+  is rejected automatically with the failing answer shown
+- Only non-paraphrasable facts; prose facts become variant sets
+  (`any_expected_in_answer`), never single literal strings; only
+  `any_expected_in_answer` / `not_in_answer` / `regex_match` are proposed
+- Candidates without a golden answer are `unvalidated` and never
+  auto-accepted, even with `--yes`; interactive review for everything else
+- Merge never overwrites user-written assertions; `.bak` backup on write;
+  `--dry-run` mode
+- New module `agentci.engine.check_generator`; 21 new tests
+
+#### Judge Audit — `agentci judge-audit`
+Meta-evaluation of the LLM judge against ground truth you already have,
+re-scoring recorded golden baselines (the agent is never re-run):
+
+- **Mode 1 — judge vs. deterministic checks**: independent verdicts on the
+  same recorded answer; reports the disagreement matrix. The killer row:
+  answers the judge PASSED that a deterministic fact-check FAILED
+  (shared-context judge blindness, detected automatically)
+- **Mode 2 — retest stability** (`--repeats K`, default 3): same answer
+  judged K times; verdict flips on identical input are the judge's noise floor
+- **Mode 3 — hand labels** (`--labels FILE`): agreement + Cohen's κ against
+  human review, with standard trust thresholds
+- Scoped claim stated in the report itself: measured on fact-checkable
+  queries; one-directional (disqualifying) signal for judgment-only queries
+- Verdicts: TRUSTWORTHY / NEEDS CALIBRATION / UNRELIABLE (exit 1) /
+  ERROR when the judge never ran (exit 2 — a judge that couldn't run is
+  never scored)
+- `--sample N` cost cap; console + JSON output
+- New module `agentci.engine.judge_audit`; 27 new tests
+
+#### Stability Report — `agentci test --runs N`
+A stable suite score can hide per-query verdict flips: the aggregate holds
+because the errors move around. `--runs N` executes the whole suite N times
+and reports what a single run cannot show:
+
+- Per-query verdict history (✅❌✅), pass rate, pass@k and pass^k estimates
+- Suite score per run printed side by side with the queries that flipped
+- **Flip-source attribution** — every flip is labelled:
+  - `agent-variance`: the agent's output changed → fix the agent
+  - `judge-flake`: same output, the LLM judge changed its verdict → fix the eval
+  - `mixed`: near-identical paraphrase with a judge configured — not guessed
+  Attribution rests on a structural fact: deterministic checks cannot flip on
+  identical output, so identical answer + tools + flipped verdict = judge.
+- Exit semantics: flaky-but-passing exits 0 (warnings only); queries failing
+  in EVERY run exit 1; `--fail-on-flaky` escalates flips to exit 1
+- Works in every format: console section, GitHub `::warning` annotations,
+  `stability` block in JSON, stability card in the HTML report
+- Mock mode support: `AGENTCI_MOCK_FLAKY=1 agentci test --mock --runs 3`
+  demonstrates the report with zero API keys
+- New module `agentci.engine.stability` (`build_stability_report`,
+  `StabilityReport`, `QueryStability`, `FlipSource`); 21 new tests
+
+### Changed
+- **`expected_tools` now asserts by default**: a missing expected tool produces a WARN
+  (tool recall gates at 1.0 unless `min_tool_recall` explicitly loosens it). Previously,
+  without `min_tool_recall`, a recall of 0.0 displayed as PASS with a checkmark.
+- **`expected_tools: []` now asserts that no tools are called**: an explicit empty list
+  produces a WARN if the agent called any tool. Previously it was silently skipped.
+- `agentci doctor` no longer reports numpy as a required dependency (it was never used
+  by AgentCI, so every fresh install showed a false failure).
+
+### Docs
+- README: fixed the quickstart spec example (was missing the required `agent:` field),
+  added CI badge, "Check facts in code" section, docs index
+- Rewrote `docs/quickstart.md`, `docs/ci-cd.md`, `docs/cost-tracking.md`, and
+  `docs/golden-traces.md` to match the current `agentci test` workflow
+- Fixed dead clone URLs in CONTRIBUTING.md and quickstart
+- Removed unused demo GIF variants and cast recordings (6 files, ~2 MB)
+
 ## [0.6.0] - 2026-03-05
 
 ### Added
