@@ -269,6 +269,72 @@ class TestImportCLI:
         assert result.exit_code == 2
         assert "not an OTel span export" in _flat(result.output)
 
+    def test_import_into_spec_with_path_assertion_serializes_enums(self, tmp_path):
+        # Regression (dogfood 2026-07-07): the spec rewrite used
+        # model_dump(exclude_none=True), leaving path.match_mode as a MatchMode
+        # enum that yaml.safe_dump cannot represent — crashing import for ANY
+        # spec that carries a path assertion.
+        from click.testing import CliRunner
+
+        import yaml
+
+        from ciagent.cli import cli
+        from ciagent.loader import load_spec
+
+        spec_path = tmp_path / "agentci_spec.yaml"
+        spec_path.write_text(
+            "agent: import-test\n"
+            f"baseline_dir: {tmp_path / 'golden'}\n"
+            "queries:\n"
+            '  - query: "route me"\n'
+            "    path:\n"
+            '      expected_handoff: "Billing Agent"\n'
+            "      match_mode: subset\n"
+        )
+        trace_file = tmp_path / "prod.json"
+        trace_file.write_text(json.dumps([_chat_span()]))
+
+        result = CliRunner().invoke(cli, ["import", str(trace_file), "-c", str(spec_path)])
+        assert result.exit_code == 0, result.output
+
+        reloaded = yaml.safe_load(spec_path.read_text())
+        routed = [q for q in reloaded["queries"] if q["query"] == "route me"][0]
+        assert routed["path"]["match_mode"] == "subset"  # plain string, not an enum
+        load_spec(str(spec_path))  # the rewritten spec still loads
+
+    def test_failing_trace_blocked_then_forced(self, tmp_path):
+        # F7's purpose is importing FAILURES. When the matching query already
+        # gates on correctness the trace fails, the save prechecks and stops
+        # (exit 1) unless --force-save keeps the failure as the golden.
+        from click.testing import CliRunner
+
+        from ciagent.cli import cli
+
+        spec_path = tmp_path / "agentci_spec.yaml"
+        spec_path.write_text(
+            "agent: import-test\n"
+            f"baseline_dir: {tmp_path / 'golden'}\n"
+            "queries:\n"
+            f"  - query: {json.dumps(QUERY)}\n"
+            "    correctness:\n"
+            '      expected_in_answer: ["thermostats are in stock"]\n'
+        )
+        trace_file = tmp_path / "prod.json"
+        trace_file.write_text(json.dumps([_chat_span()]))
+
+        runner = CliRunner()
+        blocked = runner.invoke(cli, ["import", str(trace_file), "-c", str(spec_path)])
+        assert blocked.exit_code == 1, blocked.output
+        assert "force-save" in _flat(blocked.output)
+        assert not (tmp_path / "golden").exists()
+
+        forced = runner.invoke(
+            cli, ["import", str(trace_file), "-c", str(spec_path), "--force-save"],
+        )
+        assert forced.exit_code == 0, forced.output
+        goldens = list((tmp_path / "golden" / "import-test").glob("*.json"))
+        assert len(goldens) == 1
+
 
 class TestRealOpenllmetryExport:
     """Against a REAL export: live OpenAI call traced by openllmetry 0.62

@@ -56,6 +56,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `TracingProcessor` base, so the adapter registers cleanly against current
   SDK versions
 
+### Fixed — `ciagent import` hardening (found dogfooding F7 on our own agent)
+- Import no longer crashes rewriting a spec that carries a `path:` assertion.
+  The spec rewrite now serializes with `model_dump(mode="json")`, so enum
+  fields (e.g. `path.match_mode`) become their plain-string values instead of
+  an un-representable `Enum` object — the previous behavior raised
+  `yaml.representer.RepresenterError` on essentially any real spec
+- `ciagent import --force-save`: import a trace that FAILS its query's own
+  correctness assertions — the found failure itself becomes the golden, which
+  is the point of F7. Without the flag the save prechecks and stops with a
+  clear message (exit 1) rather than a bare stack trace, so a bad capture is
+  never planted silently
+
 ## [0.9.0] - 2026-07-06
 
 ### Added — retrieval layer 2.5: `retrieval:` assertions (F4, F6 Phase 4)

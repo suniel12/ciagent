@@ -2816,7 +2816,12 @@ def judge_audit_cmd(config, baseline_dir, repeats, labels_path, sample, live,
               help='Baseline version tag (default: imported-<n>)')
 @click.option('--dry-run', is_flag=True,
               help='Map + gate the trace and show what would be written, write nothing')
-def import_cmd(trace_file, config, version_tag, dry_run):
+@click.option('--force-save', is_flag=True,
+              help="Import a trace that FAILS its query's own correctness assertions "
+                   "— the found failure itself becomes the golden. Off by default so a "
+                   "bad capture isn't planted silently; the round-trip completeness "
+                   "gate still applies either way.")
+def import_cmd(trace_file, config, version_tag, dry_run, force_save):
     """Convert an exported production trace into a spec query + golden baseline.
 
     TRACE_FILE formats are auto-detected:
@@ -2840,9 +2845,15 @@ def import_cmd(trace_file, config, version_tag, dry_run):
     new; existing queries are never modified — only the golden is written.
 
     \b
+    If the query already carries correctness assertions the trace FAILS, the
+    save prechecks and stops (exit 1) — pass --force-save to keep the failing
+    trace as the golden (the found failure becomes the regression test).
+
+    \b
     Exit codes:
         0 — imported (or --dry-run gate passed)
-        1 — trace rejected by the round-trip gate
+        1 — trace rejected by the round-trip gate, or fails its query's
+            assertions without --force-save
         2 — file/config error
     """
     from pathlib import Path
@@ -2907,7 +2918,11 @@ def import_cmd(trace_file, config, version_tag, dry_run):
         backup.write_text(Path(config).read_text(encoding="utf-8"), encoding="utf-8")
         Path(config).write_text(
             yaml.safe_dump(
-                updated.model_dump(exclude_none=True), sort_keys=False,
+                # mode="json" so enum fields (e.g. path.match_mode) serialize as
+                # their plain-string values — yaml.safe_dump cannot represent an
+                # Enum object, which otherwise crashes the rewrite of any spec
+                # that carries a path assertion.
+                updated.model_dump(mode="json", exclude_none=True), sort_keys=False,
                 allow_unicode=True,
             ),
             encoding="utf-8",
@@ -2921,14 +2936,29 @@ def import_cmd(trace_file, config, version_tag, dry_run):
             (Path(spec.baseline_dir) / spec.agent).glob("imported-*.json")
         ) if (Path(spec.baseline_dir) / spec.agent).exists() else []
         version_tag = f"imported-{len(existing) + 1}"
-    out_path = save_baseline(
-        trace,
-        agent=spec.agent,
-        version=version_tag,
-        spec=spec,
-        query_text=str(query),
-        baseline_dir=spec.baseline_dir,
-    )
+    try:
+        out_path = save_baseline(
+            trace,
+            agent=spec.agent,
+            version=version_tag,
+            spec=spec,
+            query_text=str(query),
+            baseline_dir=spec.baseline_dir,
+            force=force_save,
+        )
+    except ValueError as e:
+        # The matching query already carries correctness assertions the trace
+        # fails — importing a FOUND FAILURE. That's the point of F7; surface
+        # the fix rather than a bare stack trace.
+        console.print(f"[bold red]Precheck failed[/] — the trace fails its query's "
+                      f"own correctness assertions:")
+        console.print(f"  {e}")
+        console.print(
+            "[dim]This is expected when the imported trace IS the failure. "
+            "Re-run with [/][cyan]--force-save[/][dim] to keep it as the golden "
+            "(the found failure becomes the regression test).[/]"
+        )
+        sys.exit(1)
     console.print(f"  golden: [green]{out_path}[/]")
     console.print(
         "\nNext: add assertions to the imported query (or run "
