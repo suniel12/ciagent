@@ -34,12 +34,23 @@ from ciagent.models import (
     ToolCall,
 )
 
+# The SDK's TracingProcessor is an ABC, not a Protocol — duck typing alone
+# leaves set_trace_processors([AgentCITraceProcessor()]) a type error in
+# every consumer. Subclass it when the SDK is installed; the adapter stays
+# importable without openai-agents.
+try:
+    from agents.tracing.processor_interface import (
+        TracingProcessor as _SDKTracingProcessor,
+    )
+except ImportError:  # openai-agents not installed
+    _SDKTracingProcessor = object  # type: ignore[assignment,misc]
 
-class AgentCITraceProcessor:
+
+class AgentCITraceProcessor(_SDKTracingProcessor):
     """
     Captures OpenAI Agents SDK traces into AgentCI's Trace model.
 
-    Implements the TracingProcessor protocol:
+    Implements the TracingProcessor interface:
         on_trace_start, on_trace_end, on_span_start, on_span_end,
         shutdown, force_flush
     """
