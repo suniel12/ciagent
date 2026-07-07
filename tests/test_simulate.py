@@ -74,9 +74,11 @@ class TestTermination:
         assert r.termination == TERM_STOP_WHEN
         assert len(r.turns) == 2
 
-    def test_scenario_without_turns_is_rejected(self):
-        with pytest.raises(ValueError, match="no scripted turns"):
-            run_scenario(ScenarioSpec(persona="angry customer"), echo_runner)
+    def test_scenario_without_turns_or_persona_is_rejected(self):
+        # Phase 3: persona-only scenarios are valid (generative); a scenario
+        # with NEITHER user-turn source is rejected at the schema level.
+        with pytest.raises(ValueError, match="turns.*persona|persona.*turns"):
+            ScenarioSpec(name="empty")
 
 
 # ── Agent raises mid-conversation ───────────────────────────────────────────────
@@ -219,15 +221,20 @@ class TestSimulateCLI:
         assert result.exit_code == 2
         assert "scenarios" in result.output.lower()
 
-    def test_unscripted_scenario_exits_2_with_hint(self):
+    def test_generative_scenario_runs_in_mock_with_mock_persona(self):
+        # Phase 3: persona-only scenarios run under --mock via the
+        # deterministic mock persona — zero keys, structure validated.
         runner = CliRunner()
         with runner.isolated_filesystem():
             self._write_spec(
-                "agent: a\nscenarios:\n  - persona: angry customer\n    goal: refund\n"
+                "agent: a\nscenarios:\n"
+                "  - persona: angry customer\n    goal: refund\n    max_turns: 3\n"
             )
             result = runner.invoke(cli, ["simulate", "--mock"])
-        assert result.exit_code == 2
-        assert "turns" in result.output
+        assert result.exit_code == 0, result.output
+        # "[mock user]" itself is swallowed by rich markup in console echo
+        assert "still pursuing" in result.output
+        assert "max-turns-reached" in result.output
 
     def test_live_without_conversation_runner_exits_2(self):
         runner = CliRunner()

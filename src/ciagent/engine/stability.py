@@ -39,11 +39,12 @@ SIMILARITY_AMBIGUITY_THRESHOLD = 0.9
 
 
 class FlipSource(str, Enum):
-    """Why a query's verdict flipped across runs."""
+    """Why a query's (or scenario's) verdict flipped across runs."""
     AGENT_VARIANCE = "agent-variance"  # agent output changed → fix the agent
     JUDGE_FLAKE = "judge-flake"        # same output/checks, judge verdict changed → fix the eval
     INFRA_ERROR = "infra-error"        # a judge call errored → fix nothing, retry
     MIXED = "mixed"                    # near-identical paraphrase + judge → ambiguous
+    SIMULATION_VARIANCE = "simulation-variance"  # simulated user said different things → persona, not agent
 
 
 @dataclass
@@ -186,6 +187,111 @@ def build_stability_report(
         queries=stabilities,
         duplicate_queries=duplicates,
     )
+
+
+# ── Scenario stability (F6 Phase 3) ────────────────────────────────────────────
+
+
+@dataclass
+class ScenarioStability:
+    """Multi-run stability record for one simulate scenario."""
+    scenario: str
+    verdicts: list[bool]                    # per-run: True = passed cleanly
+    flip_source: Optional[FlipSource] = None
+    flip_reason: str = ""
+    cost_usd: list[float] = field(default_factory=list)
+
+    @property
+    def runs(self) -> int:
+        return len(self.verdicts)
+
+    @property
+    def flipped(self) -> bool:
+        return len(set(self.verdicts)) > 1
+
+    @property
+    def pass_rate(self) -> float:
+        return sum(self.verdicts) / len(self.verdicts) if self.verdicts else 0.0
+
+    @property
+    def always_failed(self) -> bool:
+        return bool(self.verdicts) and not any(self.verdicts)
+
+    @property
+    def verdict_string(self) -> str:
+        return "".join("✅" if v else "❌" for v in self.verdicts)
+
+
+def build_scenario_stability(run_results: list[list]) -> list[ScenarioStability]:
+    """Aggregate N simulate runs into per-scenario stability records.
+
+    Args:
+        run_results: Run-major matrix of ScenarioResults; every run evaluates
+                     the same scenarios in spec order, so alignment is by index.
+
+    Flip attribution adds a fourth source over the single-turn version:
+    if the SIMULATED USER's turns differ across runs, the flip is
+    `simulation-variance` — the persona said different things, and blaming
+    the agent for that would be exactly the untrustworthy-eval failure mode
+    this tool exists to kill. Scripted/replayed turns are identical by
+    construction, so they can never attribute there.
+    """
+    if not run_results or not run_results[0]:
+        return []
+
+    n = min(len(run) for run in run_results)
+    records: list[ScenarioStability] = []
+    for i in range(n):
+        per_run = [run[i] for run in run_results]
+        rec = ScenarioStability(
+            scenario=per_run[0].scenario.display_name(),
+            verdicts=[not r.hard_fail and not r.is_partial for r in per_run],
+            cost_usd=[r.cost_usd for r in per_run],
+        )
+        if rec.flipped:
+            rec.flip_source, rec.flip_reason = _attribute_scenario_flip(per_run)
+        records.append(rec)
+    return records
+
+
+def _attribute_scenario_flip(per_run: list) -> tuple[FlipSource, str]:
+    """Attribute a scenario verdict flip. Discriminator order mirrors the
+    single-turn version: infra first, then the user side, then the agent."""
+    if any(r.is_infra_error or r.is_cost_aborted for r in per_run):
+        return (
+            FlipSource.INFRA_ERROR,
+            "at least one run aborted (infra error or cost budget) — "
+            "retry before trusting this flip",
+        )
+
+    user_transcripts = {tuple(r.user_turns()) for r in per_run}
+    if len(user_transcripts) > 1:
+        return (
+            FlipSource.SIMULATION_VARIANCE,
+            "the simulated user said different things across runs — "
+            "record one conversation and gate on replay",
+        )
+
+    tool_seqs = {
+        tuple(tuple(t.trace.tool_call_sequence or []) for t in r.turns) for r in per_run
+    }
+    if len(tool_seqs) > 1:
+        return FlipSource.AGENT_VARIANCE, "same user turns, tool sequence changed"
+
+    answers = {
+        tuple(_normalize_answer(_extract_turn_answer(t)) for t in r.turns)
+        for r in per_run
+    }
+    if len(answers) > 1:
+        return FlipSource.AGENT_VARIANCE, "same user turns, agent answers changed"
+
+    return FlipSource.JUDGE_FLAKE, "identical conversations, verdict flipped"
+
+
+def _extract_turn_answer(turn) -> str:
+    from ciagent.engine.runner import _extract_answer
+
+    return _extract_answer(turn.trace)
 
 
 # ── Internal helpers ───────────────────────────────────────────────────────────
