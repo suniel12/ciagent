@@ -289,7 +289,7 @@ def _assert_llm_judge(a: Assertion, t: Trace) -> tuple[bool, str]:
 
     The rule is defined in a.value (e.g., "The report must state the repo uses MIT License").
     Requires ANTHROPIC_API_KEY environment variable. Uses JUDGE_MODEL_NAME env var for model
-    selection (defaults to claude-3-haiku-20240307).
+    selection (defaults to claude-haiku-4-5).
 
     Args:
         a: Assertion with a.value containing the qualitative rule to evaluate.
@@ -330,7 +330,7 @@ Do not output any other markdown or text.
 
     try:
         response = client.messages.create(
-            model=os.getenv("JUDGE_MODEL_NAME", "claude-3-haiku-20240307"),
+            model=os.getenv("JUDGE_MODEL_NAME", "claude-haiku-4-5"),
             max_tokens=150,
             temperature=0.0,
             messages=[{"role": "user", "content": prompt}]
