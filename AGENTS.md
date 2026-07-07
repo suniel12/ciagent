@@ -77,6 +77,17 @@ ciagent diff --agent my-agent --baseline v1 --compare v2  # Diff two baseline ve
 ciagent diff --agent my-agent --baseline v1 --compare v2 --format json  # JSON output
 ciagent diff --spec-path spec.yaml --baseline-dir baselines/  # With custom paths
 
+# ── Import Production Traces (F7) ─────────────────────────────────────
+ciagent import trace.json             # Exported prod trace -> spec query + gated golden
+ciagent import trace.json --dry-run   # Map + round-trip gate only; write nothing
+ciagent import trace.json --version incident-42   # Name the baseline
+ciagent import trace.json --force-save # Import a FAILING trace as the golden (found bug -> test)
+# Auto-detected formats: otel-genai (openllmetry & any GenAI-semconv exporter),
+#   otel-langfuse (Langfuse v3+ langfuse.* dialect),
+#   otel-adk (Google ADK native gcp.vertex.agent.* dialect),
+#   langsmith-runs (LangSmith run export). Verified against real captures from
+#   OpenAI, Anthropic, CrewAI (via litellm), Langfuse, LangSmith, and Google ADK.
+
 # ── Legacy & Reporting ────────────────────────────────────────────────
 ciagent run                           # Legacy test suite runner (pytest-compatible)
 ciagent run -s path/to/suite.yaml     # Specify suite file
