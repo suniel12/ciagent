@@ -348,3 +348,85 @@ class TestLangsmithDetection:
         ]))
         with pytest.raises(OtelImportError, match="LangSmith runs export"):
             load_spans(f)
+
+
+class TestRealLangfuseExport:
+    """Against a REAL export: live OpenAI tool-call conversation traced by
+    the langfuse 4.13 SDK (tests/fixtures/langfuse_spans_real.json). The
+    dialect is pure langfuse.* attributes — zero gen_ai.* — which the plain
+    semconv mapping would reject; this is why we verify against emitters."""
+
+    FIXTURE = "tests/fixtures/langfuse_spans_real.json"
+
+    def test_maps_generations_with_model_and_tokens(self):
+        spans = load_spans(self.FIXTURE)
+        trace, _ = trace_from_otel(spans)
+        calls = trace.spans[0].llm_calls
+        assert len(calls) == 2
+        assert calls[0].model == "gpt-4o-mini-2024-07-18"
+        assert (calls[0].tokens_in, calls[0].tokens_out) == (79, 17)
+        assert trace.framework == "otel-langfuse"
+
+    def test_maps_tool_observation_with_structured_result(self):
+        spans = load_spans(self.FIXTURE)
+        trace, _ = trace_from_otel(spans)
+        tc = trace.spans[0].tool_calls[0]
+        assert tc.tool_name == "lookup_invoice"
+        assert tc.arguments == {"customer_email": "alice@example.com"}
+        # JSON-string output parses to a structured list — countable by F4
+        assert isinstance(tc.result, list) and tc.result[0]["id"] == "INV-2024-001"
+
+    def test_root_observation_carries_query_answer_and_agent(self):
+        spans = load_spans(self.FIXTURE)
+        trace, query = trace_from_otel(spans)
+        assert "charged twice for CloudSync Pro" in query
+        assert trace.metadata["final_output"].startswith("I found two invoices")
+        assert trace.agent_name == "billing-support-agent"
+
+    def test_generation_only_export_still_yields_query_and_answer(self):
+        # A user exporting just the generation spans (no root observation)
+        # still gets a gateable golden from the message content.
+        spans = [s for s in load_spans(self.FIXTURE)
+                 if s["attributes"].get("langfuse.observation.type") == "generation"]
+        trace, query = trace_from_otel(spans)
+        assert query and "charged twice" in query
+        assert trace.metadata["final_output"].startswith("I found two invoices")
+
+    def test_gate_and_retrieval_layer_accept_the_import(self):
+        from ciagent.engine.artifact_gate import gate_imported_golden
+        from ciagent.engine.results import LayerStatus
+        from ciagent.engine.retrieval import evaluate_retrieval
+        from ciagent.schema.spec_models import RetrievalSpec
+
+        spans = load_spans(self.FIXTURE)
+        trace, query = trace_from_otel(spans)
+        assert gate_imported_golden(trace, query).accepted
+        result = evaluate_retrieval(
+            trace,
+            RetrievalSpec(tool="lookup_invoice", forbid_empty=True, min_results=2),
+        )
+        assert result.status == LayerStatus.PASS
+
+    def test_dispatcher_reports_langfuse_dialect(self, tmp_path):
+        from pathlib import Path
+
+        from click.testing import CliRunner
+
+        from ciagent.cli import cli
+        from ciagent.importers import import_trace_file
+
+        _, _, fmt = import_trace_file(self.FIXTURE)
+        assert fmt == "otel-langfuse"
+
+        spec_path = tmp_path / "agentci_spec.yaml"
+        spec_path.write_text(
+            "agent: lf-import\n"
+            f"baseline_dir: {tmp_path / 'golden'}\n"
+            "queries:\n  - query: \"existing\"\n"
+        )
+        result = CliRunner().invoke(
+            cli, ["import", str(Path(self.FIXTURE).resolve()), "-c", str(spec_path)],
+        )
+        assert result.exit_code == 0, result.output
+        assert "otel-langfuse" in _flat(result.output)
+        assert list((tmp_path / "golden" / "lf-import").glob("imported-*.json"))

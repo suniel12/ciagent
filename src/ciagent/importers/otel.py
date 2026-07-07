@@ -122,6 +122,17 @@ def trace_from_otel(spans: list[dict[str, Any]]) -> tuple[Trace, Optional[str]]:
         op = str(attrs.get("gen_ai.operation.name") or "").lower()
         start_ns, end_ns = _widen_window(span, start_ns, end_ns)
 
+        # Langfuse SDK spans (v3+) use a langfuse.* attribute dialect with
+        # NO gen_ai.* attributes — verified against a live langfuse 4.13
+        # capture (tests/fixtures/langfuse_spans_real.json).
+        lf_type = str(attrs.get("langfuse.observation.type") or "").lower()
+        if lf_type:
+            trace.framework = "otel-langfuse"
+            query, final_output = _map_langfuse_span(
+                span, attrs, lf_type, root, trace, query, final_output,
+            )
+            continue
+
         if op in _AGENT_OPERATIONS or (not op and _looks_like_agent(attrs)):
             agent_name = attrs.get("gen_ai.agent.name") or span.get("name")
             if agent_name:
@@ -275,6 +286,78 @@ def _parse_json_attr(value: Any, default: Any) -> Any:
         except (json.JSONDecodeError, ValueError):
             return value if default is None else default
     return default
+
+
+def _map_langfuse_span(
+    span: dict[str, Any],
+    attrs: dict[str, Any],
+    lf_type: str,
+    root: Span,
+    trace: Trace,
+    query: Optional[str],
+    final_output: Optional[str],
+) -> tuple[Optional[str], Optional[str]]:
+    """Map one Langfuse-dialect span; returns updated (query, final_output).
+
+    Shapes verified against a live langfuse 4.13 capture:
+      generation: langfuse.observation.model.name, .usage_details (JSON with
+                  prompt_tokens/completion_tokens), .input (JSON with
+                  messages), .output (JSON message dict)
+      tool/retriever: .input (JSON dict → arguments), .output (result)
+      agent/chain root: .input / .output as plain strings (the query and
+                  final answer); langfuse.internal.is_app_root marks it
+    """
+    lf_input = _parse_json_attr(attrs.get("langfuse.observation.input"), default=None)
+    lf_output = _parse_json_attr(attrs.get("langfuse.observation.output"), default=None)
+
+    if lf_type == "generation":
+        usage = _parse_json_attr(
+            attrs.get("langfuse.observation.usage_details"), default={},
+        )
+        usage = usage if isinstance(usage, dict) else {}
+        root.llm_calls.append(LLMCall(
+            model=str(attrs.get("langfuse.observation.model.name") or ""),
+            tokens_in=_as_int(usage.get("prompt_tokens") or usage.get("input")),
+            tokens_out=_as_int(usage.get("completion_tokens") or usage.get("output")),
+            output_text=(
+                lf_output.get("content") if isinstance(lf_output, dict)
+                and isinstance(lf_output.get("content"), str) else ""
+            ) or "",
+            duration_ms=_span_duration_ms(span),
+        ))
+        # Fallbacks: a generation-only export still yields query + answer
+        if query is None and isinstance(lf_input, dict):
+            for msg in reversed(lf_input.get("messages") or []):
+                if isinstance(msg, dict) and msg.get("role") == "user" \
+                        and isinstance(msg.get("content"), str):
+                    query = msg["content"]
+                    break
+        if isinstance(lf_output, dict) and isinstance(lf_output.get("content"), str) \
+                and lf_output["content"].strip():
+            final_output = lf_output["content"]
+        return query, final_output
+
+    if lf_type in ("tool", "retriever"):
+        root.tool_calls.append(ToolCall(
+            tool_name=str(span.get("name") or f"unknown-{lf_type}"),
+            arguments=lf_input if isinstance(lf_input, dict) else {},
+            result=lf_output,
+            duration_ms=_span_duration_ms(span),
+        ))
+        return query, final_output
+
+    # agent / chain / span — the root observation carries the conversation's
+    # query and final answer as plain values and names the agent
+    if attrs.get("langfuse.internal.is_app_root") or lf_type == "agent":
+        name = str(span.get("name") or "").strip()
+        if name:
+            trace.agent_name = name
+            root.name = name
+    if isinstance(lf_input, str) and lf_input.strip():
+        query = lf_input
+    if isinstance(lf_output, str) and lf_output.strip():
+        final_output = lf_output
+    return query, final_output
 
 
 def _tool_calls_from_messages(spans: list[dict[str, Any]]) -> list[ToolCall]:

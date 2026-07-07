@@ -49,6 +49,8 @@ def import_trace_file(path: Union[str, Path]) -> tuple[Any, Optional[str], str]:
             # fell through: not JSONL runs either — report as OTel below
 
     try:
-        return (*trace_from_otel(load_spans(path)), "otel-genai")
+        trace, query = trace_from_otel(load_spans(path))
+        # trace.framework carries the detected dialect (e.g. otel-langfuse)
+        return trace, query, trace.framework or "otel-genai"
     except OtelImportError as e:
         raise TraceImportError(str(e)) from e

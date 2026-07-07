@@ -1,0 +1,49 @@
+[
+  {
+    "name": "OpenAI-generation",
+    "startTimeUnixNano": 1783441753269441000,
+    "endTimeUnixNano": 1783441754881423000,
+    "attributes": {
+      "langfuse.observation.input": "{\"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"lookup_invoice\", \"description\": \"Look up recent invoices for a customer by email\", \"parameters\": {\"type\": \"object\", \"properties\": {\"customer_email\": {\"type\": \"string\"}}, \"required\": [\"customer_email\"]}}}], \"messages\": [{\"role\": \"system\", \"content\": \"You are TechCorp's billing support agent.\"}, {\"role\": \"user\", \"content\": \"I was charged twice for CloudSync Pro. My email is alice@example.com \\u2014 can you check my invoices?\"}]}",
+      "langfuse.observation.model.parameters": "{\"temperature\": 1, \"max_tokens\": \"Infinity\", \"top_p\": 1, \"frequency_penalty\": 0, \"presence_penalty\": 0}",
+      "langfuse.observation.type": "generation",
+      "langfuse.observation.output": "{\"role\": \"assistant\", \"tool_calls\": [{\"id\": \"call_LDaBlfvpHiXkQVrgkZy4oMkv\", \"function\": {\"arguments\": \"{\\\"customer_email\\\":\\\"alice@example.com\\\"}\", \"name\": \"lookup_invoice\"}, \"type\": \"function\"}], \"content\": null}",
+      "langfuse.observation.model.name": "gpt-4o-mini-2024-07-18",
+      "langfuse.observation.usage_details": "{\"completion_tokens\": 17, \"prompt_tokens\": 79, \"total_tokens\": 96, \"completion_tokens_details\": {\"accepted_prediction_tokens\": 0, \"audio_tokens\": 0, \"reasoning_tokens\": 0, \"rejected_prediction_tokens\": 0}, \"prompt_tokens_details\": {\"audio_tokens\": 0, \"cached_tokens\": 0}}"
+    }
+  },
+  {
+    "name": "lookup_invoice",
+    "startTimeUnixNano": 1783441754881801000,
+    "endTimeUnixNano": 1783441754881918000,
+    "attributes": {
+      "langfuse.observation.input": "{\"customer_email\": \"alice@example.com\"}",
+      "langfuse.observation.type": "tool",
+      "langfuse.observation.output": "[{\"id\": \"INV-2024-001\", \"amount\": \"$49.00\", \"date\": \"2024-01-15\", \"status\": \"paid\"}, {\"id\": \"INV-2024-002\", \"amount\": \"$49.00\", \"date\": \"2024-02-15\", \"status\": \"paid\"}]"
+    }
+  },
+  {
+    "name": "OpenAI-generation",
+    "startTimeUnixNano": 1783441754882088000,
+    "endTimeUnixNano": 1783441756856766000,
+    "attributes": {
+      "langfuse.observation.input": "{\"tools\": [{\"type\": \"function\", \"function\": {\"name\": \"lookup_invoice\", \"description\": \"Look up recent invoices for a customer by email\", \"parameters\": {\"type\": \"object\", \"properties\": {\"customer_email\": {\"type\": \"string\"}}, \"required\": [\"customer_email\"]}}}], \"messages\": [{\"role\": \"system\", \"content\": \"You are TechCorp's billing support agent.\"}, {\"role\": \"user\", \"content\": \"I was charged twice for CloudSync Pro. My email is alice@example.com \\u2014 can you check my invoices?\"}, {\"role\": \"assistant\", \"content\": null, \"tool_calls\": [{\"id\": \"call_LDaBlfvpHiXkQVrgkZy4oMkv\", \"function\": {\"arguments\": \"{\\\"customer_email\\\":\\\"alice@example.com\\\"}\", \"name\": \"lookup_invoice\"}, \"type\": \"function\"}]}, {\"role\": \"tool\", \"tool_call_id\": \"call_LDaBlfvpHiXkQVrgkZy4oMkv\", \"content\": \"[{\\\"id\\\": \\\"INV-2024-001\\\", \\\"amount\\\": \\\"$49.00\\\", \\\"date\\\": \\\"2024-01-15\\\", \\\"status\\\": \\\"paid\\\"}, {\\\"id\\\": \\\"INV-2024-002\\\", \\\"amount\\\": \\\"$49.00\\\", \\\"date\\\": \\\"2024-02-15\\\", \\\"status\\\": \\\"paid\\\"}]\"}]}",
+      "langfuse.observation.model.parameters": "{\"temperature\": 1, \"max_tokens\": \"Infinity\", \"top_p\": 1, \"frequency_penalty\": 0, \"presence_penalty\": 0}",
+      "langfuse.observation.type": "generation",
+      "langfuse.observation.output": "{\"role\": \"assistant\", \"content\": \"I found two invoices for your CloudSync Pro subscription:\\n\\n1. **Invoice ID:** INV-2024-001\\n   - **Amount:** $49.00\\n   - **Date:** January 15, 2024\\n   - **Status:** Paid\\n\\n2. **Invoice ID:** INV-2024-002\\n   - **Amount:** $49.00\\n   - **Date:** February 15, 2024\\n   - **Status:** Paid\\n\\nIt appears that you were indeed charged twice for the subscription, once in January and once in February. Would you like assistance in resolving this issue?\"}",
+      "langfuse.observation.model.name": "gpt-4o-mini-2024-07-18",
+      "langfuse.observation.usage_details": "{\"completion_tokens\": 127, \"prompt_tokens\": 178, \"total_tokens\": 305, \"completion_tokens_details\": {\"accepted_prediction_tokens\": 0, \"audio_tokens\": 0, \"reasoning_tokens\": 0, \"rejected_prediction_tokens\": 0}, \"prompt_tokens_details\": {\"audio_tokens\": 0, \"cached_tokens\": 0}}"
+    }
+  },
+  {
+    "name": "billing-support-agent",
+    "startTimeUnixNano": 1783441753269189000,
+    "endTimeUnixNano": 1783441756857147000,
+    "attributes": {
+      "langfuse.internal.is_app_root": true,
+      "langfuse.observation.type": "agent",
+      "langfuse.observation.input": "I was charged twice for CloudSync Pro. My email is alice@example.com \u2014 can you check my invoices?",
+      "langfuse.observation.output": "I found two invoices for your CloudSync Pro subscription:\n\n1. **Invoice ID:** INV-2024-001\n   - **Amount:** $49.00\n   - **Date:** January 15, 2024\n   - **Status:** Paid\n\n2. **Invoice ID:** INV-2024-002\n   - **Amount:** $49.00\n   - **Date:** February 15, 2024\n   - **Status:** Paid\n\nIt appears that you were indeed charged twice for the subscription, once in January and once in February. Would you like assistance in resolving this issue?"
+    }
+  }
+]
