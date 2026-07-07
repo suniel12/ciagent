@@ -254,6 +254,7 @@ ciagent report -i results.json # Generate HTML report from JSON results
 ## Docs
 
 - [Quickstart](docs/quickstart.md) — install to first green run
+- [Simulate](docs/simulate.md) — multi-turn conversation scenarios: scripted for CI, generative personas as the finder
 - [Stability testing](docs/stability.md) — `--runs N`, flip-source attribution
 - [Judge audit](docs/judge-audit.md) — is your LLM judge lying to you?
 - [Generate checks](docs/generate-checks.md) — mine KB facts into gated assertions
