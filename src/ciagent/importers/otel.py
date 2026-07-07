@@ -85,6 +85,20 @@ def load_spans(path: Union[str, Path]) -> list[dict[str, Any]]:
             "flat list of span objects."
         )
 
+    # LangSmith run exports are their own schema, not OTel spans — say so
+    # instead of importing garbage. (Support pending a real export to
+    # verify against; LangSmith can also forward traces via OTel.)
+    if raw_spans and all(
+        isinstance(s, dict) and "run_type" in s and "attributes" not in s
+        for s in raw_spans
+    ):
+        raise OtelImportError(
+            f"'{path}' looks like a LangSmith runs export (run_type objects), "
+            "which isn't OTel span data. LangSmith run-format import isn't "
+            "supported yet — configure LangSmith's OpenTelemetry export and "
+            "import those spans instead."
+        )
+
     if not raw_spans:
         raise OtelImportError(f"'{path}' contains no spans.")
     return [_normalize_span(s) for s in raw_spans if isinstance(s, dict)]
@@ -152,6 +166,27 @@ def trace_from_otel(spans: list[dict[str, Any]]) -> tuple[Trace, Optional[str]]:
         assistant_text = _last_message_text(attrs, "gen_ai.output.messages", role="assistant")
         if assistant_text:
             final_output = assistant_text
+
+    # Tool calls that never got their own span: real chat-instrumentation
+    # exports (verified against a live openllmetry 0.62 capture) carry the
+    # tool call as a `tool_call` part in the output messages and the tool's
+    # RESULT as a `tool_call_response` part in a later span's input messages
+    # — the tool itself runs in app code, unspanned. Recover both, paired
+    # by call id, so the imported golden keeps tool usage (and the F4
+    # retrieval layer can see retriever output). execute_tool spans take
+    # precedence; message-derived results backfill them when missing.
+    existing = {
+        (c.tool_name, json.dumps(c.arguments, sort_keys=True, default=str)): c
+        for c in root.tool_calls
+    }
+    for tc in _tool_calls_from_messages(spans):
+        key = (tc.tool_name, json.dumps(tc.arguments, sort_keys=True, default=str))
+        match = existing.get(key)
+        if match is None:
+            root.tool_calls.append(tc)
+            existing[key] = tc
+        elif match.result is None and tc.result is not None:
+            match.result = tc.result
 
     if final_output:
         trace.metadata["final_output"] = final_output
@@ -241,6 +276,58 @@ def _parse_json_attr(value: Any, default: Any) -> Any:
         except (json.JSONDecodeError, ValueError):
             return value if default is None else default
     return default
+
+
+def _tool_calls_from_messages(spans: list[dict[str, Any]]) -> list[ToolCall]:
+    """Recover tool calls + results from GenAI message content.
+
+    Shapes verified against a live openllmetry 0.62 export:
+      output part: {"type": "tool_call", "name", "id", "arguments": {...}}
+      input part:  {"type": "tool_call_response", "id", "response": "<json>"}
+    Results pair to calls by id; an unpaired call keeps result=None (the
+    retrieval layer SKIPs on uncaptured results, never guesses).
+    """
+    calls: dict[str, ToolCall] = {}   # id → ToolCall (insertion-ordered)
+    unkeyed: list[ToolCall] = []
+    responses: dict[str, Any] = {}
+
+    for span in spans:
+        attrs = span.get("attributes") or {}
+        for key in ("gen_ai.output.messages", "gen_ai.input.messages"):
+            messages = _parse_json_attr(attrs.get(key), default=None)
+            if not isinstance(messages, list):
+                continue
+            for msg in messages:
+                if not isinstance(msg, dict):
+                    continue
+                for part in msg.get("parts") or []:
+                    if not isinstance(part, dict):
+                        continue
+                    if part.get("type") == "tool_call" and part.get("name"):
+                        call_id = str(part.get("id") or "")
+                        if call_id and call_id in calls:
+                            continue  # same call echoed in a later span's input
+                        tc = ToolCall(
+                            tool_name=str(part["name"]),
+                            arguments=part.get("arguments")
+                            if isinstance(part.get("arguments"), dict)
+                            else _parse_json_attr(part.get("arguments"), default={}),
+                        )
+                        if call_id:
+                            calls[call_id] = tc
+                        else:
+                            unkeyed.append(tc)
+                    elif part.get("type") == "tool_call_response":
+                        call_id = str(part.get("id") or "")
+                        if call_id:
+                            responses[call_id] = _parse_json_attr(
+                                part.get("response"), default=part.get("response"),
+                            )
+
+    for call_id, tc in calls.items():
+        if call_id in responses and tc.result is None:
+            tc.result = responses[call_id]
+    return list(calls.values()) + unkeyed
 
 
 def _last_message_text(

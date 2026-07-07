@@ -268,3 +268,83 @@ class TestImportCLI:
         )
         assert result.exit_code == 2
         assert "not an OTel span export" in _flat(result.output)
+
+
+class TestRealOpenllmetryExport:
+    """Against a REAL export: live OpenAI call traced by openllmetry 0.62
+    (tests/fixtures/otel_openllmetry_real.json). Two chat spans, no
+    execute_tool span — the tool call lives in message content."""
+
+    FIXTURE = "tests/fixtures/otel_openllmetry_real.json"
+
+    def test_maps_llm_calls_query_and_answer(self):
+        spans = load_spans(self.FIXTURE)
+        trace, query = trace_from_otel(spans)
+        assert "charged twice for CloudSync Pro" in query
+        assert trace.metadata["final_output"].startswith("I've checked your invoices")
+        span = trace.spans[0]
+        assert len(span.llm_calls) == 2
+        assert span.llm_calls[0].model == "gpt-4o-mini-2024-07-18"
+        assert span.llm_calls[1].tokens_in == 178
+
+    def test_recovers_tool_call_with_result_from_messages(self):
+        # No execute_tool span exists; the call comes from a `tool_call`
+        # output part and its result from the paired `tool_call_response`.
+        spans = load_spans(self.FIXTURE)
+        trace, _ = trace_from_otel(spans)
+        assert trace.tool_call_sequence == ["lookup_invoice"]
+        tc = trace.spans[0].tool_calls[0]
+        assert tc.arguments == {"customer_email": "alice@example.com"}
+        assert isinstance(tc.result, list) and tc.result[0]["id"] == "INV-2024-001"
+
+    def test_echoed_tool_call_not_duplicated(self):
+        # Span 2's input messages echo span 1's tool_call — id-dedupe keeps one.
+        spans = load_spans(self.FIXTURE)
+        trace, _ = trace_from_otel(spans)
+        assert len(trace.spans[0].tool_calls) == 1
+
+    def test_imported_result_is_visible_to_retrieval_layer(self):
+        # The F7→F4 hand-off: a captured tool result in an imported golden
+        # is exactly what the retrieval layer evaluates.
+        from ciagent.engine.results import LayerStatus
+        from ciagent.engine.retrieval import evaluate_retrieval
+        from ciagent.schema.spec_models import RetrievalSpec
+
+        spans = load_spans(self.FIXTURE)
+        trace, _ = trace_from_otel(spans)
+        result = evaluate_retrieval(
+            trace,
+            RetrievalSpec(tool="lookup_invoice", forbid_empty=True, min_results=2),
+        )
+        assert result.status == LayerStatus.PASS
+
+    def test_cli_import_real_export(self, tmp_path):
+        from pathlib import Path
+
+        from click.testing import CliRunner
+
+        from ciagent.cli import cli
+
+        fixture = Path(self.FIXTURE).resolve()
+        spec_path = tmp_path / "agentci_spec.yaml"
+        spec_path.write_text(
+            "agent: real-import\n"
+            f"baseline_dir: {tmp_path / 'golden'}\n"
+            "queries:\n  - query: \"existing\"\n"
+        )
+        result = CliRunner().invoke(
+            cli, ["import", str(fixture), "-c", str(spec_path)],
+        )
+        assert result.exit_code == 0, result.output
+        goldens = list((tmp_path / "golden" / "real-import").glob("imported-*.json"))
+        assert len(goldens) == 1
+
+
+class TestLangsmithDetection:
+    def test_langsmith_runs_export_gets_targeted_error(self, tmp_path):
+        f = tmp_path / "runs.json"
+        f.write_text(json.dumps([
+            {"run_type": "llm", "name": "openai", "inputs": {}, "outputs": {}},
+        ]))
+        with pytest.raises(OtelImportError, match="LangSmith runs export"):
+            load_spans(f)
