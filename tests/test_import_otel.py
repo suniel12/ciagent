@@ -456,6 +456,68 @@ class TestRealAnthropicExport:
         assert len(goldens) == 1
 
 
+class TestRealCrewAIExport:
+    """Against a REAL export: a live CrewAI crew (agent + tool + task, gpt-4o-mini)
+    traced by openllmetry's CrewAI + OpenAI instrumentors
+    (tests/fixtures/crewai_otel_real.json). CrewAI runs LLM calls through
+    litellm -> the OpenAI client, so the gen_ai content lives on `openai.chat`
+    spans alongside CrewAI's `invoke_agent` workflow spans. Verifies the F7
+    import path on the CrewAI dialect with zero importer changes.
+
+    Note: CrewAI's imported query is its full constructed task prompt (it is the
+    last user message CrewAI sent) — faithful to the emitter, just verbose.
+    (The bloated crewai.agent.* object-dump attributes — which the instrumentor
+    fills with the whole Agent incl. the API key — were stripped from the
+    fixture; the importer never reads them.)"""
+
+    FIXTURE = "tests/fixtures/crewai_otel_real.json"
+
+    def test_maps_answer_and_llm_calls(self):
+        spans = load_spans(self.FIXTURE)
+        trace, query = trace_from_otel(spans)
+        assert "get_weather" in query  # the constructed task prompt
+        assert "Paris" in trace.metadata["final_output"]
+        assert trace.total_llm_calls >= 2
+
+    def test_recovers_tool_call_with_result(self):
+        spans = load_spans(self.FIXTURE)
+        trace, _ = trace_from_otel(spans)
+        assert trace.tool_call_sequence == ["get_weather"]
+        tc = trace.spans[0].tool_calls[0]
+        assert tc.arguments == {"city": "Paris"}
+        assert tc.result == {"temp_c": 18, "condition": "light rain", "city": "Paris"}
+
+    def test_fixture_carries_no_secret(self):
+        # Regression guard: the CrewAI instrumentor serializes the Agent object
+        # (incl. api_key) into span attributes — the fixture must stay scrubbed.
+        import re
+
+        from pathlib import Path
+
+        text = Path(self.FIXTURE).read_text()
+        assert "api_key=" not in text
+        assert not re.search(r"sk-[A-Za-z0-9_\-]{20,}", text)
+
+    def test_cli_import_real_crewai_export(self, tmp_path):
+        from pathlib import Path
+
+        from click.testing import CliRunner
+
+        from ciagent.cli import cli
+
+        fixture = Path(self.FIXTURE).resolve()
+        spec_path = tmp_path / "agentci_spec.yaml"
+        spec_path.write_text(
+            "agent: crewai-import\n"
+            f"baseline_dir: {tmp_path / 'golden'}\n"
+            "queries:\n  - query: \"existing\"\n"
+        )
+        result = CliRunner().invoke(cli, ["import", str(fixture), "-c", str(spec_path)])
+        assert result.exit_code == 0, result.output
+        goldens = list((tmp_path / "golden" / "crewai-import").glob("imported-*.json"))
+        assert len(goldens) == 1
+
+
 class TestLangsmithDetection:
     def test_langsmith_runs_export_gets_targeted_error(self, tmp_path):
         f = tmp_path / "runs.json"

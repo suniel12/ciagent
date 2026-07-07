@@ -1,0 +1,225 @@
+[
+  {
+    "name": "Crew Created",
+    "startTimeUnixNano": "1783451403689783000",
+    "endTimeUnixNano": "1783451403690602000",
+    "attributes": {
+      "crewai_version": "1.15.1",
+      "python_version": "3.10.19",
+      "crew_key": "cd577a172269b1d251c2aacd8fc3347f",
+      "crew_id": "d22068b9-1801-4621-86d1-bd650cbd5353",
+      "crew_fingerprint": "84734865-16d4-48a3-be58-db05d3ef7b17",
+      "crew_process": "sequential",
+      "crew_memory": false,
+      "crew_number_of_tasks": 1,
+      "crew_number_of_agents": 1,
+      "crew_fingerprint_created_at": "2026-07-07T12:10:03.683361",
+      "crew_agents": "[{\"key\": \"21102687744faa229cb4f036ba93e774\", \"id\": \"9258c859-e89d-4418-bcb5-f4761186cff6\", \"role\": \"Weather Assistant\", \"verbose?\": false, \"max_iter\": 25, \"max_rpm\": null, \"function_calling_llm\": \"\", \"llm\": \"gpt-4o-mini\", \"delegation_enabled?\": false, \"allow_code_execution?\": false, \"max_retry_limit\": 2, \"tools_names\": [\"get_weather\"]}]",
+      "crew_tasks": "[{\"key\": \"3c1f332deff52bdb24bf46ea1b45befb\", \"id\": \"74de7785-a192-49c9-984c-a6cdc870ca66\", \"async_execution?\": false, \"human_input?\": false, \"agent_role\": \"Weather Assistant\", \"agent_key\": \"21102687744faa229cb4f036ba93e774\", \"tools_names\": [\"get_weather\"]}]"
+    }
+  },
+  {
+    "name": "Environment Context",
+    "startTimeUnixNano": "1783451403689499000",
+    "endTimeUnixNano": "1783451403691239000",
+    "attributes": {
+      "crewai_version": "1.15.1",
+      "tool": "cc_env"
+    }
+  },
+  {
+    "name": "Task Created",
+    "startTimeUnixNano": "1783451403697386000",
+    "endTimeUnixNano": "1783451403697459000",
+    "attributes": {
+      "crew_key": "cd577a172269b1d251c2aacd8fc3347f",
+      "crew_id": "d22068b9-1801-4621-86d1-bd650cbd5353",
+      "crew_fingerprint": "84734865-16d4-48a3-be58-db05d3ef7b17",
+      "task_key": "3c1f332deff52bdb24bf46ea1b45befb",
+      "task_id": "74de7785-a192-49c9-984c-a6cdc870ca66",
+      "task_fingerprint": "d4114575-c56f-4b2b-a110-57ad7cea0915",
+      "task_fingerprint_created_at": "2026-07-07T12:10:03.683292",
+      "agent_fingerprint": "abf3bf40-bc76-4fba-a7dc-6706f2a35942",
+      "agent_role": "Weather Assistant"
+    }
+  },
+  {
+    "name": "Flow Execution",
+    "startTimeUnixNano": "1783451403700871000",
+    "endTimeUnixNano": "1783451403701510000",
+    "attributes": {
+      "crewai_version": "1.15.1",
+      "flow_name": "AgentExecutor",
+      "node_names": "[\"generate_plan\", \"observe_step_result\", \"handle_step_observed_low\", \"handle_step_observed_medium\", \"decide_next_action\", \"handle_refine_and_continue\", \"handle_continue_plan\", \"handle_goal_achieved\", \"handle_replan_now\", \"check_todos_available\", \"get_ready_todos_method\", \"execute_todo_sequential\", \"execute_todos_parallel\", \"after_parallel_execution\", \"initialize_reasoning\", \"ensure_force_final_answer\", \"call_llm_and_parse\", \"call_llm_native_tools\", \"route_by_answer_type\", \"execute_tool_action\", \"execute_native_tool\", \"check_native_todo_completion\", \"continue_iteration\", \"check_max_iterations\", \"check_todo_completion\", \"mark_todo_complete\", \"check_more_todos\", \"increment_and_continue\", \"finalize\", \"handle_replan\", \"recover_from_parser_error\", \"recover_from_context_length\"]"
+    }
+  },
+  {
+    "name": "openai.chat",
+    "startTimeUnixNano": "1783451403703338000",
+    "endTimeUnixNano": "1783451405591430000",
+    "attributes": {
+      "gen_ai.operation.name": "chat",
+      "gen_ai.provider.name": "openai",
+      "gen_ai.request.model": "gpt-4o-mini",
+      "gen_ai.is_streaming": false,
+      "gen_ai.openai.api_base": "https://api.openai.com/v1/",
+      "gen_ai.input.messages": "[{\"role\": \"system\", \"parts\": [{\"content\": \"You are Weather Assistant. You always call the get_weather tool before answering.\\nYour personal goal is: Answer weather questions using the get_weather tool.\", \"type\": \"text\"}]}, {\"role\": \"user\", \"parts\": [{\"content\": \"\\nCurrent Task: What's the weather in Paris right now? Use the get_weather tool.\\n\\nThis is the expected criteria for your final answer: A one-sentence weather report for Paris.\\nyou MUST return the actual complete content as the final answer, not a summary.\", \"type\": \"text\"}]}]",
+      "gen_ai.tool.definitions": "[{\"type\": \"function\", \"name\": \"get_weather\", \"description\": \"Get the current weather for a city. Returns JSON.\", \"parameters\": {\"properties\": {\"city\": {\"type\": \"string\"}}, \"required\": [\"city\"], \"type\": \"object\", \"additionalProperties\": false}}]",
+      "gen_ai.response.model": "gpt-4o-mini-2024-07-18",
+      "gen_ai.response.id": "chatcmpl-Dz5TBi1kmZLA23oDUEcDIUlbaLFsV",
+      "gen_ai.response.finish_reasons": [
+        "tool_call"
+      ],
+      "gen_ai.openai.response.system_fingerprint": "fp_86eb24cbce",
+      "openai.response.service_tier": "default",
+      "gen_ai.usage.total_tokens": 144,
+      "gen_ai.usage.output_tokens": 14,
+      "gen_ai.usage.input_tokens": 130,
+      "gen_ai.usage.cache_read.input_tokens": 0,
+      "gen_ai.usage.reasoning_tokens": 0,
+      "gen_ai.output.messages": "[{\"role\": \"assistant\", \"parts\": [{\"type\": \"tool_call\", \"name\": \"get_weather\", \"id\": \"call_29Tc7UUHTYxlYZ0BXnMkDhOY\", \"arguments\": {\"city\": \"Paris\"}}], \"finish_reason\": \"tool_call\"}]"
+    }
+  },
+  {
+    "name": "openai.chat",
+    "startTimeUnixNano": "1783451405597628000",
+    "endTimeUnixNano": "1783451406573480000",
+    "attributes": {
+      "gen_ai.operation.name": "chat",
+      "gen_ai.provider.name": "openai",
+      "gen_ai.request.model": "gpt-4o-mini",
+      "gen_ai.is_streaming": false,
+      "gen_ai.openai.api_base": "https://api.openai.com/v1/",
+      "gen_ai.input.messages": "[{\"role\": \"system\", \"parts\": [{\"content\": \"You are Weather Assistant. You always call the get_weather tool before answering.\\nYour personal goal is: Answer weather questions using the get_weather tool.\", \"type\": \"text\"}]}, {\"role\": \"user\", \"parts\": [{\"content\": \"\\nCurrent Task: What's the weather in Paris right now? Use the get_weather tool.\\n\\nThis is the expected criteria for your final answer: A one-sentence weather report for Paris.\\nyou MUST return the actual complete content as the final answer, not a summary.\", \"type\": \"text\"}]}, {\"role\": \"assistant\", \"parts\": [{\"type\": \"tool_call\", \"name\": \"get_weather\", \"id\": \"call_29Tc7UUHTYxlYZ0BXnMkDhOY\", \"arguments\": {\"city\": \"Paris\"}}]}, {\"role\": \"tool\", \"parts\": [{\"type\": \"tool_call_response\", \"id\": \"call_29Tc7UUHTYxlYZ0BXnMkDhOY\", \"response\": \"{\\\"temp_c\\\": 18, \\\"condition\\\": \\\"light rain\\\", \\\"city\\\": \\\"Paris\\\"}\"}]}]",
+      "gen_ai.tool.definitions": "[{\"type\": \"function\", \"name\": \"get_weather\", \"description\": \"Get the current weather for a city. Returns JSON.\", \"parameters\": {\"properties\": {\"city\": {\"type\": \"string\"}}, \"required\": [\"city\"], \"type\": \"object\", \"additionalProperties\": false}}]",
+      "gen_ai.response.model": "gpt-4o-mini-2024-07-18",
+      "gen_ai.response.id": "chatcmpl-Dz5TCWmJ6kRiM1JtG96xVJ1sUYBVZ",
+      "gen_ai.response.finish_reasons": [
+        "stop"
+      ],
+      "gen_ai.openai.response.system_fingerprint": "fp_86eb24cbce",
+      "openai.response.service_tier": "default",
+      "gen_ai.usage.total_tokens": 186,
+      "gen_ai.usage.output_tokens": 14,
+      "gen_ai.usage.input_tokens": 172,
+      "gen_ai.usage.cache_read.input_tokens": 0,
+      "gen_ai.usage.reasoning_tokens": 0,
+      "gen_ai.output.messages": "[{\"role\": \"assistant\", \"parts\": [{\"content\": \"The current weather in Paris is 18\\u00b0C with light rain.\", \"type\": \"text\"}], \"finish_reason\": \"stop\"}]"
+    }
+  },
+  {
+    "name": "Weather Assistant.agent",
+    "startTimeUnixNano": "1783451403697140000",
+    "endTimeUnixNano": "1783451406580090000",
+    "attributes": {
+      "traceloop.span.kind": "agent",
+      "gen_ai.provider.name": "crewai",
+      "gen_ai.operation.name": "invoke_agent",
+      "crewai.agent.entity_type": "agent",
+      "crewai.agent.id": "9258c859-e89d-4418-bcb5-f4761186cff6",
+      "crewai.agent.role": "Weather Assistant",
+      "crewai.agent.goal": "Answer weather questions using the get_weather tool.",
+      "crewai.agent.backstory": "You always call the get_weather tool before answering.",
+      "crewai.agent.cache": "True",
+      "crewai.agent.verbose": "False",
+      "crewai.agent.allow_delegation": "False",
+      "crewai.agent.tools": "[{\"name\": \"get_weather\", \"description\": \"Tool Name: get_weather\\nTool Arguments: {\\n  \\\"properties\\\": {\\n    \\\"city\\\": {\\n      \\\"title\\\": \\\"City\\\",\\n      \\\"type\\\": \\\"string\\\"\\n    }\\n  },\\n  \\\"required\\\": [\\n    \\\"city\\\"\\n  ],\\n  \\\"title\\\": \\\"Get_Weather\\\",\\n  \\\"type\\\": \\\"object\\\",\\n  \\\"additionalProperties\\\": false\\n}\\nTool Description: Get the current weather for a city. Returns JSON.\"}]",
+      "crewai.agent.max_iter": "25",
+      "crewai.agent.i18n": "prompt_file=None",
+      "crewai.agent.crew": "entity_type='crew' name='crew' cache=True tasks=[Task(description=What's the weather in Paris right now? Use the get_weather tool., expected_output=A one-sentence weather report for Paris.)] agents=[Agent(role=Weather Assistant, goal=Answer weather questions using the get_weather tool., backstory=You always call the get_weather tool before answering.)] process=<Process.sequential: 'sequential'> verbose=False memory=False embedder=None usage_metrics=None manager_llm=None manager_agent=None function_calling_llm=None config=None id=UUID('d22068b9-1801-4621-86d1-bd650cbd5353') share_crew=False step_callback=None task_callback=None before_kickoff_callbacks=[] after_kickoff_callbacks=[] stream=False max_rpm=None prompt_file=None trained_agents_file=None output_log_file=None planning=False planning_llm=None task_execution_output_json_files=None execution_logs=[] knowledge_sources=None chat_llm=None knowledge=None skills=None security_config=SecurityConfig(fingerprint=Fingerprint(metadata={})) checkpoint=None token_usage=None tracing=None execution_context=None checkpoint_inputs=None checkpoint_train=None checkpoint_kickoff_event_id=None",
+      "crewai.agent.tools_handler": "cache=CacheHandler() last_used_tool=None",
+      "crewai.agent.tools_results": "[]",
+      "crewai.agent.security_config": "fingerprint=Fingerprint(metadata={})",
+      "crewai.agent.callbacks": "[]",
+      "crewai.agent.adapted_agent": "False",
+      "crewai.agent.use_system_prompt": "True",
+      "crewai.agent.allow_code_execution": "False",
+      "crewai.agent.respect_context_window": "True",
+      "crewai.agent.max_retry_limit": "2",
+      "crewai.agent.multimodal": "False",
+      "crewai.agent.inject_date": "False",
+      "crewai.agent.date_format": "%Y-%m-%d",
+      "crewai.agent.code_execution_mode": "safe",
+      "crewai.agent.planning": "False",
+      "crewai.agent.reasoning": "False",
+      "crewai.agent.guardrail_max_retries": "3",
+      "crewai.agent.executor_class": "<class 'crewai.experimental.agent_executor.AgentExecutor'>",
+      "gen_ai.agent.name": "Weather Assistant",
+      "gen_ai.agent.id": "9258c859-e89d-4418-bcb5-f4761186cff6",
+      "gen_ai.request.model": "gpt-4o-mini",
+      "gen_ai.response.model": "gpt-4o-mini"
+    }
+  },
+  {
+    "name": "Task Execution",
+    "startTimeUnixNano": "1783451403697487000",
+    "endTimeUnixNano": "1783451406580405000",
+    "attributes": {
+      "crew_key": "cd577a172269b1d251c2aacd8fc3347f",
+      "crew_id": "d22068b9-1801-4621-86d1-bd650cbd5353",
+      "crew_fingerprint": "84734865-16d4-48a3-be58-db05d3ef7b17",
+      "task_key": "3c1f332deff52bdb24bf46ea1b45befb",
+      "task_id": "74de7785-a192-49c9-984c-a6cdc870ca66",
+      "agent_fingerprint": "abf3bf40-bc76-4fba-a7dc-6706f2a35942",
+      "agent_role": "Weather Assistant",
+      "task_fingerprint": "d4114575-c56f-4b2b-a110-57ad7cea0915"
+    }
+  },
+  {
+    "name": "What's the weather in Paris right now? Use the get_weather tool..task",
+    "startTimeUnixNano": "1783451403696809000",
+    "endTimeUnixNano": "1783451406580641000",
+    "attributes": {
+      "traceloop.span.kind": "task",
+      "gen_ai.provider.name": "crewai",
+      "gen_ai.operation.name": "invoke_agent",
+      "crewai.task.used_tools": "0",
+      "crewai.task.tools_errors": "0",
+      "crewai.task.delegations": "0",
+      "crewai.task.description": "What's the weather in Paris right now? Use the get_weather tool.",
+      "crewai.task.expected_output": "A one-sentence weather report for Paris.",
+      "crewai.task.agent": "Weather Assistant",
+      "crewai.task.context": "NOT_SPECIFIED",
+      "crewai.task.async_execution": "False",
+      "crewai.task.create_directory": "True",
+      "crewai.task.tools": "[{\"name\": \"get_weather\", \"description\": \"Tool Name: get_weather\\nTool Arguments: {\\n  \\\"properties\\\": {\\n    \\\"city\\\": {\\n      \\\"title\\\": \\\"City\\\",\\n      \\\"type\\\": \\\"string\\\"\\n    }\\n  },\\n  \\\"required\\\": [\\n    \\\"city\\\"\\n  ],\\n  \\\"title\\\": \\\"Get_Weather\\\",\\n  \\\"type\\\": \\\"object\\\",\\n  \\\"additionalProperties\\\": false\\n}\\nTool Description: Get the current weather for a city. Returns JSON.\"}]",
+      "crewai.task.input_files": "{}",
+      "crewai.task.security_config": "fingerprint=Fingerprint(metadata={})",
+      "crewai.task.id": "74de7785-a192-49c9-984c-a6cdc870ca66",
+      "crewai.task.human_input": "False",
+      "crewai.task.markdown": "False",
+      "crewai.task.processed_by_agents": "set()",
+      "crewai.task.guardrail_max_retries": "3",
+      "crewai.task.retry_count": "0",
+      "traceloop.entity.output": "The current weather in Paris is 18\u00b0C with light rain."
+    }
+  },
+  {
+    "name": "crewai.workflow",
+    "startTimeUnixNano": "1783451403688768000",
+    "endTimeUnixNano": "1783451406585467000",
+    "attributes": {
+      "gen_ai.provider.name": "crewai",
+      "gen_ai.operation.name": "invoke_agent",
+      "crewai.crew.tasks": "[{\"agent\": \"Weather Assistant\", \"description\": \"What's the weather in Paris right now? Use the get_weather tool.\", \"async_execution\": false, \"expected_output\": \"A one-sentence weather report for Paris.\", \"human_input\": false, \"tools\": [\"name='get_weather' description='Tool Name: get_weather\\\\nTool Arguments: {\\\\n  \\\"properties\\\": {\\\\n    \\\"city\\\": {\\\\n      \\\"title\\\": \\\"City\\\",\\\\n      \\\"type\\\": \\\"string\\\"\\\\n    }\\\\n  },\\\\n  \\\"required\\\": [\\\\n    \\\"city\\\"\\\\n  ],\\\\n  \\\"title\\\": \\\"Get_Weather\\\",\\\\n  \\\"type\\\": \\\"object\\\",\\\\n  \\\"additionalProperties\\\": false\\\\n}\\\\nTool Description: Get the current weather for a city. Returns JSON.' env_vars=[] args_schema=<class 'crewai.tools.base_tool.Get_Weather'> result_schema=None description_updated=False cache_function=<function _default_cache_function at 0x1043afeb0> result_as_answer=False max_usage_count=None current_usage_count=0 func=<function main.<locals>.get_weather at 0x109f94d30> tool_type='crewai.tools.base_tool.Tool'\"], \"output_file\": null}]",
+      "crewai.crew.agents": "[{\"id\": \"9258c859-e89d-4418-bcb5-f4761186cff6\", \"role\": \"Weather Assistant\", \"goal\": \"Answer weather questions using the get_weather tool.\", \"backstory\": \"You always call the get_weather tool before answering.\", \"cache\": true, \"config\": null, \"verbose\": false, \"allow_delegation\": false, \"tools\": [\"name='get_weather' description='Tool Name: get_weather\\\\nTool Arguments: {\\\\n  \\\"properties\\\": {\\\\n    \\\"city\\\": {\\\\n      \\\"title\\\": \\\"City\\\",\\\\n      \\\"type\\\": \\\"string\\\"\\\\n    }\\\\n  },\\\\n  \\\"required\\\": [\\\\n    \\\"city\\\"\\\\n  ],\\\\n  \\\"title\\\": \\\"Get_Weather\\\",\\\\n  \\\"type\\\": \\\"object\\\",\\\\n  \\\"additionalProperties\\\": false\\\\n}\\\\nTool Description: Get the current weather for a city. Returns JSON.' env_vars=[] args_schema=<class 'crewai.tools.base_tool.Get_Weather'> result_schema=None description_updated=False cache_function=<function _default_cache_function at 0x1043afeb0> result_as_answer=False max_usage_count=None current_usage_count=0 func=<function main.<locals>.get_weather at 0x109f94d30> tool_type='crewai.tools.base_tool.Tool'\"], \"max_iter\": 25, \"llm\": \"gpt-4o-mini\"}]",
+      "crewai.crew.entity_type": "crew",
+      "crewai.crew.name": "crew",
+      "crewai.crew.cache": "True",
+      "crewai.crew.process": "Process.sequential",
+      "crewai.crew.verbose": "False",
+      "crewai.crew.memory": "False",
+      "crewai.crew.id": "d22068b9-1801-4621-86d1-bd650cbd5353",
+      "crewai.crew.share_crew": "False",
+      "crewai.crew.before_kickoff_callbacks": "[]",
+      "crewai.crew.after_kickoff_callbacks": "[]",
+      "crewai.crew.stream": "False",
+      "crewai.crew.planning": "False",
+      "crewai.crew.execution_logs": "[]",
+      "crewai.crew.security_config": "fingerprint=Fingerprint(metadata={})",
+      "crewai.crew.result": "The current weather in Paris is 18\u00b0C with light rain.",
+      "crewai.crew.tasks_output": "[TaskOutput(description=\"What's the weather in Paris right now? Use the get_weather tool.\", name=\"What's the weather in Paris right now? Use the get_weather tool.\", expected_output='A one-sentence weather report for Paris.', summary=\"What's the weather in Paris right now? Use the get_weather...\", raw='The current weather in Paris is 18\u00b0C with light rain.', pydantic=None, json_dict=None, agent='Weather Assistant', output_format=<OutputFormat.RAW: 'raw'>, messages=[{'role': 'system', 'content': 'You are Weather Assistant. You always call the get_weather tool before answering.\\nYour personal goal is: Answer weather questions using the get_weather tool.'}, {'role': 'user', 'content': \"\\nCurrent Task: What's the weather in Paris right now? Use the get_weather tool.\\n\\nThis is the expected criteria for your final answer: A one-sentence weather report for Paris.\\nyou MUST return the actual complete content as the final answer, not a summary.\"}, {'role': 'assistant', 'content': '', 'tool_calls': [{'id': 'call_29Tc7UUHTYxlYZ0BXnMkDhOY', 'type': 'function', 'function': {'name': 'get_weather', 'arguments': '{\"city\":\"Paris\"}'}}]}, {'role': 'tool', 'content': '{\"temp_c\": 18, \"condition\": \"light rain\", \"city\": \"Paris\"}', 'tool_call_id': 'call_29Tc7UUHTYxlYZ0BXnMkDhOY', 'name': 'get_weather'}, {'role': 'assistant', 'content': 'The current weather in Paris is 18\u00b0C with light rain.'}])]",
+      "crewai.crew.token_usage": "total_tokens=330 prompt_tokens=302 cached_prompt_tokens=0 completion_tokens=28 reasoning_tokens=0 cache_creation_tokens=0 successful_requests=2"
+    }
+  }
+]
