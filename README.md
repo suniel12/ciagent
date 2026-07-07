@@ -9,6 +9,8 @@ CIAgent tells you whether your agent's evals are lying to you:
 - **Audit your LLM judge** against ground truth you already have
 - **Replace judge calls with deterministic fact-checks** mined from your knowledge base
 
+![Three identical 88% suite scores — then the stability report shows 3 of 8 verdicts flipped across runs, each flip attributed to agent-variance](demo/stability-report.gif)
+
 [![PyPI](https://img.shields.io/pypi/v/ciagent)](https://pypi.org/project/ciagent/)
 [![CI](https://github.com/suniel12/ciagent/actions/workflows/ci.yml/badge.svg)](https://github.com/suniel12/ciagent/actions/workflows/ci.yml)
 [![License: Apache-2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
