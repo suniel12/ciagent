@@ -20,6 +20,13 @@ QUERY = "Do you sell smart thermostats?"
 ANSWER = "We don't sell smart thermostats — CloudSync is our only product line."
 
 
+def _flat(output: str) -> str:
+    """Collapse whitespace — rich wraps console output at the CI terminal
+    width, splitting asserted phrases across lines."""
+    return " ".join(output.split())
+
+
+
 def _chat_span(with_content: bool = True) -> dict:
     attrs = {
         "gen_ai.operation.name": "chat",
@@ -205,8 +212,8 @@ class TestImportCLI:
             cli, ["import", str(trace_file), "-c", str(spec_path)],
         )
         assert result.exit_code == 1
-        assert "no user input" in result.output
-        assert "no final output" in result.output
+        assert "no user input" in _flat(result.output)
+        assert "no final output" in _flat(result.output)
         assert not (tmp_path / "golden").exists()
         assert "existing query" in spec_path.read_text()
 
@@ -223,7 +230,7 @@ class TestImportCLI:
             cli, ["import", str(trace_file), "-c", str(spec_path), "--dry-run"],
         )
         assert result.exit_code == 0, result.output
-        assert "nothing written" in result.output
+        assert "nothing written" in _flat(result.output)
         assert not (tmp_path / "golden").exists()
 
     def test_reimport_same_query_leaves_spec_alone(self, tmp_path):
@@ -242,7 +249,7 @@ class TestImportCLI:
 
         second = runner.invoke(cli, ["import", str(trace_file), "-c", str(spec_path)])
         assert second.exit_code == 0, second.output
-        assert "spec unchanged" in second.output
+        assert "spec unchanged" in _flat(second.output)
         assert spec_path.read_text() == spec_after_first
         # but a second golden version was written
         goldens = list((tmp_path / "golden" / "import-test").glob("imported-*.json"))
@@ -260,4 +267,4 @@ class TestImportCLI:
             cli, ["import", str(bad), "-c", str(tmp_path / "agentci_spec.yaml")],
         )
         assert result.exit_code == 2
-        assert "not an OTel span export" in result.output
+        assert "not an OTel span export" in _flat(result.output)
