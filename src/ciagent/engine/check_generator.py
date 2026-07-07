@@ -28,14 +28,11 @@ filled.
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass, field
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 import yaml
 
-from ciagent.engine.correctness import evaluate_correctness
-from ciagent.engine.results import LayerStatus
 from ciagent.schema.spec_models import AgentCISpec, CorrectnessSpec
 
 LlmFn = Callable[[str], str]
@@ -183,31 +180,23 @@ def validate_candidates(
     - An invalid regex is rejected outright.
     - A candidate whose query has no recorded known-good answer cannot be
       gated — marked `unvalidated`, applied only with explicit user consent.
+
+    The gate itself lives in engine/artifact_gate.py, shared with F6's
+    conversation-golden gate and F7's import round-trip gate.
     """
+    from ciagent.engine.artifact_gate import gate_candidate_check
+
     for cand in result.candidates:
-        if cand.field == "regex_match":
-            try:
-                re.compile(cand.value)
-            except re.error as e:
-                cand.status = "rejected"
-                cand.reason = f"invalid regex: {e}"
-                continue
-
-        good_answers = known_good_answers.get(cand.query) or []
-        if not good_answers:
-            cand.status = "unvalidated"
-            cand.reason = "no recorded known-good answer to validate against"
-            continue
-
-        failing = _first_failing_answer(cand, good_answers)
-        if failing is not None:
-            cand.status = "rejected"
-            cand.reason = (
-                f"fails a known-good answer: \"{failing[:80]}\" — "
-                "would flag correct output as wrong"
-            )
-        else:
+        gate = gate_candidate_check(
+            cand.field, cand.value, known_good_answers.get(cand.query) or [],
+        )
+        if gate.accepted:
             cand.status = "validated"
+            cand.reason = ""
+        else:
+            # gate statuses map 1:1 onto candidate statuses
+            cand.status = "rejected" if gate.rejected else "unvalidated"
+            cand.reason = "; ".join(gate.reasons)
 
 
 def merge_candidates(
@@ -317,14 +306,3 @@ def default_llm(prompt: str) -> str:
     )
 
 
-# ── Internal helpers ───────────────────────────────────────────────────────────
-
-
-def _first_failing_answer(cand: CandidateCheck, answers: list[str]) -> Optional[str]:
-    """Return the first known-good answer this candidate would fail, if any."""
-    single = CorrectnessSpec(**{cand.field: cand.value})
-    for answer in answers:
-        result = evaluate_correctness(answer=answer, spec=single)
-        if result.status != LayerStatus.PASS:
-            return answer
-    return None

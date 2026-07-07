@@ -2808,6 +2808,131 @@ def judge_audit_cmd(config, baseline_dir, repeats, labels_path, sample, live,
     sys.exit(report_judge_audit(report, format=fmt))
 
 
+@cli.command(name="import")
+@click.argument('trace_file', type=click.Path(exists=True))
+@click.option('--config', '-c', default='agentci_spec.yaml',
+              help='Path to agentci_spec.yaml', show_default=True)
+@click.option('--version', 'version_tag', default=None,
+              help='Baseline version tag (default: imported-<n>)')
+@click.option('--dry-run', is_flag=True,
+              help='Map + gate the trace and show what would be written, write nothing')
+def import_cmd(trace_file, config, version_tag, dry_run):
+    """Convert an exported production trace into a spec query + golden baseline.
+
+    TRACE_FILE is a JSON export of OpenTelemetry spans using the GenAI
+    semantic conventions (what Langfuse / LangSmith / OTel instrumentation
+    emit): an OTLP/JSON envelope, a {"spans": [...]} wrapper, or a flat span
+    list. That production failure from last Tuesday becomes a CI test.
+
+    \b
+    Round-trip gate (always on): the import must produce a golden that loads
+    and evaluates cleanly BEFORE anything is written. Partial traces — no
+    user input, no final output, no spans — are rejected with the missing
+    fields named. A golden that can never pass is a permanent false
+    regression; this command refuses to plant one.
+
+    The spec gains a minimal query (tagged `imported`) if the query text is
+    new; existing queries are never modified — only the golden is written.
+
+    \b
+    Exit codes:
+        0 — imported (or --dry-run gate passed)
+        1 — trace rejected by the round-trip gate
+        2 — file/config error
+    """
+    from pathlib import Path
+
+    import yaml
+
+    from .baselines import save_baseline
+    from .engine.artifact_gate import gate_imported_golden
+    from .engine.runner import _extract_answer
+    from .exceptions import ConfigError
+    from .importers.otel import OtelImportError, load_spans, trace_from_otel
+    from .loader import load_spec
+    from .schema.spec_models import GoldenQuery
+
+    try:
+        spans = load_spans(trace_file)
+    except OtelImportError as e:
+        console.print(f"[bold red]Import error:[/] {e}")
+        sys.exit(2)
+
+    trace, query = trace_from_otel(spans)
+
+    gate = gate_imported_golden(trace, query)
+    if not gate.accepted:
+        console.print(
+            f"[bold red]Rejected by the round-trip gate[/] — nothing written:"
+        )
+        for reason in gate.reasons:
+            console.print(f"  • {reason}")
+        console.print(
+            "[dim]Partial traces are never silently imported: a golden that "
+            "can never pass is a permanent false regression in your CI.[/]"
+        )
+        sys.exit(1)
+
+    query = str(query)  # gate acceptance guarantees it is present
+    answer = _extract_answer(trace)
+    console.print(
+        f"[bold blue]CIAgent v{__version__}[/] │ import │ "
+        f"spans: [cyan]{len(spans)}[/] │ tool calls: [cyan]{len(trace.tool_call_sequence)}[/] │ "
+        f"llm calls: [cyan]{trace.total_llm_calls}[/]"
+    )
+    console.print(f"  query:  {query[:100]}")
+    console.print(f"  answer: {answer[:100]}")
+
+    if dry_run:
+        console.print("[green]Gate passed.[/] --dry-run: nothing written.")
+        sys.exit(0)
+
+    try:
+        spec = load_spec(config)
+    except ConfigError as e:
+        console.print(f"[bold red]Config error:[/] {e}")
+        sys.exit(2)
+
+    # ── Spec: add a minimal imported query; never touch existing ones ────────
+    if any(q.query == query for q in spec.queries):
+        console.print("  spec:   query already present — spec unchanged")
+    else:
+        updated = spec.model_copy(deep=True)
+        updated.queries.append(GoldenQuery(query=str(query), tags=["imported"]))
+        backup = Path(config).with_suffix(".yaml.bak")
+        backup.write_text(Path(config).read_text(encoding="utf-8"), encoding="utf-8")
+        Path(config).write_text(
+            yaml.safe_dump(
+                updated.model_dump(exclude_none=True), sort_keys=False,
+                allow_unicode=True,
+            ),
+            encoding="utf-8",
+        )
+        spec = updated
+        console.print(f"  spec:   query added (tagged 'imported'; backup: {backup.name})")
+
+    # ── Golden: versioned baseline the suite can gate on ─────────────────────
+    if version_tag is None:
+        existing = list(
+            (Path(spec.baseline_dir) / spec.agent).glob("imported-*.json")
+        ) if (Path(spec.baseline_dir) / spec.agent).exists() else []
+        version_tag = f"imported-{len(existing) + 1}"
+    out_path = save_baseline(
+        trace,
+        agent=spec.agent,
+        version=version_tag,
+        spec=spec,
+        query_text=str(query),
+        baseline_dir=spec.baseline_dir,
+    )
+    console.print(f"  golden: [green]{out_path}[/]")
+    console.print(
+        "\nNext: add assertions to the imported query (or run "
+        "[cyan]ciagent generate-checks[/]), then gate with [cyan]ciagent test[/]."
+    )
+    sys.exit(0)
+
+
 def _finish_stability_session(fmt, config, output, run_results, stability, fail_on_flaky):
     """Render a multi-run stability session and exit with the right code.
 
@@ -3509,17 +3634,22 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
 
         out_dir = record_dir or spec.baseline_dir
         for r in results:
-            recorded_paths.append(
-                record_scenario_result(
-                    r,
-                    out_dir,
-                    agent=spec.agent,
-                    # replay re-records as replay; otherwise mode as produced
-                    # (scripted | simulated)
-                    mode="replay" if replay_path else None,
-                    mock=mock,
+            try:
+                recorded_paths.append(
+                    record_scenario_result(
+                        r,
+                        out_dir,
+                        agent=spec.agent,
+                        # replay re-records as replay; otherwise mode as produced
+                        # (scripted | simulated)
+                        mode="replay" if replay_path else None,
+                        mock=mock,
+                    )
                 )
-            )
+            except ValueError as e:
+                # Artifact gate refused (e.g. zero turns after an infra
+                # error) — skip this golden, keep recording the rest.
+                console.print(f"[yellow]not recorded:[/] {e}")
 
     # ── Report ────────────────────────────────────────────────────────────────
     if fmt == "json":

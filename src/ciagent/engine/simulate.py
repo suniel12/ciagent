@@ -433,12 +433,23 @@ def record_scenario_result(
     from pathlib import Path
 
     from ..conversation import save_envelope
+    from .artifact_gate import gate_conversation_envelope
 
     envelope = result.to_envelope(agent=agent, mode=mode)
     envelope.captured_at = datetime.now(timezone.utc).isoformat()
     envelope.metadata["checks_passed"] = not result.hard_fail
     if mock:
         envelope.metadata["mock"] = True
+
+    # Artifact gate: a golden that cannot replay is a permanent false
+    # regression — refuse to write it, naming what's wrong. (Failed CHECKS
+    # still record; the gate is structural only.)
+    gate = gate_conversation_envelope(envelope)
+    if gate.rejected:
+        raise ValueError(
+            f"refusing to record '{result.scenario.display_name()}' as a "
+            f"golden — {gate.summary()}"
+        )
 
     out_dir = Path(directory) / agent / "scenarios"
     return save_envelope(envelope, out_dir / f"{scenario_slug(result.scenario.display_name())}.json")
