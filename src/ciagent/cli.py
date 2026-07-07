@@ -2819,10 +2819,15 @@ def judge_audit_cmd(config, baseline_dir, repeats, labels_path, sample, live,
 def import_cmd(trace_file, config, version_tag, dry_run):
     """Convert an exported production trace into a spec query + golden baseline.
 
-    TRACE_FILE is a JSON export of OpenTelemetry spans using the GenAI
-    semantic conventions (what Langfuse / LangSmith / OTel instrumentation
-    emit): an OTLP/JSON envelope, a {"spans": [...]} wrapper, or a flat span
-    list. That production failure from last Tuesday becomes a CI test.
+    TRACE_FILE formats are auto-detected:
+
+    \b
+      - OTel GenAI spans (what OTel instrumentation / Langfuse emit):
+        OTLP/JSON envelope, {"spans": [...]} wrapper, or a flat span list
+      - LangSmith run exports (langsmith run export / Client.list_runs):
+        JSON or JSONL run objects, flat or nested RunTree
+
+    That production failure from last Tuesday becomes a CI test.
 
     \b
     Round-trip gate (always on): the import must produce a golden that loads
@@ -2848,17 +2853,15 @@ def import_cmd(trace_file, config, version_tag, dry_run):
     from .engine.artifact_gate import gate_imported_golden
     from .engine.runner import _extract_answer
     from .exceptions import ConfigError
-    from .importers.otel import OtelImportError, load_spans, trace_from_otel
+    from .importers import import_trace_file
     from .loader import load_spec
     from .schema.spec_models import GoldenQuery
 
     try:
-        spans = load_spans(trace_file)
-    except OtelImportError as e:
+        trace, query, source_format = import_trace_file(trace_file)
+    except ValueError as e:  # any importer's read error
         console.print(f"[bold red]Import error:[/] {e}")
         sys.exit(2)
-
-    trace, query = trace_from_otel(spans)
 
     gate = gate_imported_golden(trace, query)
     if not gate.accepted:
@@ -2877,7 +2880,8 @@ def import_cmd(trace_file, config, version_tag, dry_run):
     answer = _extract_answer(trace)
     console.print(
         f"[bold blue]CIAgent v{__version__}[/] │ import │ "
-        f"spans: [cyan]{len(spans)}[/] │ tool calls: [cyan]{len(trace.tool_call_sequence)}[/] │ "
+        f"format: [cyan]{source_format}[/] │ "
+        f"tool calls: [cyan]{len(trace.tool_call_sequence)}[/] │ "
         f"llm calls: [cyan]{trace.total_llm_calls}[/]"
     )
     console.print(f"  query:  {query[:100]}")
