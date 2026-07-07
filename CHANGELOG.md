@@ -5,7 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.0] - 2026-07-06
+
+### Added — retrieval layer 2.5: `retrieval:` assertions (F4, F6 Phase 4)
+- New `retrieval:` block on queries and scenario `per_turn:`/`outcome:`
+  checks — deterministic assertions on the retriever tool's captured
+  `ToolCall.result`: `forbid_empty` (empty retrieval + confident answer →
+  WARN "ungrounded answer"; a refusal passes), `min_results`,
+  `expected_sources`, `facts_in_context` (informational-only in v1),
+  `result_format` hint, `empty_markers`/`refusal_markers` overrides
+- Binding result-interpretation contract: the layer SKIPs on uncaptured or
+  unparseable results — it never guesses. Empty means None/[]/""/whitespace
+  plus spec markers. Retrieval never hard-fails (WARN tier, like path/cost)
+- Fifth stability flip source `retrieval-variance` (single-turn and
+  scenario): verdict flipped, same tool sequence, retrieved set differed →
+  blames the retriever, not the prompt; attribution skips when any run's
+  retriever output wasn't captured
+- Judge audit gains a "judged against EMPTY retrieval" row (console + JSON):
+  the judge graded an answer whose ground truth was already lost
+- Diff engine gains `RETRIEVAL_CHANGED`: retrieved source set changed vs
+  golden, emitted only when a source set is extractable from both traces
+- Mock runner synthesizes retrieval results satisfying the spec — the
+  zero-key path exercises layer 2.5 end to end
+- Adapter capture verification and fixes: langgraph now pairs `ToolMessage`
+  outputs onto tool calls by `tool_call_id`; the openai/anthropic
+  monkey-patches backfill `ToolCall.result` from the next request's
+  `role="tool"` messages / `tool_result` blocks (openai-agents adapter
+  already captured results)
+
+### Added — generative personas, cost guardrails, stability (F6 Phase 3)
+- Scenarios with `persona:`/`goal:` and no `turns:` get user turns from a
+  persona LLM (cheap haiku-class default, `persona_config` spec key) — the
+  finder path. Termination rules unchanged: max_turns / stop_when only; a
+  derailed persona (empty/unusable output) marks the scenario infra-error
+  with partial turns kept rather than silently grading the agent
+- `--max-cost` session budget: hard-aborts mid-conversation at the next turn
+  boundary; partial results are clearly marked and the outcome verdict is
+  never evaluated on a partial conversation. Pre-run cost estimate with a
+  confirm gate; per-scenario cost line
+- `--runs N` scenario stability with new `simulation-variance` flip source:
+  the simulated user said different things across runs — the persona varied,
+  not the agent. `--workers` runs scenarios in parallel (turns stay
+  sequential); a mock persona gives a zero-key generative path
+
+### Added — record + replay: found bug → regression test (F6 Phase 2)
+- `--record` / `--record-dir`: save any driven conversation as a golden
+  envelope at `<baseline_dir>/<agent>/scenarios/<slug>.json`. Recording
+  never prechecks — a FAILED scenario records too (`checks_passed: false`),
+  because converting a found bug into a regression test is the point
+- `--replay`: recorded user turns are fed back verbatim (the persona is
+  never consulted); the scenario spec is embedded in the envelope so goldens
+  are self-contained. Replaying a deterministic agent twice yields
+  byte-identical verdicts (the `scenario_verdict` contract)
+- Conversation-aware diff (`diff_envelopes`): per-turn tool-sequence and
+  answer changes between a golden conversation and a fresh run
 
 ### Added — `ciagent simulate` Phase 1: scripted multi-turn scenarios (F6)
 - New `scenarios:` spec block: `turns:` (scripted user messages), `max_turns`,
