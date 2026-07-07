@@ -18,8 +18,8 @@ Built from a real study: 1 in 7 answers an LLM judge passed were wrong, and dete
 checks caught 8 of 8 — methodology and raw numbers in [STUDY.md](STUDY.md).
 Native adapters for OpenAI, Anthropic, and LangGraph; imports exported traces
 from any stack — OpenTelemetry (openllmetry, Google ADK), Langfuse, and
-LangSmith — verified against real captures from OpenAI, Anthropic, CrewAI, and
-Google ADK. Runs inside pytest.
+LangSmith — verified against real captures from OpenAI, Anthropic, CrewAI,
+Google ADK, and the Claude Agent SDK. Runs inside pytest.
 
 ## See It in 30 Seconds
 

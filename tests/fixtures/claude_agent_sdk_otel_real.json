@@ -1,0 +1,48 @@
+[
+  {
+    "name": "execute_tool ToolSearch",
+    "startTimeUnixNano": 1783457332751827000,
+    "endTimeUnixNano": 1783457332755698000,
+    "attributes": {
+      "gen_ai.operation.name": "execute_tool",
+      "gen_ai.provider.name": "anthropic",
+      "gen_ai.tool.name": "ToolSearch",
+      "gen_ai.tool.call.id": "toolu_01Hcq56uQR8zitXxpWAzajky",
+      "gen_ai.tool.type": "function"
+    }
+  },
+  {
+    "name": "execute_tool mcp__weather__get_weather",
+    "startTimeUnixNano": 1783457337409982000,
+    "endTimeUnixNano": 1783457337420106000,
+    "attributes": {
+      "gen_ai.operation.name": "execute_tool",
+      "gen_ai.provider.name": "anthropic",
+      "gen_ai.tool.name": "mcp__weather__get_weather",
+      "gen_ai.tool.call.id": "toolu_01UZ3aAFYWFwiEtGM2XijDrz",
+      "gen_ai.tool.type": "extension"
+    }
+  },
+  {
+    "name": "invoke_agent",
+    "startTimeUnixNano": 1783457323660865000,
+    "endTimeUnixNano": 1783457344686395000,
+    "attributes": {
+      "gen_ai.operation.name": "invoke_agent",
+      "gen_ai.provider.name": "anthropic",
+      "gen_ai.response.model": "claude-fable-5",
+      "gen_ai.usage.input_tokens": 28689,
+      "gen_ai.usage.output_tokens": 175,
+      "gen_ai.usage.cache_creation.input_tokens": 14159,
+      "gen_ai.usage.cache_read.input_tokens": 9483,
+      "gen_ai.response.finish_reasons": [
+        "end_turn"
+      ],
+      "gen_ai.conversation.id": "74ff7504-a60b-417f-9bd3-a74c06a62a08",
+      "gen_ai.input.messages": "[{\"role\": \"user\", \"parts\": [{\"type\": \"text\", \"content\": \"What's the weather in Paris right now?\"}]}, {\"role\": \"user\", \"parts\": [{\"type\": \"tool_call_response\", \"id\": \"toolu_01Hcq56uQR8zitXxpWAzajky\", \"response\": [{\"type\": \"tool_reference\", \"tool_name\": \"mcp__weather__get_weather\"}]}]}, {\"role\": \"user\", \"parts\": [{\"type\": \"tool_call_response\", \"id\": \"toolu_01UZ3aAFYWFwiEtGM2XijDrz\", \"response\": [{\"type\": \"text\", \"text\": \"{\\\"temp_c\\\": 18, \\\"condition\\\": \\\"light rain\\\", \\\"city\\\": \\\"Paris\\\"}\"}]}]}]",
+      "gen_ai.output.messages": "[{\"role\": \"assistant\", \"parts\": []}, {\"role\": \"assistant\", \"parts\": [{\"type\": \"tool_call\", \"id\": \"toolu_01Hcq56uQR8zitXxpWAzajky\", \"name\": \"ToolSearch\", \"arguments\": {\"query\": \"select:mcp__weather__get_weather\", \"max_results\": 1}}]}, {\"role\": \"assistant\", \"parts\": [{\"type\": \"tool_call\", \"id\": \"toolu_01UZ3aAFYWFwiEtGM2XijDrz\", \"name\": \"mcp__weather__get_weather\", \"arguments\": {\"city\": \"Paris\"}}]}, {\"role\": \"assistant\", \"parts\": [{\"type\": \"text\", \"content\": \"Paris is currently 18\\u00b0C with light rain.\"}]}]",
+      "gen_ai.system_instructions": "[{\"type\": \"text\", \"content\": \"Answer using the get_weather tool. Be brief.\"}]",
+      "gen_ai.tool.definitions": "[{\"type\": \"function\", \"name\": \"mcp__weather__get_weather\"}]"
+    }
+  }
+]

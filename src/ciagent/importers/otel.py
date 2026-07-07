@@ -116,6 +116,7 @@ def trace_from_otel(spans: list[dict[str, Any]]) -> tuple[Trace, Optional[str]]:
     final_output: Optional[str] = None
     start_ns: Optional[int] = None
     end_ns: Optional[int] = None
+    span_calls_by_id: dict[str, ToolCall] = {}
 
     for span in spans:
         attrs = span.get("attributes") or {}
@@ -157,12 +158,16 @@ def trace_from_otel(spans: list[dict[str, Any]]) -> tuple[Trace, Optional[str]]:
                 root.name = str(agent_name)
 
         if op in _TOOL_OPERATIONS:
-            root.tool_calls.append(ToolCall(
+            tc = ToolCall(
                 tool_name=str(attrs.get("gen_ai.tool.name") or span.get("name") or "unknown-tool"),
                 arguments=_parse_json_attr(attrs.get("gen_ai.tool.call.arguments"), default={}),
                 result=_parse_json_attr(attrs.get("gen_ai.tool.call.result"), default=None),
                 duration_ms=_span_duration_ms(span),
-            ))
+            )
+            root.tool_calls.append(tc)
+            call_id = str(attrs.get("gen_ai.tool.call.id") or "")
+            if call_id:
+                span_calls_by_id[call_id] = tc
             continue
 
         if op in _LLM_OPERATIONS or _looks_like_llm(attrs):
@@ -201,12 +206,27 @@ def trace_from_otel(spans: list[dict[str, Any]]) -> tuple[Trace, Optional[str]]:
     # — the tool itself runs in app code, unspanned. Recover both, paired
     # by call id, so the imported golden keeps tool usage (and the F4
     # retrieval layer can see retriever output). execute_tool spans take
-    # precedence; message-derived results backfill them when missing.
+    # precedence; message-derived content backfills them.
+    #
+    # Pairing is by tool call ID first: the Claude Agent SDK instrumentor
+    # (otel-instrumentation-claude-agent-sdk, verified against a live
+    # capture in tests/fixtures/claude_agent_sdk_otel_real.json) emits
+    # execute_tool spans that carry gen_ai.tool.call.id but NOT
+    # arguments/result — the content rides the invoke_agent span's
+    # messages. Without id pairing every tool call double-counts: once
+    # bare from its span, once with content from the messages.
     existing = {
         (c.tool_name, json.dumps(c.arguments, sort_keys=True, default=str)): c
         for c in root.tool_calls
     }
-    for tc in _tool_calls_from_messages(spans):
+    for call_id, tc in _tool_calls_from_messages(spans):
+        span_call = span_calls_by_id.get(call_id) if call_id else None
+        if span_call is not None:
+            if not span_call.arguments and tc.arguments:
+                span_call.arguments = tc.arguments
+            if span_call.result is None and tc.result is not None:
+                span_call.result = tc.result
+            continue
         key = (tc.tool_name, json.dumps(tc.arguments, sort_keys=True, default=str))
         match = existing.get(key)
         if match is None:
@@ -479,7 +499,7 @@ def _map_adk_span(
     return query, final_output
 
 
-def _tool_calls_from_messages(spans: list[dict[str, Any]]) -> list[ToolCall]:
+def _tool_calls_from_messages(spans: list[dict[str, Any]]) -> list[tuple[str, ToolCall]]:
     """Recover tool calls + results from GenAI message content.
 
     Shapes verified against a live openllmetry 0.62 export:
@@ -487,6 +507,10 @@ def _tool_calls_from_messages(spans: list[dict[str, Any]]) -> list[ToolCall]:
       input part:  {"type": "tool_call_response", "id", "response": "<json>"}
     Results pair to calls by id; an unpaired call keeps result=None (the
     retrieval layer SKIPs on uncaptured results, never guesses).
+
+    Returns (call_id, ToolCall) pairs — call_id is "" when the emitter
+    didn't include one — so the caller can merge message-derived content
+    onto execute_tool spans that share the id.
     """
     calls: dict[str, ToolCall] = {}   # id → ToolCall (insertion-ordered)
     unkeyed: list[ToolCall] = []
@@ -528,7 +552,7 @@ def _tool_calls_from_messages(spans: list[dict[str, Any]]) -> list[ToolCall]:
     for call_id, tc in calls.items():
         if call_id in responses and tc.result is None:
             tc.result = responses[call_id]
-    return list(calls.values()) + unkeyed
+    return list(calls.items()) + [("", tc) for tc in unkeyed]
 
 
 def _last_message_text(

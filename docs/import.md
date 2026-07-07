@@ -31,9 +31,14 @@ namespace matches," as Langfuse and Google ADK both proved. Verified against rea
 captured tool-use traces (query, answer, and tool call **with its result** all
 survive import): the **OpenAI** and **Anthropic** providers under openllmetry, a
 full **CrewAI** crew (agent + tool + task) whose LLM calls openllmetry traces
-through litellm, and a **Google ADK** agent via ADK's native OTel export.
+through litellm, a **Google ADK** agent via ADK's native OTel export, and a
+**Claude Agent SDK** `query()` run instrumented by
+`otel-instrumentation-claude-agent-sdk`.
 (CrewAI's imported query is its full constructed task prompt — that is the last
-user message CrewAI actually sends.)
+user message CrewAI actually sends. The Claude Agent SDK emits one
+session-level `invoke_agent` span carrying the messages plus bare
+`execute_tool` child spans; the importer merges the two views by tool call
+id, so each tool call imports once, with its arguments and result.)
 
 Because these are all OTel (or OTel-derived) paths, any framework whose runs
 emit GenAI-semconv spans imports through `otel-genai` without a bespoke

@@ -576,6 +576,84 @@ class TestRealADKExport:
         assert len(goldens) == 1
 
 
+class TestRealClaudeAgentSdkExport:
+    """Against a REAL export: a live Claude Agent SDK query() (claude-agent-sdk
+    0.2, SDK MCP weather tool) instrumented by otel-instrumentation-claude-agent-sdk
+    0.0.6 (GenAI semconv 1.42), tests/fixtures/claude_agent_sdk_otel_real.json.
+
+    The Agent SDK dialect: ONE invoke_agent span carries provider, model,
+    session-aggregate usage, and (opt-in) the full input/output messages;
+    execute_tool child spans carry gen_ai.tool.call.id but NOT
+    arguments/result — that content only exists in the invoke_agent span's
+    messages. The importer pairs the two views by call id; without that,
+    every tool call double-counts (once bare from its span, once with
+    content from the messages).
+
+    Real-harness quirk kept faithful: the CLI subprocess loads deferred
+    tools, so the model calls ToolSearch before the MCP weather tool."""
+
+    FIXTURE = "tests/fixtures/claude_agent_sdk_otel_real.json"
+
+    def test_maps_query_answer_model_and_session(self):
+        spans = load_spans(self.FIXTURE)
+        trace, query = trace_from_otel(spans)
+        assert query == "What's the weather in Paris right now?"
+        assert "Paris" in trace.metadata["final_output"]
+        # The invoke_agent span is the only model/usage carrier -> one
+        # session-aggregate LLM call.
+        assert trace.total_llm_calls == 1
+        llm = trace.spans[0].llm_calls[0]
+        assert llm.provider == "anthropic"
+        assert llm.model.startswith("claude-")
+        assert llm.tokens_in > 0 and llm.tokens_out > 0
+
+    def test_execute_tool_spans_merge_with_message_content_by_call_id(self):
+        # The dialect gap this class exists for: execute_tool spans have ids
+        # but no content; messages have content keyed by the same ids. The
+        # merged result must be exactly one ToolCall per real call, each
+        # with arguments AND result.
+        spans = load_spans(self.FIXTURE)
+        trace, _ = trace_from_otel(spans)
+        assert trace.tool_call_sequence == ["ToolSearch", "mcp__weather__get_weather"]
+        weather = trace.spans[0].tool_calls[1]
+        assert weather.arguments == {"city": "Paris"}
+        assert weather.result == [
+            {"type": "text", "text": '{"temp_c": 18, "condition": "light rain", "city": "Paris"}'}
+        ]
+        # The span-derived ToolSearch call got its arguments backfilled too.
+        assert trace.spans[0].tool_calls[0].arguments != {}
+
+    def test_fixture_carries_no_secret(self):
+        import re
+        from pathlib import Path
+
+        text = Path(self.FIXTURE).read_text()
+        assert "api_key=" not in text
+        assert not re.search(r"sk-[A-Za-z0-9_\-]{20,}", text)
+
+    def test_cli_import_real_claude_agent_sdk_export(self, tmp_path):
+        from pathlib import Path
+
+        from click.testing import CliRunner
+
+        from ciagent.cli import cli
+
+        fixture = Path(self.FIXTURE).resolve()
+        spec_path = tmp_path / "agentci_spec.yaml"
+        spec_path.write_text(
+            "agent: claude-agent-sdk-import\n"
+            f"baseline_dir: {tmp_path / 'golden'}\n"
+            "queries:\n  - query: \"existing\"\n"
+        )
+        result = CliRunner().invoke(cli, ["import", str(fixture), "-c", str(spec_path)])
+        assert result.exit_code == 0, result.output
+        assert "otel-genai" in _flat(result.output)
+        goldens = list(
+            (tmp_path / "golden" / "claude-agent-sdk-import").glob("imported-*.json")
+        )
+        assert len(goldens) == 1
+
+
 class TestLangsmithDetection:
     def test_langsmith_runs_export_gets_targeted_error(self, tmp_path):
         f = tmp_path / "runs.json"
