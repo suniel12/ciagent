@@ -137,7 +137,12 @@ def mock_conversation_runner(scenario):
     well-formed scenario passes end-to-end with zero API keys, mirroring what
     `ciagent test --mock` does for single-turn queries.
     """
-    n_turns = min(len(scenario.turns or []), scenario.max_turns)
+    # Scripted: the script's length (capped). Generative (mock persona):
+    # every turn runs, so the conversation is max_turns long.
+    if scenario.turns:
+        n_turns = min(len(scenario.turns), scenario.max_turns)
+    else:
+        n_turns = scenario.max_turns
 
     def _merged_spec(is_last: bool) -> dict:
         blocks = [scenario.per_turn]
@@ -168,3 +173,21 @@ def mock_conversation_runner(scenario):
         return mock_run(messages[-1]["content"], _merged_spec(is_last))
 
     return run
+
+
+def mock_persona_turn_source(scenario):
+    """Deterministic stand-in persona for --mock generative scenarios.
+
+    Lets a persona/goal scenario validate structure and checks with zero API
+    keys — the same role the synthetic agent trace plays for the other side.
+    Turns are a pure function of (goal, turn_index), so mock runs stay fully
+    deterministic.
+    """
+    goal = scenario.goal or scenario.persona or "resolve my issue"
+
+    def next_turn(messages: list[dict], turn_index: int) -> str:
+        if turn_index == 0:
+            return f"[mock user] hi — i need help: {goal}"
+        return f"[mock user] still pursuing: {goal} (turn {turn_index + 1})"
+
+    return next_turn

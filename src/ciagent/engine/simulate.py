@@ -17,6 +17,18 @@ This is the one-command found-bug → regression-test conversion: a failed
 scenario recorded with `--record` becomes a golden the suite gates on via
 `--replay`.
 
+Phase 3: generative personas + cost guardrails + parallel scenarios. A
+scenario with `persona:`/`goal:` and no `turns:` gets its user turns from a
+persona LLM (engine/persona.py) — nondeterministic by design, the finder
+path. Termination rules DO NOT change: max_turns / stop_when only; the
+persona never decides when a conversation ends, and a derailed persona
+(empty/unusable output) marks the scenario infra-error rather than silently
+grading the agent. A shared CostBudget hard-aborts the session mid-
+conversation when `--max-cost` is breached; partial turns are kept and
+clearly marked, and the outcome verdict is NOT evaluated on a partial
+conversation. Scenarios run in parallel (they are independent, binding);
+turns within a conversation stay sequential.
+
 Termination rules (eng review 2026-07-05, binding):
 - a conversation runs until scripted turns are exhausted or `max_turns` is
   reached, whichever comes first
@@ -47,11 +59,50 @@ from .results import QueryResult
 # assistant's reply (str) or a full Trace.
 ConversationRunner = Callable[[list[dict[str, str]]], Union[str, "Trace"]]
 
+# A turn source produces the NEXT user message from (history, turn_index):
+# a str to continue, or None when a scripted source is exhausted. Generative
+# sources never return None — they end only via max_turns / stop_when.
+TurnSource = Callable[[list[dict[str, str]], int], Optional[str]]
+
 # Termination reasons (deterministic, reported per scenario)
 TERM_SCRIPT_EXHAUSTED = "scripted-turns-exhausted"
 TERM_MAX_TURNS = "max-turns-reached"
 TERM_STOP_WHEN = "stop-when-event"
 TERM_INFRA_ERROR = "infra-error"
+TERM_COST_ABORT = "max-cost-aborted"
+
+
+@dataclass
+class CostBudget:
+    """Session-level cost ceiling shared across scenarios (and threads).
+
+    The driver checks `exceeded` before every turn and charges each turn's
+    trace cost after it runs — so a breach stops the session mid-conversation
+    at the next turn boundary, including scenarios that haven't started yet.
+    """
+    max_usd: float
+    spent_usd: float = 0.0
+
+    def __post_init__(self) -> None:
+        import threading
+
+        self._lock = threading.Lock()
+
+    def charge(self, amount_usd: Optional[float]) -> None:
+        with self._lock:
+            self.spent_usd += amount_usd or 0.0
+
+    @property
+    def exceeded(self) -> bool:
+        return self.spent_usd > self.max_usd
+
+
+def scripted_turn_source(turns: list[str]) -> TurnSource:
+    """Turn source over a fixed `turns:` list; None when exhausted."""
+    def next_turn(messages: list[dict[str, str]], turn_index: int) -> Optional[str]:
+        return turns[turn_index] if turn_index < len(turns) else None
+
+    return next_turn
 
 
 @dataclass
@@ -70,7 +121,8 @@ class ScenarioResult:
     turns: list[TurnResult] = field(default_factory=list)
     outcome: Optional[QueryResult] = None  # evaluated on the final trace
     termination: str = ""
-    error: Optional[str] = None  # set when termination == infra-error
+    error: Optional[str] = None  # set when termination == infra-error / cost-abort
+    mode: str = "scripted"  # how user turns were produced: scripted | simulated
 
     @property
     def hard_fail(self) -> bool:
@@ -83,9 +135,27 @@ class ScenarioResult:
     def is_infra_error(self) -> bool:
         return self.termination == TERM_INFRA_ERROR
 
-    def to_envelope(self, agent: str = "", mode: str = "scripted") -> ConversationEnvelope:
+    @property
+    def is_cost_aborted(self) -> bool:
+        return self.termination == TERM_COST_ABORT
+
+    @property
+    def is_partial(self) -> bool:
+        """The conversation did not run to a clean termination — partial
+        results are reported but the outcome verdict was not evaluated."""
+        return self.is_infra_error or self.is_cost_aborted
+
+    @property
+    def cost_usd(self) -> float:
+        """Agent-side cost of this conversation (sum of turn trace costs)."""
+        return sum(t.trace.total_cost_usd or 0.0 for t in self.turns)
+
+    def user_turns(self) -> list[str]:
+        return [t.user_message for t in self.turns]
+
+    def to_envelope(self, agent: str = "", mode: Optional[str] = None) -> ConversationEnvelope:
         return ConversationEnvelope(
-            mode=mode,
+            mode=mode or self.mode,
             agent=agent,
             scenario={
                 "name": self.scenario.display_name(),
@@ -113,32 +183,51 @@ def _run_turn(
     messages: list[dict[str, str]],
     agent_name: str,
     turn_label: str,
+    retry_count: int = 2,
+    retry_backoff: float = 1.0,
 ) -> "Trace":
     """Execute one conversation turn with capture + return-type coercion.
 
     Same contract as the single-turn executor: wrap in TraceContext so string
     returns still get LLM/tool capture; Trace returns pass through (merging
-    captured spans when the runner's Trace has none).
+    captured spans when the runner's Trace has none). Transient infra errors
+    (rate limits, timeouts) retry with the same exponential backoff the
+    single-turn worker pool uses; anything else propagates to the driver's
+    infra-error handling.
     """
+    import time
+
     from ..capture import TraceContext
-    from .parallel import _wrap_str_as_trace
+    from .parallel import _RETRYABLE_EXCEPTIONS, _wrap_str_as_trace
 
-    with TraceContext(agent_name=agent_name, test_name=turn_label) as ctx:
-        result = conv_runner(messages)
+    for attempt in range(retry_count + 1):
+        try:
+            with TraceContext(agent_name=agent_name, test_name=turn_label) as ctx:
+                result = conv_runner(messages)
+        except _RETRYABLE_EXCEPTIONS:
+            if attempt >= retry_count:
+                raise
+            time.sleep(retry_backoff * (2 ** attempt))
+            continue
+        return _coerce_turn_trace(result, ctx.trace, turn_label, _wrap_str_as_trace)
+    raise RuntimeError("unreachable: retry loop exits by return or raise")
 
+
+def _coerce_turn_trace(result, captured: "Trace", turn_label: str, wrap_str) -> "Trace":
+    """Coerce a runner's return (Trace | str) into a Trace with captured spans."""
     if isinstance(result, Trace):
-        if not result.spans and ctx.trace.spans:
-            result.spans = ctx.trace.spans
+        if not result.spans and captured.spans:
+            result.spans = captured.spans
             result.compute_metrics()
         return result
 
     text = result if isinstance(result, str) else str(result)
-    trace = ctx.trace
+    trace = captured
     trace.metadata["final_output"] = text
     if trace.spans:
         trace.spans[0].output_data = text
     if not trace.spans:
-        trace = _wrap_str_as_trace(text, turn_label)
+        trace = wrap_str(text, turn_label)
     return trace
 
 
@@ -166,23 +255,60 @@ def run_scenario(
     agent_name: str = "",
     judge_config: Optional[dict[str, Any]] = None,
     spec_dir: Optional[str] = None,
+    turn_source: Optional[TurnSource] = None,
+    persona_config: Optional[dict[str, Any]] = None,
+    budget: Optional[CostBudget] = None,
 ) -> ScenarioResult:
-    """Drive one scenario against a conversation runner until termination."""
+    """Drive one scenario against a conversation runner until termination.
+
+    User turns come from `turn_source` when given (tests, mock personas);
+    otherwise from the scenario itself — its `turns:` list (scripted), or a
+    persona LLM built from `persona:`/`goal:` (simulated, the finder path).
+    """
     from .runner import evaluate_query
 
-    if not scenario.turns:
-        raise ValueError(
-            f"Scenario '{scenario.display_name()}' has no scripted turns. "
-            "Generative personas (persona/goal without turns) are not available "
-            "yet — give the scenario a `turns:` list."
-        )
+    if turn_source is None:
+        if scenario.turns:
+            turn_source = scripted_turn_source(scenario.turns)
+        elif scenario.persona or scenario.goal:
+            from .persona import persona_turn_source
 
-    result = ScenarioResult(scenario=scenario)
+            turn_source = persona_turn_source(scenario, persona_config)
+        else:
+            raise ValueError(
+                f"Scenario '{scenario.display_name()}' has neither scripted turns "
+                "nor a persona — give it a `turns:` list or a `persona:`/`goal:`."
+            )
+
+    result = ScenarioResult(
+        scenario=scenario,
+        mode="scripted" if scenario.turns else "simulated",
+    )
     messages: list[dict[str, str]] = []
-    n_turns = min(len(scenario.turns), scenario.max_turns)
+    script_exhausted = False
 
-    for i in range(n_turns):
-        user_message = scenario.turns[i]
+    for i in range(scenario.max_turns):
+        try:
+            user_message = turn_source(list(messages), i)
+        except Exception as exc:  # noqa: BLE001 — persona derail / source failure
+            result.termination = TERM_INFRA_ERROR
+            result.error = f"user turn {i + 1}: {type(exc).__name__}: {exc}"
+            return result
+
+        if user_message is None:
+            script_exhausted = True
+            break
+
+        # Budget gates the NEXT turn only — a conversation whose script just
+        # exhausted completed cleanly and must not read as partial.
+        if budget is not None and budget.exceeded:
+            result.termination = TERM_COST_ABORT
+            result.error = (
+                f"cost budget breached before turn {i + 1}: "
+                f"${budget.spent_usd:.4f} spent, max ${budget.max_usd:.4f}"
+            )
+            return result  # partial turns kept; outcome NOT evaluated
+
         messages.append({"role": "user", "content": user_message})
         label = f"{scenario.display_name()} [turn {i + 1}]"
 
@@ -192,6 +318,9 @@ def run_scenario(
             result.termination = TERM_INFRA_ERROR
             result.error = f"turn {i + 1}: {type(exc).__name__}: {exc}"
             return result
+
+        if budget is not None:
+            budget.charge(trace.total_cost_usd)
 
         from .runner import _extract_answer
 
@@ -210,10 +339,16 @@ def run_scenario(
         if _stop_event_observed(scenario, trace):
             result.termination = TERM_STOP_WHEN
             break
-    else:
-        result.termination = (
-            TERM_SCRIPT_EXHAUSTED if n_turns == len(scenario.turns) else TERM_MAX_TURNS
-        )
+
+    if not result.termination:
+        # Scripted turns fitting inside max_turns exhaust the script even when
+        # the last turn IS the max — preserves Phase 1 semantics.
+        if script_exhausted or (
+            scenario.turns and len(scenario.turns) <= scenario.max_turns
+        ):
+            result.termination = TERM_SCRIPT_EXHAUSTED
+        else:
+            result.termination = TERM_MAX_TURNS
 
     # Outcome: the verdict, evaluated once at the end on the final trace
     if scenario.outcome is not None and result.turns:
@@ -225,6 +360,47 @@ def run_scenario(
             spec_dir=spec_dir,
         )
     return result
+
+
+def run_scenarios_parallel(
+    scenarios: list[ScenarioSpec],
+    conv_runner_for: Callable[[ScenarioSpec], ConversationRunner],
+    agent_name: str = "",
+    judge_config: Optional[dict[str, Any]] = None,
+    spec_dir: Optional[str] = None,
+    max_workers: int = 4,
+    turn_source_for: Optional[Callable[[ScenarioSpec], Optional[TurnSource]]] = None,
+    persona_config: Optional[dict[str, Any]] = None,
+    budget: Optional[CostBudget] = None,
+) -> list[ScenarioResult]:
+    """Run scenarios concurrently; turns within each stay sequential.
+
+    Scenarios are independent (eng review, binding), so this is the same
+    worker-pool shape the single-turn path uses. Results come back in
+    scenario order. A shared budget still aborts the whole session: workers
+    check it at every turn boundary.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    results: list[Optional[ScenarioResult]] = [None] * len(scenarios)
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        futures = {
+            executor.submit(
+                run_scenario,
+                s,
+                conv_runner_for(s),
+                agent_name=agent_name,
+                judge_config=judge_config,
+                spec_dir=spec_dir,
+                turn_source=turn_source_for(s) if turn_source_for else None,
+                persona_config=persona_config,
+                budget=budget,
+            ): i
+            for i, s in enumerate(scenarios)
+        }
+        for fut in as_completed(futures):
+            results[futures[fut]] = fut.result()
+    return [r for r in results if r is not None]
 
 
 # ── Phase 2: record + replay ────────────────────────────────────────────────────
@@ -241,7 +417,7 @@ def record_scenario_result(
     result: ScenarioResult,
     directory: Union[str, "Path"],
     agent: str = "",
-    mode: str = "scripted",
+    mode: Optional[str] = None,
     mock: bool = False,
 ) -> "Path":
     """Save a driven scenario as a golden conversation envelope.

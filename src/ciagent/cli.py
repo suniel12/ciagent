@@ -3129,6 +3129,38 @@ def _collect_replay_paths(path, agent):
     return []
 
 
+def _checks_use_judge(checks) -> bool:
+    if checks is None or checks.correctness is None:
+        return False
+    c = checks.correctness
+    return bool(
+        getattr(c, "llm_judge", None)
+        or getattr(c, "safety_check", None)
+        or getattr(c, "hallucination_check", None)
+    )
+
+
+def _simulation_turn_plan(scenarios) -> tuple[int, int, int]:
+    """Planned (agent_turns, persona_turns, judged_turns) for ONE run.
+
+    Scripted scenarios run min(len(turns), max_turns) turns; generative ones
+    are budgeted at max_turns — the ceiling is exactly what the estimate is
+    for. Judged turns count per-turn judge checks per turn plus one for a
+    judged outcome.
+    """
+    agent_turns = persona_turns = judged_turns = 0
+    for s in scenarios:
+        planned = min(len(s.turns), s.max_turns) if s.turns else s.max_turns
+        agent_turns += planned
+        if not s.turns:
+            persona_turns += planned
+        if _checks_use_judge(s.per_turn):
+            judged_turns += planned
+        if _checks_use_judge(s.outcome):
+            judged_turns += 1
+    return agent_turns, persona_turns, judged_turns
+
+
 def _print_conversation_diff(diff):
     """Console block for a replay's turn-by-turn diff vs its golden."""
     if not diff.has_changes:
@@ -3170,29 +3202,49 @@ def _print_conversation_diff(diff):
               help='Replay recorded conversation envelope(s) — a golden .json file '
                    'or a directory — feeding the recorded user turns back to the '
                    'agent verbatim. Spec scenarios are ignored.')
+@click.option('--runs', default=1, show_default=True, type=int,
+              help='Run every scenario N times and report per-scenario stability '
+                   'with flip attribution (agent-variance vs simulation-variance '
+                   'vs judge-flake).')
+@click.option('--workers', '-w', default=4, show_default=True, type=int,
+              help='Max parallel scenarios; turns within a conversation stay '
+                   'sequential.')
+@click.option('--max-cost', default=None, type=float,
+              help='Session cost ceiling in USD. When breached, the session '
+                   'hard-aborts mid-conversation; partial results are reported '
+                   'and clearly marked.')
 @click.option('--yes', '-y', is_flag=True, help='Skip the live-run confirmation')
 @click.option('--format', 'fmt', type=click.Choice(['console', 'json']),
               default='console', show_default=True, help='Output format')
-def simulate_cmd(config, mock, record, record_dir, replay_path, yes, fmt):
+def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
+                 max_cost, yes, fmt):
     """Drive multi-turn conversation scenarios against your agent.
 
     Scripted scenarios (a `turns:` list of user messages) run
-    deterministically — the CI path. `--record` saves each conversation as a
-    golden envelope; `--replay` feeds a recorded conversation's user turns
-    back verbatim (only the agent side can vary) and shows a turn-by-turn
-    diff against the golden. Generative personas and cost guardrails arrive
-    in later 0.9 releases.
+    deterministically — the CI path. Generative scenarios (`persona:` +
+    `goal:`, no turns) let a cheap persona LLM improvise the user side —
+    the finder path, nondeterministic by design. `--record` saves each
+    conversation as a golden envelope; `--replay` feeds a recorded
+    conversation's user turns back verbatim (the persona is never called,
+    only the agent side can vary) and shows a turn-by-turn diff against
+    the golden.
 
     \b
     Spec additions:
         conversation_runner: "myagent.run:respond"   # (messages) -> str | Trace
+        persona_config: {model: claude-haiku-4-5, temperature: 0.7}  # optional
         scenarios:
-          - turns: ["hi", "i want a refund for order #123"]
+          - turns: ["hi", "i want a refund for order #123"]   # scripted
             max_turns: 8
             per_turn:
               path: {expected_tools: [search_kb]}
             outcome:
               correctness: {any_expected_in_answer: ["refund", "5-7 business days"]}
+          - persona: "frustrated customer, discontinued product"  # generative
+            goal: "get a refund routed correctly"
+            max_turns: 8
+            outcome:
+              correctness: {any_expected_in_answer: ["refund"]}
 
     \b
     Found-bug → regression-test in one command:
@@ -3201,20 +3253,22 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, yes, fmt):
 
     \b
     Termination is deterministic: scripted turns exhausted, max_turns, or an
-    explicit stop_when event. Outcome checks are the END-of-conversation
-    verdict, never a stop condition.
+    explicit stop_when event — the persona never ends a conversation and
+    outcome checks are the END-of-conversation verdict, never a stop
+    condition. Live sessions show a cost estimate before running; --max-cost
+    adds a hard mid-session abort.
 
     \b
     Exit codes:
         0 — every scenario's checks passed
         1 — a scenario failed its outcome or a per-turn correctness check
-        2 — config error, or a scenario aborted on an agent exception
+        2 — config error, agent exception, or session aborted on --max-cost
     """
     import json as _json
     from pathlib import Path
 
     from .conversation import load_envelope
-    from .engine.simulate import envelope_to_scenario, run_scenario
+    from .engine.simulate import envelope_to_scenario
     from .exceptions import BaselineError, ConfigError
     from .loader import load_spec
 
@@ -3253,14 +3307,6 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, yes, fmt):
                 "see [cyan]ciagent simulate --help[/] for the shape."
             )
             sys.exit(2)
-        unscripted = [s.display_name() for s in spec.scenarios if not s.turns]
-        if unscripted:
-            console.print(
-                f"[bold red]{len(unscripted)} scenario(s) have no scripted turns[/] "
-                f"(e.g. '{unscripted[0]}'). Generative personas are not available yet — "
-                "each scenario needs a [cyan]turns:[/] list."
-            )
-            sys.exit(2)
         scenarios = spec.scenarios
         goldens = [None] * len(scenarios)
 
@@ -3274,13 +3320,19 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, yes, fmt):
         f"scenarios: [cyan]{len(scenarios)}[/] │ mode: [cyan]{mode_str}[/]"
     )
 
-    # Resolve the conversation runner (mock synthesizes one per scenario)
+    # Resolve the conversation runner (mock synthesizes one per scenario);
+    # generative scenarios additionally need a user-turn source (mock persona
+    # in --mock, the persona LLM otherwise — the driver builds the latter).
     conv_runner_for = None
+    turn_source_for = None
     if mock:
-        from .engine.mock_runner import mock_conversation_runner
+        from .engine.mock_runner import mock_conversation_runner, mock_persona_turn_source
 
         console.print("[dim]Running with synthetic traces — zero API cost[/]\n")
         conv_runner_for = mock_conversation_runner
+        turn_source_for = (
+            lambda s: mock_persona_turn_source(s) if not s.turns else None
+        )
     else:
         if not spec.conversation_runner:
             console.print(
@@ -3297,33 +3349,69 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, yes, fmt):
         except (ImportError, AttributeError, ValueError) as e:
             console.print(f"[bold red]Runner error:[/] {e}")
             sys.exit(2)
-        total_turns = sum(min(len(s.turns or []), s.max_turns) for s in scenarios)
+        # Pre-run cost estimate + confirm gate (binding: the tool that sells
+        # cost budgets does not ship a simulator without them)
+        agent_turns, persona_turns, judged_turns = _simulation_turn_plan(scenarios)
         if not yes and fmt == "console":
             from rich.prompt import Confirm
 
-            console.print(
-                f"[dim]Live run: up to {total_turns} agent turns across "
-                f"{len(scenarios)} scenario(s), on your agent's API keys.[/]"
+            from .engine.cost_estimator import (
+                estimate_simulation_cost,
+                format_simulation_estimate,
             )
+
+            est = estimate_simulation_cost(
+                agent_turns=agent_turns,
+                persona_turns=persona_turns,
+                judged_turns=judged_turns,
+                runs=runs,
+                persona_model=(spec.persona_config or {}).get("model"),
+                judge_model=(spec.judge_config or {}).get("model"),
+            )
+            console.print(f"[dim]{format_simulation_estimate(est, len(scenarios), runs)}[/]")
+            if max_cost is not None:
+                console.print(f"[dim]Hard abort at --max-cost ${max_cost:.2f}[/]")
             if not Confirm.ask("Proceed?", default=True):
                 console.print("[yellow]Aborted.[/]")
                 sys.exit(0)
         conv_runner_for = lambda scenario: live_runner  # noqa: E731
 
-    results = []
-    for scenario in scenarios:
+    from .engine.simulate import CostBudget, run_scenarios_parallel
+
+    budget = CostBudget(max_usd=max_cost) if max_cost is not None else None
+
+    all_runs: list[list] = []
+    for _run_index in range(max(1, runs)):
+        if budget is not None and budget.exceeded:
+            break  # session aborted — completed runs still report
         try:
-            r = run_scenario(
-                scenario,
-                conv_runner_for(scenario),
+            run_results = run_scenarios_parallel(
+                scenarios,
+                conv_runner_for,
                 agent_name=spec.agent,
                 judge_config=spec.judge_config,
                 spec_dir=str(Path(config).parent) if config else None,
+                max_workers=workers,
+                turn_source_for=turn_source_for,
+                persona_config=spec.persona_config,
+                budget=budget,
             )
         except Exception as e:  # noqa: BLE001
             console.print(f"[bold red]Simulation error:[/] {e}")
             sys.exit(2)
-        results.append(r)
+        all_runs.append(run_results)
+    results = all_runs[0]
+
+    cost_aborted = any(r.is_cost_aborted for rr in all_runs for r in rr) or (
+        budget is not None and budget.exceeded and len(all_runs) < runs
+    )
+
+    # Per-scenario stability across runs (simulation-variance attribution)
+    stability = None
+    if len(all_runs) > 1:
+        from .engine.stability import build_scenario_stability
+
+        stability = build_scenario_stability(all_runs)
 
     # ── Conversation-aware diff vs the golden being replayed ─────────────────
     diffs: list[_Any] = [None] * len(results)
@@ -3344,7 +3432,13 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, yes, fmt):
         for r in results:
             recorded_paths.append(
                 record_scenario_result(
-                    r, out_dir, agent=spec.agent, mode=run_mode, mock=mock
+                    r,
+                    out_dir,
+                    agent=spec.agent,
+                    # replay re-records as replay; otherwise mode as produced
+                    # (scripted | simulated)
+                    mode="replay" if replay_path else None,
+                    mock=mock,
                 )
             )
 
@@ -3354,12 +3448,16 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, yes, fmt):
 
         payload = {
             "mode": run_mode,
+            "runs": len(all_runs),
             "scenarios": [
                 {
                     "name": r.scenario.display_name(),
+                    "mode": r.mode,
                     "termination": r.termination,
                     "error": r.error,
                     "hard_fail": r.hard_fail,
+                    "partial": r.is_partial,
+                    "cost_usd": round(r.cost_usd, 6),
                     "turns": [
                         {
                             "turn_index": t.turn_index,
@@ -3375,21 +3473,49 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, yes, fmt):
                 for r, d in zip(results, diffs)
             ],
             "recorded": [str(p) for p in recorded_paths],
+            "stability": (
+                [
+                    {
+                        "scenario": s.scenario,
+                        "verdicts": s.verdicts,
+                        "flipped": s.flipped,
+                        "flip_source": s.flip_source.value if s.flip_source else None,
+                        "flip_reason": s.flip_reason,
+                    }
+                    for s in stability
+                ]
+                if stability is not None
+                else None
+            ),
+            "cost_aborted": cost_aborted,
+            "spent_usd": round(budget.spent_usd, 6) if budget is not None else None,
             "summary": {
                 "total": len(results),
-                "passed": sum(1 for r in results if not r.hard_fail and not r.is_infra_error),
+                "passed": sum(1 for r in results if not r.hard_fail and not r.is_partial),
                 "failed": sum(1 for r in results if r.hard_fail),
                 "infra_errors": sum(1 for r in results if r.is_infra_error),
+                "cost_aborted": sum(1 for r in results if r.is_cost_aborted),
             },
         }
         print(_json.dumps(payload, indent=2))
     else:
-        for r, d in zip(results, diffs):
-            icon = "❌" if r.hard_fail else ("⚠️ " if r.is_infra_error else "✅")
+        if cost_aborted and budget is not None:
             console.print(
-                f"\n{icon} [bold]{r.scenario.display_name()}[/] — "
+                f"\n[bold red]SESSION ABORTED — --max-cost ${budget.max_usd:.2f} breached "
+                f"(spent ~${budget.spent_usd:.4f}). Results below are PARTIAL.[/]"
+            )
+        for r, d in zip(results, diffs):
+            icon = "❌" if r.hard_fail else ("⚠️ " if r.is_partial else "✅")
+            tag = " [magenta](simulated)[/]" if r.mode == "simulated" else ""
+            console.print(
+                f"\n{icon} [bold]{r.scenario.display_name()}[/]{tag} — "
                 f"{len(r.turns)} turn(s), ended: [cyan]{r.termination}[/]"
             )
+            if r.is_partial:
+                console.print(
+                    "   [yellow]PARTIAL — conversation did not complete; "
+                    "outcome verdict not evaluated[/]"
+                )
             if r.error:
                 console.print(f"   [red]{r.error}[/]")
             for t in r.turns:
@@ -3402,21 +3528,36 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, yes, fmt):
                 status = "FAIL" if r.outcome.hard_fail else "PASS"
                 color = "red" if r.outcome.hard_fail else "green"
                 console.print(f"   outcome: [{color}]{status}[/] {'; '.join(r.outcome.correctness.messages[:2])}")
+            if r.cost_usd > 0:
+                console.print(f"   [dim]cost: ${r.cost_usd:.4f}[/]")
             if d is not None:
                 _print_conversation_diff(d)
+        if stability is not None:
+            console.print(f"\n[bold]Stability across {len(all_runs)} runs:[/]")
+            for s in stability:
+                flip = ""
+                if s.flipped and s.flip_source is not None:
+                    flip = f"  [yellow]{s.flip_source.value}[/] — {s.flip_reason}"
+                console.print(f"   {s.verdict_string}  {s.scenario}{flip}")
+            flaky = sum(1 for s in stability if s.flipped)
+            console.print(
+                f"   [dim]{len(stability) - flaky}/{len(stability)} stable[/]"
+                + (f"  |  [yellow]{flaky} flaky[/]" if flaky else "")
+            )
         if recorded_paths:
             console.print(f"\n[dim]Recorded {len(recorded_paths)} golden envelope(s):[/]")
             for p in recorded_paths:
                 console.print(f"   [cyan]{p}[/]")
-        passed = sum(1 for r in results if not r.hard_fail and not r.is_infra_error)
+        passed = sum(1 for r in results if not r.hard_fail and not r.is_partial)
         console.print(
             f"\nScenarios: {passed}/{len(results)} passed"
-            + (f"  |  {sum(1 for r in results if r.is_infra_error)} infra-error" if any(r.is_infra_error for r in results) else "")
+            + (f"  |  {sum(1 for r in results if r.is_partial)} partial/infra" if any(r.is_partial for r in results) else "")
         )
 
-    if any(r.hard_fail for r in results):
+    # Exit codes consider every run, not just the reported first one
+    if any(r.hard_fail for rr in all_runs for r in rr):
         sys.exit(1)
-    if any(r.is_infra_error for r in results):
+    if cost_aborted or any(r.is_infra_error for rr in all_runs for r in rr):
         sys.exit(2)
     sys.exit(0)
 

@@ -92,6 +92,97 @@ def estimate_cost(
     }
 
 
+# Persona turns are short: a compact system prompt + transcript in, one
+# user-sized message out.
+DEFAULT_TOKENS_PER_PERSONA_TURN: dict[str, int] = {
+    "input": 800,
+    "output": 80,
+}
+
+
+def estimate_simulation_cost(
+    agent_turns: int,
+    persona_turns: int = 0,
+    judged_turns: int = 0,
+    runs: int = 1,
+    agent_model: str = "gpt-4o",
+    persona_model: str | None = None,
+    judge_model: str | None = None,
+) -> dict[str, float]:
+    """Estimate a `ciagent simulate` session's cost before running it.
+
+    Simulation multiplies calls — scenarios × turns × (agent + persona +
+    judge) × runs — which is exactly why the estimate exists (ADR, binding).
+
+    Parameters
+    ----------
+    agent_turns : int
+        Planned agent turns across all scenarios for ONE run (scripted:
+        min(len(turns), max_turns); generative: max_turns).
+    persona_turns : int
+        Persona-LLM-generated turns for one run (generative scenarios only).
+    judged_turns : int
+        Turns whose checks invoke an LLM judge, for one run.
+    runs : int
+        Stability runs; everything above scales by it.
+    """
+    if persona_model is None:
+        from .persona import default_persona_model
+
+        persona_model = default_persona_model()
+    effective_judge = judge_model or _default_judge_model()
+
+    agent_price = MODEL_PRICING.get(agent_model, MODEL_PRICING["gpt-4o"])
+    persona_price = MODEL_PRICING.get(persona_model, MODEL_PRICING["claude-haiku-4-5"])
+    judge_price = MODEL_PRICING.get(effective_judge, MODEL_PRICING["gpt-4o"])
+
+    def _cost(n_calls: int, tokens: dict[str, int], price: dict[str, float]) -> float:
+        return n_calls * (
+            tokens["input"] * price["input"] / 1_000_000
+            + tokens["output"] * price["output"] / 1_000_000
+        )
+
+    agent_cost = runs * _cost(agent_turns, DEFAULT_TOKENS_PER_QUERY, agent_price)
+    persona_cost = runs * _cost(persona_turns, DEFAULT_TOKENS_PER_PERSONA_TURN, persona_price)
+    judge_cost = runs * _cost(
+        judged_turns,
+        {
+            "input": DEFAULT_TOKENS_PER_QUERY["judge_input"],
+            "output": DEFAULT_TOKENS_PER_QUERY["judge_output"],
+        },
+        judge_price,
+    )
+
+    total = agent_cost + persona_cost + judge_cost
+    return {
+        "agent_cost": agent_cost,
+        "persona_cost": persona_cost,
+        "judge_cost": judge_cost,
+        "total_estimate": total,
+        "total_low": total * 0.5,
+        "total_high": total * 2.0,
+    }
+
+
+def format_simulation_estimate(
+    estimate: dict[str, float], n_scenarios: int, runs: int = 1
+) -> str:
+    """Human-readable simulate-session estimate."""
+    runs_part = f" × {runs} runs" if runs > 1 else ""
+    lines = [
+        f"Estimated cost for {n_scenarios} scenario(s){runs_part}:",
+        f"  Agent:    ~${estimate['agent_cost']:.4f}",
+    ]
+    if estimate.get("persona_cost", 0) > 0:
+        lines.append(f"  Persona:  ~${estimate['persona_cost']:.4f}")
+    if estimate.get("judge_cost", 0) > 0:
+        lines.append(f"  Judge:    ~${estimate['judge_cost']:.4f}")
+    lines.append(
+        f"  Range:    ${estimate['total_low']:.4f} – ${estimate['total_high']:.4f}"
+    )
+    return "\n".join(lines)
+
+
 def format_estimate(estimate: dict[str, float], num_queries: int) -> str:
     """Format a cost estimate as a human-readable string.
 

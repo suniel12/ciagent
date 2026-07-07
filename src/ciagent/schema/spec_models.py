@@ -387,6 +387,17 @@ class ScenarioSpec(BaseModel):
                 raise ValueError("turns must not contain empty messages")
         return v
 
+    @model_validator(mode="after")
+    def _has_turn_source(self) -> "ScenarioSpec":
+        # scripted (turns) or generative (persona/goal) — a scenario with
+        # neither has no way to produce user messages
+        if not self.turns and not (self.persona or self.goal):
+            raise ValueError(
+                "scenario needs a `turns:` list (scripted) or a "
+                "`persona:`/`goal:` (generative)"
+            )
+        return self
+
     def display_name(self) -> str:
         if self.name:
             return self.name
@@ -432,6 +443,13 @@ class AgentCISpec(BaseModel):
     judge_config: Optional[dict[str, Any]] = Field(
         None,
         description="Global LLM judge settings: model, temperature, ensemble, structured_output",
+    )
+    persona_config: Optional[dict[str, Any]] = Field(
+        None,
+        description=(
+            "Persona LLM settings for generative simulate scenarios: model "
+            "(defaults to a cheap haiku-class model) and temperature (default 0.7)"
+        ),
     )
     queries: list[GoldenQuery] = Field(
         default_factory=list,
