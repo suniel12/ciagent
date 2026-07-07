@@ -85,18 +85,17 @@ def load_spans(path: Union[str, Path]) -> list[dict[str, Any]]:
             "flat list of span objects."
         )
 
-    # LangSmith run exports are their own schema, not OTel spans — say so
-    # instead of importing garbage. (Support pending a real export to
-    # verify against; LangSmith can also forward traces via OTel.)
+    # LangSmith run exports are their own schema, not OTel spans — route
+    # direct callers to the right importer (the CLI dispatcher does this
+    # automatically via importers.import_trace_file).
     if raw_spans and all(
         isinstance(s, dict) and "run_type" in s and "attributes" not in s
         for s in raw_spans
     ):
         raise OtelImportError(
             f"'{path}' looks like a LangSmith runs export (run_type objects), "
-            "which isn't OTel span data. LangSmith run-format import isn't "
-            "supported yet — configure LangSmith's OpenTelemetry export and "
-            "import those spans instead."
+            "not OTel span data — use ciagent.importers.langsmith (the "
+            "`ciagent import` CLI detects and routes this automatically)."
         )
 
     if not raw_spans:
