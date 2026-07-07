@@ -1,0 +1,1060 @@
+[
+  {
+    "id": "019f3d5d-5eba-7413-913b-df5aaebdbdba",
+    "name": "ChatOpenAI",
+    "start_time": "2026-07-07T16:15:57.114896Z",
+    "run_type": "llm",
+    "end_time": "2026-07-07T16:15:57.963033Z",
+    "extra": {
+      "invocation_params": {
+        "model": "gpt-4o-mini",
+        "model_name": "gpt-4o-mini",
+        "stream": false,
+        "_type": "openai-chat",
+        "stop": null,
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "lookup_invoice",
+              "description": "Look up recent invoices for a customer by email.",
+              "parameters": {
+                "properties": {
+                  "customer_email": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "customer_email"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        ]
+      },
+      "options": {
+        "stop": null
+      },
+      "batch_size": 1,
+      "metadata": {
+        "ls_integration": "langchain_chat_model",
+        "langgraph_step": 1,
+        "langgraph_node": "model",
+        "langgraph_triggers": [
+          "branch:to:model"
+        ],
+        "langgraph_path": [
+          "__pregel_pull",
+          "model"
+        ],
+        "langgraph_checkpoint_ns": "model:0cd39374-2f2c-142e-4d5c-1284dee78ab3",
+        "checkpoint_ns": "model:0cd39374-2f2c-142e-4d5c-1284dee78ab3",
+        "ls_provider": "openai",
+        "ls_model_name": "gpt-4o-mini",
+        "ls_model_type": "chat",
+        "ls_temperature": null,
+        "lc_versions": {
+          "langchain-core": "1.4.8",
+          "langchain": "1.3.11",
+          "langchain-openai": "1.3.3"
+        }
+      },
+      "tool_call_count": 1
+    },
+    "error": null,
+    "serialized": {
+      "lc": 1,
+      "type": "constructor",
+      "id": [
+        "langchain",
+        "chat_models",
+        "openai",
+        "ChatOpenAI"
+      ],
+      "kwargs": {
+        "output_version": null,
+        "model_name": "gpt-4o-mini",
+        "openai_api_key": {
+          "lc": 1,
+          "type": "secret",
+          "id": [
+            "OPENAI_API_KEY"
+          ]
+        },
+        "openai_proxy": null,
+        "stream_usage": true
+      },
+      "name": "ChatOpenAI"
+    },
+    "events": [
+      {
+        "name": "start",
+        "time": "2026-07-07T16:15:57.114896Z"
+      },
+      {
+        "name": "end",
+        "time": "2026-07-07T16:15:57.963033Z"
+      }
+    ],
+    "inputs": {
+      "prompts": [
+        "System: You are TechCorp's billing support agent.\nHuman: I was charged twice for CloudSync Pro. My email is alice@example.com \u2014 can you check my invoices?"
+      ]
+    },
+    "outputs": {
+      "generations": [
+        [
+          {
+            "text": "",
+            "generation_info": {
+              "finish_reason": "tool_calls",
+              "logprobs": null
+            },
+            "type": "ChatGeneration",
+            "message": {
+              "lc": 1,
+              "type": "constructor",
+              "id": [
+                "langchain",
+                "schema",
+                "messages",
+                "AIMessage"
+              ],
+              "kwargs": {
+                "content": "",
+                "additional_kwargs": {
+                  "refusal": null
+                },
+                "response_metadata": {
+                  "token_usage": {
+                    "completion_tokens": 17,
+                    "prompt_tokens": 79,
+                    "total_tokens": 96,
+                    "completion_tokens_details": {
+                      "accepted_prediction_tokens": 0,
+                      "audio_tokens": 0,
+                      "reasoning_tokens": 0,
+                      "rejected_prediction_tokens": 0
+                    },
+                    "prompt_tokens_details": {
+                      "audio_tokens": 0,
+                      "cached_tokens": 0
+                    }
+                  },
+                  "model_provider": "openai",
+                  "model_name": "gpt-4o-mini-2024-07-18",
+                  "system_fingerprint": "fp_86eb24cbce",
+                  "id": "chatcmpl-Dz2kfvyx3tznOseT1FBTFGGnYglHf",
+                  "service_tier": "default",
+                  "finish_reason": "tool_calls",
+                  "logprobs": null
+                },
+                "type": "ai",
+                "id": "lc_run--019f3d5d-5eba-7413-913b-df5aaebdbdba-0",
+                "tool_calls": [
+                  {
+                    "name": "lookup_invoice",
+                    "args": {
+                      "customer_email": "alice@example.com"
+                    },
+                    "id": "call_Dv5pt9r1ztggYi4ihxswOg5A",
+                    "type": "tool_call"
+                  }
+                ],
+                "usage_metadata": {
+                  "input_tokens": 79,
+                  "output_tokens": 17,
+                  "total_tokens": 96,
+                  "input_token_details": {
+                    "audio": 0,
+                    "cache_read": 0
+                  },
+                  "output_token_details": {
+                    "audio": 0,
+                    "reasoning": 0
+                  }
+                },
+                "invalid_tool_calls": []
+              }
+            }
+          }
+        ]
+      ],
+      "llm_output": {
+        "token_usage": {
+          "completion_tokens": 17,
+          "prompt_tokens": 79,
+          "total_tokens": 96,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        },
+        "model_provider": "openai",
+        "model_name": "gpt-4o-mini-2024-07-18",
+        "system_fingerprint": "fp_86eb24cbce",
+        "id": "chatcmpl-Dz2kfvyx3tznOseT1FBTFGGnYglHf",
+        "service_tier": "default"
+      },
+      "run": null,
+      "type": "LLMResult"
+    },
+    "reference_example_id": null,
+    "parent_run_id": "019f3d5d-5eb9-7ef0-a9bd-53f0f70f225f",
+    "tags": [
+      "seq:step:1"
+    ],
+    "attachments": {},
+    "session_name": "default",
+    "session_id": null,
+    "dotted_order": "20260707T161557112329Z019f3d5d-5eb8-7d81-983a-d8e28dffacc6.20260707T161557113692Z019f3d5d-5eb9-7ef0-a9bd-53f0f70f225f.20260707T161557114896Z019f3d5d-5eba-7413-913b-df5aaebdbdba",
+    "trace_id": "019f3d5d-5eb8-7d81-983a-d8e28dffacc6",
+    "dangerously_allow_filesystem": false,
+    "replicas": []
+  },
+  {
+    "id": "019f3d5d-5eb9-7ef0-a9bd-53f0f70f225f",
+    "name": "model",
+    "start_time": "2026-07-07T16:15:57.113692Z",
+    "run_type": "chain",
+    "end_time": "2026-07-07T16:15:57.963386Z",
+    "extra": {
+      "metadata": {
+        "ls_integration": "langchain_create_agent",
+        "langgraph_step": 1,
+        "langgraph_node": "model",
+        "langgraph_triggers": [
+          "branch:to:model"
+        ],
+        "langgraph_path": [
+          "__pregel_pull",
+          "model"
+        ],
+        "langgraph_checkpoint_ns": "model:0cd39374-2f2c-142e-4d5c-1284dee78ab3"
+      }
+    },
+    "error": null,
+    "serialized": null,
+    "events": [
+      {
+        "name": "start",
+        "time": "2026-07-07T16:15:57.113692Z"
+      },
+      {
+        "name": "end",
+        "time": "2026-07-07T16:15:57.963386Z"
+      }
+    ],
+    "inputs": {
+      "messages": [
+        {
+          "content": "I was charged twice for CloudSync Pro. My email is alice@example.com \u2014 can you check my invoices?",
+          "additional_kwargs": {},
+          "response_metadata": {},
+          "type": "human",
+          "name": null,
+          "id": "aaafc863-4647-4589-b2e9-849f073be1ee"
+        }
+      ]
+    },
+    "outputs": {
+      "output": [
+        {
+          "graph": null,
+          "update": {
+            "messages": [
+              {
+                "content": "",
+                "additional_kwargs": {
+                  "refusal": null
+                },
+                "response_metadata": {
+                  "token_usage": {
+                    "completion_tokens": 17,
+                    "prompt_tokens": 79,
+                    "total_tokens": 96,
+                    "completion_tokens_details": {
+                      "accepted_prediction_tokens": 0,
+                      "audio_tokens": 0,
+                      "reasoning_tokens": 0,
+                      "rejected_prediction_tokens": 0
+                    },
+                    "prompt_tokens_details": {
+                      "audio_tokens": 0,
+                      "cached_tokens": 0
+                    }
+                  },
+                  "model_provider": "openai",
+                  "model_name": "gpt-4o-mini-2024-07-18",
+                  "system_fingerprint": "fp_86eb24cbce",
+                  "id": "chatcmpl-Dz2kfvyx3tznOseT1FBTFGGnYglHf",
+                  "service_tier": "default",
+                  "finish_reason": "tool_calls",
+                  "logprobs": null
+                },
+                "type": "ai",
+                "name": null,
+                "id": "lc_run--019f3d5d-5eba-7413-913b-df5aaebdbdba-0",
+                "tool_calls": [
+                  {
+                    "name": "lookup_invoice",
+                    "args": {
+                      "customer_email": "alice@example.com"
+                    },
+                    "id": "call_Dv5pt9r1ztggYi4ihxswOg5A",
+                    "type": "tool_call"
+                  }
+                ],
+                "invalid_tool_calls": [],
+                "usage_metadata": {
+                  "input_tokens": 79,
+                  "output_tokens": 17,
+                  "total_tokens": 96,
+                  "input_token_details": {
+                    "audio": 0,
+                    "cache_read": 0
+                  },
+                  "output_token_details": {
+                    "audio": 0,
+                    "reasoning": 0
+                  }
+                }
+              }
+            ]
+          },
+          "resume": null,
+          "goto": []
+        }
+      ]
+    },
+    "reference_example_id": null,
+    "parent_run_id": "019f3d5d-5eb8-7d81-983a-d8e28dffacc6",
+    "tags": [
+      "graph:step:1"
+    ],
+    "attachments": {},
+    "session_name": "default",
+    "session_id": null,
+    "dotted_order": "20260707T161557112329Z019f3d5d-5eb8-7d81-983a-d8e28dffacc6.20260707T161557113692Z019f3d5d-5eb9-7ef0-a9bd-53f0f70f225f",
+    "trace_id": "019f3d5d-5eb8-7d81-983a-d8e28dffacc6",
+    "dangerously_allow_filesystem": false,
+    "replicas": []
+  },
+  {
+    "id": "019f3d5d-620c-7122-b3ea-e77be9809e7e",
+    "name": "lookup_invoice",
+    "start_time": "2026-07-07T16:15:57.964365Z",
+    "run_type": "tool",
+    "end_time": "2026-07-07T16:15:57.964655Z",
+    "extra": {
+      "color": "green",
+      "tool_call_id": "call_Dv5pt9r1ztggYi4ihxswOg5A",
+      "metadata": {
+        "ls_integration": "langchain_create_agent",
+        "langgraph_step": 2,
+        "langgraph_node": "tools",
+        "langgraph_triggers": [
+          "__pregel_push"
+        ],
+        "langgraph_path": [
+          "__pregel_push",
+          0,
+          false
+        ],
+        "langgraph_checkpoint_ns": "tools:52c6b7ca-345f-078d-6458-64178336253d",
+        "checkpoint_ns": "tools:52c6b7ca-345f-078d-6458-64178336253d"
+      }
+    },
+    "error": null,
+    "serialized": {
+      "name": "lookup_invoice",
+      "description": "Look up recent invoices for a customer by email."
+    },
+    "events": [
+      {
+        "name": "start",
+        "time": "2026-07-07T16:15:57.964365Z"
+      },
+      {
+        "name": "end",
+        "time": "2026-07-07T16:15:57.964655Z"
+      }
+    ],
+    "inputs": {
+      "customer_email": "alice@example.com"
+    },
+    "outputs": {
+      "output": {
+        "content": "[{\"id\": \"INV-2024-001\", \"amount\": \"$49.00\", \"date\": \"2024-01-15\", \"status\": \"paid\"}, {\"id\": \"INV-2024-002\", \"amount\": \"$49.00\", \"date\": \"2024-02-15\", \"status\": \"paid\"}]",
+        "additional_kwargs": {},
+        "response_metadata": {},
+        "type": "tool",
+        "name": "lookup_invoice",
+        "id": "b64b3850-2752-493a-bd35-00e29baee98f",
+        "tool_call_id": "call_Dv5pt9r1ztggYi4ihxswOg5A",
+        "artifact": null,
+        "status": "success"
+      }
+    },
+    "reference_example_id": null,
+    "parent_run_id": "019f3d5d-620b-7b83-a8fc-4639e48b0130",
+    "tags": [
+      "seq:step:1"
+    ],
+    "attachments": {},
+    "session_name": "default",
+    "session_id": null,
+    "dotted_order": "20260707T161557112329Z019f3d5d-5eb8-7d81-983a-d8e28dffacc6.20260707T161557963827Z019f3d5d-620b-7b83-a8fc-4639e48b0130.20260707T161557964365Z019f3d5d-620c-7122-b3ea-e77be9809e7e",
+    "trace_id": "019f3d5d-5eb8-7d81-983a-d8e28dffacc6",
+    "dangerously_allow_filesystem": false,
+    "replicas": []
+  },
+  {
+    "id": "019f3d5d-620b-7b83-a8fc-4639e48b0130",
+    "name": "tools",
+    "start_time": "2026-07-07T16:15:57.963827Z",
+    "run_type": "chain",
+    "end_time": "2026-07-07T16:15:57.964866Z",
+    "extra": {
+      "metadata": {
+        "ls_integration": "langchain_create_agent",
+        "langgraph_step": 2,
+        "langgraph_node": "tools",
+        "langgraph_triggers": [
+          "__pregel_push"
+        ],
+        "langgraph_path": [
+          "__pregel_push",
+          0,
+          false
+        ],
+        "langgraph_checkpoint_ns": "tools:52c6b7ca-345f-078d-6458-64178336253d"
+      }
+    },
+    "error": null,
+    "serialized": null,
+    "events": [
+      {
+        "name": "start",
+        "time": "2026-07-07T16:15:57.963827Z"
+      },
+      {
+        "name": "end",
+        "time": "2026-07-07T16:15:57.964866Z"
+      }
+    ],
+    "inputs": {
+      "input": [
+        {
+          "name": "lookup_invoice",
+          "args": {
+            "customer_email": "alice@example.com"
+          },
+          "id": "call_Dv5pt9r1ztggYi4ihxswOg5A",
+          "type": "tool_call"
+        }
+      ]
+    },
+    "outputs": {
+      "messages": [
+        {
+          "content": "[{\"id\": \"INV-2024-001\", \"amount\": \"$49.00\", \"date\": \"2024-01-15\", \"status\": \"paid\"}, {\"id\": \"INV-2024-002\", \"amount\": \"$49.00\", \"date\": \"2024-02-15\", \"status\": \"paid\"}]",
+          "additional_kwargs": {},
+          "response_metadata": {},
+          "type": "tool",
+          "name": "lookup_invoice",
+          "id": "b64b3850-2752-493a-bd35-00e29baee98f",
+          "tool_call_id": "call_Dv5pt9r1ztggYi4ihxswOg5A",
+          "artifact": null,
+          "status": "success"
+        }
+      ]
+    },
+    "reference_example_id": null,
+    "parent_run_id": "019f3d5d-5eb8-7d81-983a-d8e28dffacc6",
+    "tags": [
+      "graph:step:2"
+    ],
+    "attachments": {},
+    "session_name": "default",
+    "session_id": null,
+    "dotted_order": "20260707T161557112329Z019f3d5d-5eb8-7d81-983a-d8e28dffacc6.20260707T161557963827Z019f3d5d-620b-7b83-a8fc-4639e48b0130",
+    "trace_id": "019f3d5d-5eb8-7d81-983a-d8e28dffacc6",
+    "dangerously_allow_filesystem": false,
+    "replicas": []
+  },
+  {
+    "id": "019f3d5d-620d-7600-ae58-6c860dad4ee3",
+    "name": "ChatOpenAI",
+    "start_time": "2026-07-07T16:15:57.965424Z",
+    "run_type": "llm",
+    "end_time": "2026-07-07T16:16:00.189285Z",
+    "extra": {
+      "invocation_params": {
+        "model": "gpt-4o-mini",
+        "model_name": "gpt-4o-mini",
+        "stream": false,
+        "_type": "openai-chat",
+        "stop": null,
+        "tools": [
+          {
+            "type": "function",
+            "function": {
+              "name": "lookup_invoice",
+              "description": "Look up recent invoices for a customer by email.",
+              "parameters": {
+                "properties": {
+                  "customer_email": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "customer_email"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        ]
+      },
+      "options": {
+        "stop": null
+      },
+      "batch_size": 1,
+      "metadata": {
+        "ls_integration": "langchain_chat_model",
+        "langgraph_step": 3,
+        "langgraph_node": "model",
+        "langgraph_triggers": [
+          "branch:to:model"
+        ],
+        "langgraph_path": [
+          "__pregel_pull",
+          "model"
+        ],
+        "langgraph_checkpoint_ns": "model:7f68e29f-bc99-04d7-ed7b-726235312541",
+        "checkpoint_ns": "model:7f68e29f-bc99-04d7-ed7b-726235312541",
+        "ls_provider": "openai",
+        "ls_model_name": "gpt-4o-mini",
+        "ls_model_type": "chat",
+        "ls_temperature": null,
+        "lc_versions": {
+          "langchain-core": "1.4.8",
+          "langchain": "1.3.11",
+          "langchain-openai": "1.3.3"
+        }
+      }
+    },
+    "error": null,
+    "serialized": {
+      "lc": 1,
+      "type": "constructor",
+      "id": [
+        "langchain",
+        "chat_models",
+        "openai",
+        "ChatOpenAI"
+      ],
+      "kwargs": {
+        "output_version": null,
+        "model_name": "gpt-4o-mini",
+        "openai_api_key": {
+          "lc": 1,
+          "type": "secret",
+          "id": [
+            "OPENAI_API_KEY"
+          ]
+        },
+        "openai_proxy": null,
+        "stream_usage": true
+      },
+      "name": "ChatOpenAI"
+    },
+    "events": [
+      {
+        "name": "start",
+        "time": "2026-07-07T16:15:57.965424Z"
+      },
+      {
+        "name": "end",
+        "time": "2026-07-07T16:16:00.189285Z"
+      }
+    ],
+    "inputs": {
+      "prompts": [
+        "System: You are TechCorp's billing support agent.\nHuman: I was charged twice for CloudSync Pro. My email is alice@example.com \u2014 can you check my invoices?\nAI: [{'name': 'lookup_invoice', 'args': {'customer_email': 'alice@example.com'}, 'id': 'call_Dv5pt9r1ztggYi4ihxswOg5A', 'type': 'tool_call'}]\nTool: [{\"id\": \"INV-2024-001\", \"amount\": \"$49.00\", \"date\": \"2024-01-15\", \"status\": \"paid\"}, {\"id\": \"INV-2024-002\", \"amount\": \"$49.00\", \"date\": \"2024-02-15\", \"status\": \"paid\"}]"
+      ]
+    },
+    "outputs": {
+      "generations": [
+        [
+          {
+            "text": "I found two invoices for your CloudSync Pro subscription:\n\n1. **Invoice ID**: INV-2024-001\n   - **Amount**: $49.00\n   - **Date**: January 15, 2024\n   - **Status**: Paid\n\n2. **Invoice ID**: INV-2024-002\n   - **Amount**: $49.00\n   - **Date**: February 15, 2024\n   - **Status**: Paid\n\nIt appears that you were indeed charged twice, once on January 15 and again on February 15, both for $49.00. If you believe this is an error or would like to discuss this further, please let me know!",
+            "generation_info": {
+              "finish_reason": "stop",
+              "logprobs": null
+            },
+            "type": "ChatGeneration",
+            "message": {
+              "lc": 1,
+              "type": "constructor",
+              "id": [
+                "langchain",
+                "schema",
+                "messages",
+                "AIMessage"
+              ],
+              "kwargs": {
+                "content": "I found two invoices for your CloudSync Pro subscription:\n\n1. **Invoice ID**: INV-2024-001\n   - **Amount**: $49.00\n   - **Date**: January 15, 2024\n   - **Status**: Paid\n\n2. **Invoice ID**: INV-2024-002\n   - **Amount**: $49.00\n   - **Date**: February 15, 2024\n   - **Status**: Paid\n\nIt appears that you were indeed charged twice, once on January 15 and again on February 15, both for $49.00. If you believe this is an error or would like to discuss this further, please let me know!",
+                "additional_kwargs": {
+                  "refusal": null
+                },
+                "response_metadata": {
+                  "token_usage": {
+                    "completion_tokens": 154,
+                    "prompt_tokens": 178,
+                    "total_tokens": 332,
+                    "completion_tokens_details": {
+                      "accepted_prediction_tokens": 0,
+                      "audio_tokens": 0,
+                      "reasoning_tokens": 0,
+                      "rejected_prediction_tokens": 0
+                    },
+                    "prompt_tokens_details": {
+                      "audio_tokens": 0,
+                      "cached_tokens": 0
+                    }
+                  },
+                  "model_provider": "openai",
+                  "model_name": "gpt-4o-mini-2024-07-18",
+                  "system_fingerprint": "fp_86eb24cbce",
+                  "id": "chatcmpl-Dz2kgOTe0RStUBpBsUPQZl1iPnKBV",
+                  "service_tier": "default",
+                  "finish_reason": "stop",
+                  "logprobs": null
+                },
+                "type": "ai",
+                "id": "lc_run--019f3d5d-620d-7600-ae58-6c860dad4ee3-0",
+                "usage_metadata": {
+                  "input_tokens": 178,
+                  "output_tokens": 154,
+                  "total_tokens": 332,
+                  "input_token_details": {
+                    "audio": 0,
+                    "cache_read": 0
+                  },
+                  "output_token_details": {
+                    "audio": 0,
+                    "reasoning": 0
+                  }
+                },
+                "tool_calls": [],
+                "invalid_tool_calls": []
+              }
+            }
+          }
+        ]
+      ],
+      "llm_output": {
+        "token_usage": {
+          "completion_tokens": 154,
+          "prompt_tokens": 178,
+          "total_tokens": 332,
+          "completion_tokens_details": {
+            "accepted_prediction_tokens": 0,
+            "audio_tokens": 0,
+            "reasoning_tokens": 0,
+            "rejected_prediction_tokens": 0
+          },
+          "prompt_tokens_details": {
+            "audio_tokens": 0,
+            "cached_tokens": 0
+          }
+        },
+        "model_provider": "openai",
+        "model_name": "gpt-4o-mini-2024-07-18",
+        "system_fingerprint": "fp_86eb24cbce",
+        "id": "chatcmpl-Dz2kgOTe0RStUBpBsUPQZl1iPnKBV",
+        "service_tier": "default"
+      },
+      "run": null,
+      "type": "LLMResult"
+    },
+    "reference_example_id": null,
+    "parent_run_id": "019f3d5d-620d-7600-ae58-6c79b000f1b7",
+    "tags": [
+      "seq:step:1"
+    ],
+    "attachments": {},
+    "session_name": "default",
+    "session_id": null,
+    "dotted_order": "20260707T161557112329Z019f3d5d-5eb8-7d81-983a-d8e28dffacc6.20260707T161557965057Z019f3d5d-620d-7600-ae58-6c79b000f1b7.20260707T161557965424Z019f3d5d-620d-7600-ae58-6c860dad4ee3",
+    "trace_id": "019f3d5d-5eb8-7d81-983a-d8e28dffacc6",
+    "dangerously_allow_filesystem": false,
+    "replicas": []
+  },
+  {
+    "id": "019f3d5d-620d-7600-ae58-6c79b000f1b7",
+    "name": "model",
+    "start_time": "2026-07-07T16:15:57.965057Z",
+    "run_type": "chain",
+    "end_time": "2026-07-07T16:16:00.189506Z",
+    "extra": {
+      "metadata": {
+        "ls_integration": "langchain_create_agent",
+        "langgraph_step": 3,
+        "langgraph_node": "model",
+        "langgraph_triggers": [
+          "branch:to:model"
+        ],
+        "langgraph_path": [
+          "__pregel_pull",
+          "model"
+        ],
+        "langgraph_checkpoint_ns": "model:7f68e29f-bc99-04d7-ed7b-726235312541"
+      }
+    },
+    "error": null,
+    "serialized": null,
+    "events": [
+      {
+        "name": "start",
+        "time": "2026-07-07T16:15:57.965057Z"
+      },
+      {
+        "name": "end",
+        "time": "2026-07-07T16:16:00.189506Z"
+      }
+    ],
+    "inputs": {
+      "messages": [
+        {
+          "content": "I was charged twice for CloudSync Pro. My email is alice@example.com \u2014 can you check my invoices?",
+          "additional_kwargs": {},
+          "response_metadata": {},
+          "type": "human",
+          "name": null,
+          "id": "aaafc863-4647-4589-b2e9-849f073be1ee"
+        },
+        {
+          "content": "",
+          "additional_kwargs": {
+            "refusal": null
+          },
+          "response_metadata": {
+            "token_usage": {
+              "completion_tokens": 17,
+              "prompt_tokens": 79,
+              "total_tokens": 96,
+              "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0
+              },
+              "prompt_tokens_details": {
+                "audio_tokens": 0,
+                "cached_tokens": 0
+              }
+            },
+            "model_provider": "openai",
+            "model_name": "gpt-4o-mini-2024-07-18",
+            "system_fingerprint": "fp_86eb24cbce",
+            "id": "chatcmpl-Dz2kfvyx3tznOseT1FBTFGGnYglHf",
+            "service_tier": "default",
+            "finish_reason": "tool_calls",
+            "logprobs": null
+          },
+          "type": "ai",
+          "name": null,
+          "id": "lc_run--019f3d5d-5eba-7413-913b-df5aaebdbdba-0",
+          "tool_calls": [
+            {
+              "name": "lookup_invoice",
+              "args": {
+                "customer_email": "alice@example.com"
+              },
+              "id": "call_Dv5pt9r1ztggYi4ihxswOg5A",
+              "type": "tool_call"
+            }
+          ],
+          "invalid_tool_calls": [],
+          "usage_metadata": {
+            "input_tokens": 79,
+            "output_tokens": 17,
+            "total_tokens": 96,
+            "input_token_details": {
+              "audio": 0,
+              "cache_read": 0
+            },
+            "output_token_details": {
+              "audio": 0,
+              "reasoning": 0
+            }
+          }
+        },
+        {
+          "content": "[{\"id\": \"INV-2024-001\", \"amount\": \"$49.00\", \"date\": \"2024-01-15\", \"status\": \"paid\"}, {\"id\": \"INV-2024-002\", \"amount\": \"$49.00\", \"date\": \"2024-02-15\", \"status\": \"paid\"}]",
+          "additional_kwargs": {},
+          "response_metadata": {},
+          "type": "tool",
+          "name": "lookup_invoice",
+          "id": "b64b3850-2752-493a-bd35-00e29baee98f",
+          "tool_call_id": "call_Dv5pt9r1ztggYi4ihxswOg5A",
+          "artifact": null,
+          "status": "success"
+        }
+      ]
+    },
+    "outputs": {
+      "output": [
+        {
+          "graph": null,
+          "update": {
+            "messages": [
+              {
+                "content": "I found two invoices for your CloudSync Pro subscription:\n\n1. **Invoice ID**: INV-2024-001\n   - **Amount**: $49.00\n   - **Date**: January 15, 2024\n   - **Status**: Paid\n\n2. **Invoice ID**: INV-2024-002\n   - **Amount**: $49.00\n   - **Date**: February 15, 2024\n   - **Status**: Paid\n\nIt appears that you were indeed charged twice, once on January 15 and again on February 15, both for $49.00. If you believe this is an error or would like to discuss this further, please let me know!",
+                "additional_kwargs": {
+                  "refusal": null
+                },
+                "response_metadata": {
+                  "token_usage": {
+                    "completion_tokens": 154,
+                    "prompt_tokens": 178,
+                    "total_tokens": 332,
+                    "completion_tokens_details": {
+                      "accepted_prediction_tokens": 0,
+                      "audio_tokens": 0,
+                      "reasoning_tokens": 0,
+                      "rejected_prediction_tokens": 0
+                    },
+                    "prompt_tokens_details": {
+                      "audio_tokens": 0,
+                      "cached_tokens": 0
+                    }
+                  },
+                  "model_provider": "openai",
+                  "model_name": "gpt-4o-mini-2024-07-18",
+                  "system_fingerprint": "fp_86eb24cbce",
+                  "id": "chatcmpl-Dz2kgOTe0RStUBpBsUPQZl1iPnKBV",
+                  "service_tier": "default",
+                  "finish_reason": "stop",
+                  "logprobs": null
+                },
+                "type": "ai",
+                "name": null,
+                "id": "lc_run--019f3d5d-620d-7600-ae58-6c860dad4ee3-0",
+                "tool_calls": [],
+                "invalid_tool_calls": [],
+                "usage_metadata": {
+                  "input_tokens": 178,
+                  "output_tokens": 154,
+                  "total_tokens": 332,
+                  "input_token_details": {
+                    "audio": 0,
+                    "cache_read": 0
+                  },
+                  "output_token_details": {
+                    "audio": 0,
+                    "reasoning": 0
+                  }
+                }
+              }
+            ]
+          },
+          "resume": null,
+          "goto": []
+        }
+      ]
+    },
+    "reference_example_id": null,
+    "parent_run_id": "019f3d5d-5eb8-7d81-983a-d8e28dffacc6",
+    "tags": [
+      "graph:step:3"
+    ],
+    "attachments": {},
+    "session_name": "default",
+    "session_id": null,
+    "dotted_order": "20260707T161557112329Z019f3d5d-5eb8-7d81-983a-d8e28dffacc6.20260707T161557965057Z019f3d5d-620d-7600-ae58-6c79b000f1b7",
+    "trace_id": "019f3d5d-5eb8-7d81-983a-d8e28dffacc6",
+    "dangerously_allow_filesystem": false,
+    "replicas": []
+  },
+  {
+    "id": "019f3d5d-5eb8-7d81-983a-d8e28dffacc6",
+    "name": "LangGraph",
+    "start_time": "2026-07-07T16:15:57.112329Z",
+    "run_type": "chain",
+    "end_time": "2026-07-07T16:16:00.189709Z",
+    "extra": {
+      "metadata": {
+        "ls_integration": "langchain_create_agent"
+      }
+    },
+    "error": null,
+    "serialized": null,
+    "events": [
+      {
+        "name": "start",
+        "time": "2026-07-07T16:15:57.112329Z"
+      },
+      {
+        "name": "end",
+        "time": "2026-07-07T16:16:00.189709Z"
+      }
+    ],
+    "inputs": {
+      "messages": [
+        [
+          "user",
+          "I was charged twice for CloudSync Pro. My email is alice@example.com \u2014 can you check my invoices?"
+        ]
+      ]
+    },
+    "outputs": {
+      "messages": [
+        {
+          "content": "I was charged twice for CloudSync Pro. My email is alice@example.com \u2014 can you check my invoices?",
+          "additional_kwargs": {},
+          "response_metadata": {},
+          "type": "human",
+          "name": null,
+          "id": "aaafc863-4647-4589-b2e9-849f073be1ee"
+        },
+        {
+          "content": "",
+          "additional_kwargs": {
+            "refusal": null
+          },
+          "response_metadata": {
+            "token_usage": {
+              "completion_tokens": 17,
+              "prompt_tokens": 79,
+              "total_tokens": 96,
+              "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0
+              },
+              "prompt_tokens_details": {
+                "audio_tokens": 0,
+                "cached_tokens": 0
+              }
+            },
+            "model_provider": "openai",
+            "model_name": "gpt-4o-mini-2024-07-18",
+            "system_fingerprint": "fp_86eb24cbce",
+            "id": "chatcmpl-Dz2kfvyx3tznOseT1FBTFGGnYglHf",
+            "service_tier": "default",
+            "finish_reason": "tool_calls",
+            "logprobs": null
+          },
+          "type": "ai",
+          "name": null,
+          "id": "lc_run--019f3d5d-5eba-7413-913b-df5aaebdbdba-0",
+          "tool_calls": [
+            {
+              "name": "lookup_invoice",
+              "args": {
+                "customer_email": "alice@example.com"
+              },
+              "id": "call_Dv5pt9r1ztggYi4ihxswOg5A",
+              "type": "tool_call"
+            }
+          ],
+          "invalid_tool_calls": [],
+          "usage_metadata": {
+            "input_tokens": 79,
+            "output_tokens": 17,
+            "total_tokens": 96,
+            "input_token_details": {
+              "audio": 0,
+              "cache_read": 0
+            },
+            "output_token_details": {
+              "audio": 0,
+              "reasoning": 0
+            }
+          }
+        },
+        {
+          "content": "[{\"id\": \"INV-2024-001\", \"amount\": \"$49.00\", \"date\": \"2024-01-15\", \"status\": \"paid\"}, {\"id\": \"INV-2024-002\", \"amount\": \"$49.00\", \"date\": \"2024-02-15\", \"status\": \"paid\"}]",
+          "additional_kwargs": {},
+          "response_metadata": {},
+          "type": "tool",
+          "name": "lookup_invoice",
+          "id": "b64b3850-2752-493a-bd35-00e29baee98f",
+          "tool_call_id": "call_Dv5pt9r1ztggYi4ihxswOg5A",
+          "artifact": null,
+          "status": "success"
+        },
+        {
+          "content": "I found two invoices for your CloudSync Pro subscription:\n\n1. **Invoice ID**: INV-2024-001\n   - **Amount**: $49.00\n   - **Date**: January 15, 2024\n   - **Status**: Paid\n\n2. **Invoice ID**: INV-2024-002\n   - **Amount**: $49.00\n   - **Date**: February 15, 2024\n   - **Status**: Paid\n\nIt appears that you were indeed charged twice, once on January 15 and again on February 15, both for $49.00. If you believe this is an error or would like to discuss this further, please let me know!",
+          "additional_kwargs": {
+            "refusal": null
+          },
+          "response_metadata": {
+            "token_usage": {
+              "completion_tokens": 154,
+              "prompt_tokens": 178,
+              "total_tokens": 332,
+              "completion_tokens_details": {
+                "accepted_prediction_tokens": 0,
+                "audio_tokens": 0,
+                "reasoning_tokens": 0,
+                "rejected_prediction_tokens": 0
+              },
+              "prompt_tokens_details": {
+                "audio_tokens": 0,
+                "cached_tokens": 0
+              }
+            },
+            "model_provider": "openai",
+            "model_name": "gpt-4o-mini-2024-07-18",
+            "system_fingerprint": "fp_86eb24cbce",
+            "id": "chatcmpl-Dz2kgOTe0RStUBpBsUPQZl1iPnKBV",
+            "service_tier": "default",
+            "finish_reason": "stop",
+            "logprobs": null
+          },
+          "type": "ai",
+          "name": null,
+          "id": "lc_run--019f3d5d-620d-7600-ae58-6c860dad4ee3-0",
+          "tool_calls": [],
+          "invalid_tool_calls": [],
+          "usage_metadata": {
+            "input_tokens": 178,
+            "output_tokens": 154,
+            "total_tokens": 332,
+            "input_token_details": {
+              "audio": 0,
+              "cache_read": 0
+            },
+            "output_token_details": {
+              "audio": 0,
+              "reasoning": 0
+            }
+          }
+        }
+      ]
+    },
+    "reference_example_id": null,
+    "parent_run_id": null,
+    "tags": [],
+    "attachments": {},
+    "session_name": "default",
+    "session_id": null,
+    "dotted_order": "20260707T161557112329Z019f3d5d-5eb8-7d81-983a-d8e28dffacc6",
+    "trace_id": "019f3d5d-5eb8-7d81-983a-d8e28dffacc6",
+    "dangerously_allow_filesystem": false,
+    "replicas": []
+  }
+]
