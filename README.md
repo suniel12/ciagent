@@ -150,6 +150,10 @@ queries:
       any_expected_in_answer: ["pip install", "ciagent"]
     path:
       expected_tools: [retrieve_docs]
+    retrieval:
+      tool: retrieve_docs      # assert on what the retriever actually returned
+      forbid_empty: true       # empty retrieval + confident answer = ungrounded
+      expected_sources: [install.md]
     cost:
       max_llm_calls: 8
 
@@ -167,7 +171,7 @@ ciagent test --mock       # start here: zero-cost with synthetic traces
 ciagent test              # run live against your real agent
 ```
 
-`ciagent test` evaluates each query through 3 layers — correctness, path, and cost:
+`ciagent test` evaluates each query through 4 layers — correctness, path, retrieval, and cost. The retrieval layer reads the retriever tool's captured result and warns on empty retrievals, missing sources, and count floors — deterministically, and it SKIPs (never guesses) when a result wasn't captured or doesn't parse:
 
 ```
 ============================================================

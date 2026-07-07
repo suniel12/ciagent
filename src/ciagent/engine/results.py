@@ -32,14 +32,28 @@ class LayerResult:
     messages: list[str] = field(default_factory=list)
 
 
+def _skip_layer() -> LayerResult:
+    return LayerResult(
+        status=LayerStatus.SKIP,
+        details={},
+        messages=["No assertions configured"],
+    )
+
+
 @dataclass
 class QueryResult:
-    """Aggregated result for a single golden query across all three layers."""
+    """Aggregated result for a single golden query across all layers.
+
+    Layer order of evaluation: correctness (1), path (2), retrieval (2.5),
+    cost (3). Retrieval defaults to SKIP so pre-F4 construction sites and
+    serialized results stay valid unchanged.
+    """
     query: str
     correctness: LayerResult
     path: LayerResult
     cost: LayerResult
     trace: Any = None  # Using Any to avoid circular imports without TYPE_CHECKING string annotations parsing issues
+    retrieval: LayerResult = field(default_factory=_skip_layer)
 
     @property
     def hard_fail(self) -> bool:
@@ -48,8 +62,9 @@ class QueryResult:
 
     @property
     def has_warnings(self) -> bool:
-        """True if path or cost layers produced warnings."""
+        """True if path, retrieval, or cost layers produced warnings."""
         return (
             self.path.status == LayerStatus.WARN
+            or self.retrieval.status == LayerStatus.WARN
             or self.cost.status == LayerStatus.WARN
         )

@@ -277,6 +277,17 @@
           ],
           "default": null
         },
+        "retrieval": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RetrievalSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "cost": {
           "anyOf": [
             {
@@ -413,7 +424,7 @@
             }
           ],
           "default": null,
-          "description": "Tools that should be called (used for recall calculation)",
+          "description": "Tools that should be called. A missing expected tool produces a WARN (recall gates at 1.0 unless min_tool_recall loosens it). An explicit empty list asserts that NO tools are called.",
           "title": "Expected Tools"
         },
         "forbidden_tools": {
@@ -456,7 +467,7 @@
             }
           ],
           "default": null,
-          "description": "|expected \u2229 used| / |expected|",
+          "description": "|expected \u2229 used| / |expected|. Defaults to 1.0 when expected_tools is set.",
           "title": "Min Tool Recall"
         },
         "min_tool_precision": {
@@ -550,6 +561,213 @@
         }
       },
       "title": "PathSpec",
+      "type": "object"
+    },
+    "RetrievalSpec": {
+      "description": "Layer 2.5: Retrieval assertions \u2014 deterministic checks on the retriever\ntool's captured result.\n\nResult-interpretation contract (eng review 2026-07-05, binding): the layer\nreads `ToolCall.result` with explicit rules and SKIPs whenever it cannot \u2014\nunparseable results, uncaptured results \u2014 never guesses. Empty means None,\n[], \"\", whitespace-only, or a literal match on `empty_markers`; anything\nelse is non-empty. Retrieval never hard-fails in v1: exceedances WARN.",
+      "properties": {
+        "tool": {
+          "description": "Name of the retriever tool whose captured result is evaluated",
+          "title": "Tool",
+          "type": "string"
+        },
+        "forbid_empty": {
+          "default": false,
+          "description": "WARN when the retriever returned nothing but the agent still produced a substantive answer (an ungrounded answer). An answer matching `refusal_markers` counts as a refusal and passes.",
+          "title": "Forbid Empty",
+          "type": "boolean"
+        },
+        "min_results": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Minimum number of retrieved items. Counted only when the result parses as a list \u2014 otherwise the check SKIPs, never guesses.",
+          "title": "Min Results"
+        },
+        "expected_sources": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Doc IDs/paths that must appear in the retrieved results (case-insensitive substring match on the serialized result)",
+          "title": "Expected Sources"
+        },
+        "facts_in_context": {
+          "default": false,
+          "description": "Cross-check that every correctness fact term (expected_in_answer / any_expected_in_answer) also appears in the retrieved chunks. Informational-only in v1: reported, never WARNs.",
+          "title": "Facts In Context",
+          "type": "boolean"
+        },
+        "result_format": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Optional parsing hint for ToolCall.result: 'list', 'json', or 'text'. Results that don't parse as the hinted format SKIP.",
+          "title": "Result Format"
+        },
+        "empty_markers": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Literal no-result strings that count as an empty retrieval, e.g. 'No results found' (case-insensitive exact match after strip)",
+          "title": "Empty Markers"
+        },
+        "refusal_markers": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Answer substrings that count as a refusal for forbid_empty (case-insensitive). Overrides the built-in refusal marker list.",
+          "title": "Refusal Markers"
+        }
+      },
+      "required": [
+        "tool"
+      ],
+      "title": "RetrievalSpec",
+      "type": "object"
+    },
+    "ScenarioSpec": {
+      "description": "A multi-turn conversation scenario for `ciagent simulate`.\n\nScripted mode (`turns:` given) is deterministic and needs no persona LLM \u2014\nit is the CI / zero-key path. Generative personas (persona/goal without\nturns) are the finder path and ship in a later 0.9 phase.",
+      "properties": {
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Scenario identifier for reports",
+          "title": "Name"
+        },
+        "persona": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Simulated-user persona (generative mode)",
+          "title": "Persona"
+        },
+        "goal": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the simulated user is trying to accomplish",
+          "title": "Goal"
+        },
+        "max_turns": {
+          "default": 8,
+          "description": "Hard cap on conversation turns",
+          "minimum": 1,
+          "title": "Max Turns",
+          "type": "integer"
+        },
+        "turns": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Scripted user messages (deterministic mode); the conversation ends when these are exhausted or max_turns is reached",
+          "title": "Turns"
+        },
+        "per_turn": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnChecks"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Checks evaluated on EVERY turn's trace"
+        },
+        "outcome": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TurnChecks"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Checks evaluated once at the END of the conversation as the verdict \u2014 never as a stop condition"
+        },
+        "stop_when": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StopWhen"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Explicit deterministic early-exit event"
+        }
+      },
+      "title": "ScenarioSpec",
       "type": "object"
     },
     "SpanAssert": {
@@ -673,6 +891,77 @@
       ],
       "title": "SpanSelector",
       "type": "object"
+    },
+    "StopWhen": {
+      "description": "Explicit early-exit condition for a scenario.\n\nTermination is deterministic and event-based only (eng review, binding):\nnever judge-based, never keyword-triggered. A scenario stops early when the\nnamed concrete event is observed in a turn's trace.",
+      "properties": {
+        "tool_called": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Stop after a turn in which the agent called this tool",
+          "title": "Tool Called"
+        }
+      },
+      "title": "StopWhen",
+      "type": "object"
+    },
+    "TurnChecks": {
+      "description": "Layer checks applied inside a scenario (per-turn or as the outcome).",
+      "properties": {
+        "correctness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CorrectnessSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "path": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PathSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "retrieval": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RetrievalSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "cost": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CostSpec"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "title": "TurnChecks",
+      "type": "object"
     }
   },
   "description": "Root schema for agentci_spec.yaml.",
@@ -704,8 +993,21 @@
         }
       ],
       "default": null,
-      "description": "Python dotted path to the agent runner callable, e.g. 'myagent.run:run_agent'. The function must accept (query: str) and return an ciagent.models.Trace. When set, 'agentci test' can invoke the agent directly without pytest.",
+      "description": "Python dotted path to the agent runner callable, e.g. 'myagent.run:run_agent'. The function must accept (query: str) and return an ciagent.models.Trace. When set, 'ciagent test' can invoke the agent directly without pytest.",
       "title": "Runner"
+    },
+    "conversation_runner": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Python dotted path to the multi-turn runner callable for `ciagent simulate`, e.g. 'myagent.run:respond'. The function must accept (messages: list[dict]) with {'role', 'content'} entries and return the assistant's reply as a str (or a ciagent.models.Trace). Fresh state per scenario; history is passed explicitly.",
+      "title": "Conversation Runner"
     },
     "defaults": {
       "anyOf": [
@@ -735,19 +1037,39 @@
       "description": "Global LLM judge settings: model, temperature, ensemble, structured_output",
       "title": "Judge Config"
     },
+    "persona_config": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Persona LLM settings for generative simulate scenarios: model (defaults to a cheap haiku-class model) and temperature (default 0.7)",
+      "title": "Persona Config"
+    },
     "queries": {
-      "description": "Test cases to evaluate",
+      "description": "Single-turn test cases to evaluate",
       "items": {
         "$ref": "#/$defs/GoldenQuery"
       },
-      "minItems": 1,
       "title": "Queries",
+      "type": "array"
+    },
+    "scenarios": {
+      "description": "Multi-turn conversation scenarios for `ciagent simulate`",
+      "items": {
+        "$ref": "#/$defs/ScenarioSpec"
+      },
+      "title": "Scenarios",
       "type": "array"
     }
   },
   "required": [
-    "agent",
-    "queries"
+    "agent"
   ],
   "title": "AgentCISpec",
   "type": "object"

@@ -46,9 +46,11 @@ ciagent test --mock
 ciagent test
 ```
 
-Each query is evaluated through three layers: **correctness** (deterministic
+Each query is evaluated through four layers: **correctness** (deterministic
 checks first, LLM judge only if configured), **path** (expected/forbidden
-tools, loop detection), and **cost** (LLM calls, tokens, dollars).
+tools, loop detection), **retrieval** (deterministic assertions on the
+retriever tool's captured output — empty-retrieval gate, expected sources,
+count floors), and **cost** (LLM calls, tokens, dollars).
 
 ## 5. Next steps
 

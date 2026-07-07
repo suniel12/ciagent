@@ -54,6 +54,7 @@ class QueryAudit:
     judge_rationales: list[str] = field(default_factory=list)
     judge_errors: int = 0                  # judge calls that raised (API down, no key)
     label: Optional[bool] = None           # hand label, if provided
+    retrieval_empty: Optional[bool] = None # True = judged against empty retrieval; None = unknown/not checked
 
     @property
     def has_judge(self) -> bool:
@@ -79,6 +80,12 @@ class QueryAudit:
     def false_pass(self) -> bool:
         """The killer row: judge passed what a deterministic check failed."""
         return self.checkable and self.judge_verdict is True and self.det_verdict is False
+
+    @property
+    def judged_against_empty_retrieval(self) -> bool:
+        """The study's insight #2, mechanized: the judge graded an answer
+        whose retrieval was empty — its ground truth was already lost."""
+        return self.has_judge and self.retrieval_empty is True
 
 
 @dataclass
@@ -110,6 +117,13 @@ class JudgeAuditReport:
     @property
     def false_passes(self) -> list[QueryAudit]:
         return [q for q in self.checkable_queries if q.false_pass]
+
+    @property
+    def empty_retrieval_judged(self) -> list[QueryAudit]:
+        """Judged queries whose recorded retrieval was empty — the judge
+        graded against nothing. Reported as its own row; does not move the
+        verdict (the retrieval layer owns the WARN at eval time)."""
+        return [q for q in self.queries if q.judged_against_empty_retrieval]
 
     @property
     def false_alarms(self) -> list[QueryAudit]:
@@ -234,6 +248,7 @@ def run_judge_audit(
     sample: Optional[int] = None,
     judge_fn: Optional[JudgeFn] = None,
     progress: Optional[Callable[[str], None]] = None,
+    retrieval_flags: Optional[dict[str, Optional[bool]]] = None,
 ) -> JudgeAuditReport:
     """Audit the spec's LLM judge against recorded answers.
 
@@ -245,6 +260,9 @@ def run_judge_audit(
         sample:   Cap on judged queries (cost control); first N in spec order.
         judge_fn: Injectable judge callable (tests); defaults to judge.run_judge.
         progress: Optional callback(str) for per-query progress output.
+        retrieval_flags: query text → whether the recorded retrieval was empty
+                  (from load_retrieval_flags_from_baselines). None values mean
+                  "could not tell" and are never reported as empty.
 
     Returns:
         JudgeAuditReport.
@@ -253,6 +271,7 @@ def run_judge_audit(
         from ciagent.engine.judge import run_judge as judge_fn  # type: ignore[no-redef]
 
     labels = labels or {}
+    retrieval_flags = retrieval_flags or {}
     audits: list[QueryAudit] = []
     judgment_only = 0
     judged_count = 0
@@ -268,7 +287,12 @@ def run_judge_audit(
             break
         judged_count += 1
 
-        audit = QueryAudit(query=gq.query, answer=answer, label=labels.get(gq.query))
+        audit = QueryAudit(
+            query=gq.query,
+            answer=answer,
+            label=labels.get(gq.query),
+            retrieval_empty=retrieval_flags.get(gq.query),
+        )
         audit.det_verdict = _deterministic_verdict(answer, gq.correctness)
         if audit.det_verdict is None:
             judgment_only += 1
@@ -396,6 +420,58 @@ def load_answers_from_baselines(baseline_dir: str) -> dict[str, str]:
         if answer:
             answers[str(query)] = str(answer)
     return answers
+
+
+def load_retrieval_flags_from_baselines(
+    baseline_dir: str,
+    spec: AgentCISpec,
+) -> dict[str, Optional[bool]]:
+    """Collect query → "was the recorded retrieval empty?" from baselines.
+
+    Only queries with a `retrieval:` spec are checked (the spec names which
+    tool is the retriever). Emptiness follows the layer's binding reading
+    rules via `is_empty_retrieval`; anything unreadable — retriever not
+    called, results not captured, unparseable, malformed baseline — maps to
+    None ("unknown"), never to a guess.
+    """
+    import glob
+    import json
+    from pathlib import Path
+
+    from ciagent.engine.retrieval import is_empty_retrieval
+    from ciagent.models import Trace
+
+    retrieval_specs = {
+        q.query: q.retrieval for q in spec.queries if q.retrieval is not None
+    }
+    if not retrieval_specs:
+        return {}
+
+    flags: dict[str, Optional[bool]] = {}
+    for f in sorted(glob.glob(str(Path(baseline_dir) / "**" / "*.json"), recursive=True)):
+        try:
+            with open(f, encoding="utf-8") as fh:
+                data = json.load(fh)
+        except (OSError, json.JSONDecodeError):
+            continue
+        trace_dict = data.get("trace") if isinstance(data.get("trace"), dict) else data
+        if not isinstance(trace_dict, dict) or "spans" not in trace_dict:
+            continue
+        query = (
+            trace_dict.get("query")
+            or trace_dict.get("test_name")
+            or (trace_dict.get("metadata") or {}).get("query")
+        )
+        rspec = retrieval_specs.get(str(query)) if query else None
+        if rspec is None:
+            continue
+        try:
+            trace = Trace(**trace_dict)
+        except Exception:  # noqa: BLE001 — malformed baseline → unknown, not a guess
+            flags[str(query)] = None
+            continue
+        flags[str(query)] = is_empty_retrieval(trace, rspec)
+    return flags
 
 
 def load_labels_file(path: str) -> dict[str, bool]:

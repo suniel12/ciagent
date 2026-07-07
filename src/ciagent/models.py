@@ -46,6 +46,7 @@ class DiffType(str, Enum):
     ROUTING_CHANGED = "routing_changed"           # Handoff target changed between runs
     GUARDRAILS_CHANGED = "guardrails_changed"     # Different guardrails triggered
     AVAILABLE_HANDOFFS_CHANGED = "available_handoffs_changed"  # Available routing options changed
+    RETRIEVAL_CHANGED = "retrieval_changed"       # Retriever returned a different source set than golden
 
 
 class TestResult(str, Enum):

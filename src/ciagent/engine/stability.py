@@ -45,6 +45,7 @@ class FlipSource(str, Enum):
     INFRA_ERROR = "infra-error"        # a judge call errored → fix nothing, retry
     MIXED = "mixed"                    # near-identical paraphrase + judge → ambiguous
     SIMULATION_VARIANCE = "simulation-variance"  # simulated user said different things → persona, not agent
+    RETRIEVAL_VARIANCE = "retrieval-variance"    # same tool sequence, retrieved set changed → retriever, not prompt
 
 
 @dataclass
@@ -229,12 +230,14 @@ def build_scenario_stability(run_results: list[list]) -> list[ScenarioStability]
         run_results: Run-major matrix of ScenarioResults; every run evaluates
                      the same scenarios in spec order, so alignment is by index.
 
-    Flip attribution adds a fourth source over the single-turn version:
+    Flip attribution adds two sources over the single-turn version:
     if the SIMULATED USER's turns differ across runs, the flip is
     `simulation-variance` — the persona said different things, and blaming
     the agent for that would be exactly the untrustworthy-eval failure mode
     this tool exists to kill. Scripted/replayed turns are identical by
-    construction, so they can never attribute there.
+    construction, so they can never attribute there. And when user turns and
+    tool sequences agree but the retriever returned a different set, the flip
+    is `retrieval-variance` (F4) — the retriever varied, not the agent.
     """
     if not run_results or not run_results[0]:
         return []
@@ -278,6 +281,21 @@ def _attribute_scenario_flip(per_run: list) -> tuple[FlipSource, str]:
     if len(tool_seqs) > 1:
         return FlipSource.AGENT_VARIANCE, "same user turns, tool sequence changed"
 
+    retriever_tool = _scenario_retriever_tool(per_run[0].scenario)
+    if retriever_tool:
+        from ciagent.engine.retrieval import retrieval_signature
+
+        sig_tuples = [
+            tuple(retrieval_signature(t.trace, retriever_tool) for t in r.turns)
+            for r in per_run
+        ]
+        if _retrieval_varied(sig_tuples):
+            return (
+                FlipSource.RETRIEVAL_VARIANCE,
+                "same user turns and tool sequence, retrieved set changed — "
+                "the retriever varied, not the agent",
+            )
+
     answers = {
         tuple(_normalize_answer(_extract_turn_answer(t)) for t in r.turns)
         for r in per_run
@@ -292,6 +310,37 @@ def _extract_turn_answer(turn) -> str:
     from ciagent.engine.runner import _extract_answer
 
     return _extract_answer(turn.trace)
+
+
+def _scenario_retriever_tool(scenario) -> Optional[str]:
+    """The retriever tool a scenario's checks assert on, if any."""
+    for checks in (scenario.per_turn, scenario.outcome):
+        if checks is not None and checks.retrieval is not None:
+            return checks.retrieval.tool
+    return None
+
+
+def _retrieval_varied(sig_tuples: list[tuple]) -> bool:
+    """Whether per-turn retrieval signatures genuinely differ across runs.
+
+    Compared position by position (tool sequences are identical at this
+    point, so positions align). A position where every run has None is a
+    turn without a (captured) retriever call — ignored. A position mixing
+    None and captured output is a capture inconsistency: attribution skips
+    entirely rather than guess (fail closed).
+    """
+    if len({len(s) for s in sig_tuples}) != 1:
+        return False
+    varied = False
+    for pos in range(len(sig_tuples[0])):
+        column = {s[pos] for s in sig_tuples}
+        if None in column:
+            if len(column) > 1:
+                return False  # mixed captured/uncaptured — never guess
+            continue
+        if len(column) > 1:
+            varied = True
+    return varied
 
 
 # ── Internal helpers ───────────────────────────────────────────────────────────
@@ -327,6 +376,7 @@ def _build_query_stability(
         det_signatures=[_det_signature(r) for r in results],
         judge_verdicts=[_judge_verdict_of(r) for r in results],
         judge_errored=[_judge_errored(r) for r in results],
+        retrieval_sigs=_retrieval_signatures(results, query_spec),
     )
     return qs
 
@@ -339,6 +389,7 @@ def _attribute_flip(
     det_signatures: list[tuple],
     judge_verdicts: list[Optional[bool]],
     judge_errored: list[bool],
+    retrieval_sigs: Optional[list[Optional[str]]] = None,
 ) -> tuple[FlipSource, str]:
     """Attribute a verdict flip to the agent, the evaluation, or infrastructure.
 
@@ -350,10 +401,14 @@ def _attribute_flip(
          judge's — regardless of how much the answer text was paraphrased.
       3. Identical output (answer + tool sequence) → judge-flake by construction:
          deterministic layers cannot flip on identical input.
-      4. Tool sequence changed → agent-variance.
-      5. Deterministic check outcomes changed → the output change caused the flip:
+      4. Same tool sequence but the retrieved set changed → retrieval-variance:
+         the retriever fed the agent different context, blaming the prompt for
+         that would be the untrustworthy-eval failure mode. Only attributed
+         when every run's retriever output was captured — never guessed.
+      5. Tool sequence changed → agent-variance.
+      6. Deterministic check outcomes changed → the output change caused the flip:
          agent-variance.
-      6. Near-identical paraphrase with a judge configured → mixed (never guess).
+      7. Near-identical paraphrase with a judge configured → mixed (never guess).
     """
     if any(judge_errored):
         return (
@@ -376,6 +431,18 @@ def _attribute_flip(
 
     if identical_answers and identical_tools:
         return FlipSource.JUDGE_FLAKE, "same answer, verdict flipped"
+
+    if (
+        identical_tools
+        and retrieval_sigs
+        and all(s is not None for s in retrieval_sigs)
+        and len(set(retrieval_sigs)) > 1
+    ):
+        return (
+            FlipSource.RETRIEVAL_VARIANCE,
+            "same tool sequence, retrieved set changed across runs — "
+            "the retriever varied, not the prompt",
+        )
 
     if not identical_tools:
         return FlipSource.AGENT_VARIANCE, "tool sequence changed"
@@ -435,6 +502,28 @@ def _judge_verdict_of(r: QueryResult) -> Optional[bool]:
 
 def _judge_errored(r: QueryResult) -> bool:
     return any(e.get("error") for e in _judge_entries(r))
+
+
+def _retrieval_signatures(
+    results: list[QueryResult],
+    query_spec: Optional["GoldenQuery"],
+) -> Optional[list[Optional[str]]]:
+    """Per-run signatures of the retriever's captured output, or None when the
+    query has no retrieval spec. A None entry (uncaptured / not called) makes
+    attribution skip the retrieval discriminator — fail closed."""
+    if query_spec is None or query_spec.retrieval is None:
+        return None
+    from ciagent.engine.retrieval import retrieval_signature
+
+    sigs: list[Optional[str]] = []
+    for r in results:
+        trace = getattr(r, "trace", None)
+        sigs.append(
+            retrieval_signature(trace, query_spec.retrieval.tool)
+            if trace is not None
+            else None
+        )
+    return sigs
 
 
 def _query_has_judge(query_spec: Optional["GoldenQuery"]) -> bool:

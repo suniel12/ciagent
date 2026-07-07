@@ -8,6 +8,22 @@ from ciagent.models import Trace, Span, ToolCall
 import time
 from typing import Any
 
+
+def _tool_results_by_id(messages: list[Any]) -> dict[str, Any]:
+    """Map tool_call_id → ToolMessage content for result pairing.
+
+    LangChain emits each executed tool's output as a ToolMessage
+    (type == "tool") carrying the originating call's tool_call_id.
+    """
+    results: dict[str, Any] = {}
+    for msg in messages:
+        if getattr(msg, "type", "") != "tool":
+            continue
+        call_id = getattr(msg, "tool_call_id", None)
+        if call_id:
+            results[call_id] = getattr(msg, "content", None)
+    return results
+
 class LangGraphAdapter(BaseAdapter):
     """
     Adapter for LangGraph agents.
@@ -75,7 +91,13 @@ class LangGraphAdapter(BaseAdapter):
                     break
 
         current_span = Span(name="langgraph_execution")
-        
+
+        # ToolMessages carry each tool's output, keyed by tool_call_id —
+        # pair them up front so ToolCall.result is populated (the retrieval
+        # layer, F4, reads it; unpaired calls keep result=None and the layer
+        # SKIPs rather than guess).
+        results_by_id = _tool_results_by_id(messages)
+
         for msg in messages:
             # Check for tool calls (AIMessage)
             if hasattr(msg, "tool_calls") and msg.tool_calls:
@@ -84,13 +106,12 @@ class LangGraphAdapter(BaseAdapter):
                     tool_call = ToolCall(
                         tool_name=tc.get("name", ""),
                         arguments=tool_args,
+                        result=results_by_id.get(tc.get("id")),
                         success=True
                     )
                     # Propagate tool args into span attributes for span assertions
                     current_span.attributes[f"tool.args.{tc.get('name', 'unknown')}"] = tool_args
 
-                    # We try to pair it with the subsequent ToolMessage
-                    # In a real parser we'd look ahead or map by tool_call_id
                     current_span.tool_calls.append(tool_call)
                     
             # Check for token usage

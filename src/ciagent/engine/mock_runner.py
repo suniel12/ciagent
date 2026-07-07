@@ -68,6 +68,31 @@ def mock_run(query: str, query_spec: dict, flaky_break: bool = False) -> Trace:
     span.output_data = output_text
     trace.metadata["final_output"] = output_text
 
+    # Synthesize a retrieval result that satisfies the retrieval spec —
+    # non-empty, meets min_results, contains expected_sources, and grounds
+    # the correctness fact terms (facts_in_context) — so the zero-key mock
+    # path exercises layer 2.5 the same way it satisfies the other layers.
+    retrieval_spec = query_spec.get("retrieval") or {}
+    retriever_tool = retrieval_spec.get("tool")
+    if retriever_tool:
+        synthesized = _synthesize_retrieval_result(
+            retrieval_spec, keywords_to_inject, query
+        )
+        existing = [
+            tc for tc in span.tool_calls if tc.tool_name == retriever_tool
+        ]
+        if existing:
+            for tc in existing:
+                tc.result = synthesized
+        else:
+            span.tool_calls.append(
+                ToolCall(
+                    tool_name=retriever_tool,
+                    arguments={"query": query},
+                    result=synthesized,
+                )
+            )
+
     # Set LLM calls within budget
     cost_spec = query_spec.get("cost") or {}
     max_llm_calls = cost_spec.get("max_llm_calls") or 10
@@ -80,6 +105,35 @@ def mock_run(query: str, query_spec: dict, flaky_break: bool = False) -> Trace:
     trace.spans.append(span)
     trace.compute_metrics()
     return trace
+
+
+def _synthesize_retrieval_result(
+    retrieval_spec: dict,
+    fact_terms: list[str],
+    query: str,
+):
+    """Build a mock retriever result that satisfies the retrieval spec.
+
+    List of {source, content} items by default; a plain string when the spec
+    hints `result_format: text` (which the layer reads as non-empty text).
+    """
+    sources: list[str] = list(retrieval_spec.get("expected_sources") or [])
+    min_results: int = retrieval_spec.get("min_results") or 1
+    facts = ", ".join(fact_terms) if fact_terms else f"mock context for: {query}"
+
+    if retrieval_spec.get("result_format") == "text":
+        source_note = f" (sources: {', '.join(sources)})" if sources else ""
+        return f"Retrieved context{source_note}: {facts}"
+
+    if not sources:
+        sources = ["mock-doc.md"]
+    items = [{"source": s, "content": f"From {s}: {facts}"} for s in sources]
+    while len(items) < min_results:
+        items.append({
+            "source": f"mock-doc-{len(items) + 1}.md",
+            "content": f"Additional mock context: {facts}",
+        })
+    return items
 
 
 def run_mock_spec(
@@ -151,6 +205,7 @@ def mock_conversation_runner(scenario):
         correctness: dict = {}
         path: dict = {}
         cost: dict = {}
+        retrieval: dict | None = None
         for b in blocks:
             if b is None:
                 continue
@@ -165,7 +220,15 @@ def mock_conversation_runner(scenario):
                 seen.extend(t for t in b.path.expected_tools if t not in seen)
             if b.cost is not None and b.cost.max_llm_calls:
                 cost["max_llm_calls"] = b.cost.max_llm_calls
-        return {"correctness": correctness or None, "path": path or None, "cost": cost or None}
+            if b.retrieval is not None:
+                # outcome (last block) overrides per_turn on the final turn
+                retrieval = b.retrieval.model_dump()
+        return {
+            "correctness": correctness or None,
+            "path": path or None,
+            "cost": cost or None,
+            "retrieval": retrieval,
+        }
 
     def run(messages: list[dict]) -> Trace:
         user_turns = sum(1 for m in messages if m.get("role") == "user")

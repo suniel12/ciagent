@@ -291,6 +291,81 @@ class CostSpec(BaseModel):
     )
 
 
+class RetrievalSpec(BaseModel):
+    """Layer 2.5: Retrieval assertions — deterministic checks on the retriever
+    tool's captured result.
+
+    Result-interpretation contract (eng review 2026-07-05, binding): the layer
+    reads `ToolCall.result` with explicit rules and SKIPs whenever it cannot —
+    unparseable results, uncaptured results — never guesses. Empty means None,
+    [], "", whitespace-only, or a literal match on `empty_markers`; anything
+    else is non-empty. Retrieval never hard-fails in v1: exceedances WARN.
+    """
+    tool: str = Field(
+        ...,
+        description="Name of the retriever tool whose captured result is evaluated",
+    )
+    forbid_empty: bool = Field(
+        False,
+        description=(
+            "WARN when the retriever returned nothing but the agent still "
+            "produced a substantive answer (an ungrounded answer). An answer "
+            "matching `refusal_markers` counts as a refusal and passes."
+        ),
+    )
+    min_results: Optional[int] = Field(
+        None,
+        ge=0,
+        description=(
+            "Minimum number of retrieved items. Counted only when the result "
+            "parses as a list — otherwise the check SKIPs, never guesses."
+        ),
+    )
+    expected_sources: Optional[list[str]] = Field(
+        None,
+        description=(
+            "Doc IDs/paths that must appear in the retrieved results "
+            "(case-insensitive substring match on the serialized result)"
+        ),
+    )
+    facts_in_context: bool = Field(
+        False,
+        description=(
+            "Cross-check that every correctness fact term (expected_in_answer / "
+            "any_expected_in_answer) also appears in the retrieved chunks. "
+            "Informational-only in v1: reported, never WARNs."
+        ),
+    )
+    result_format: Optional[str] = Field(
+        None,
+        description=(
+            "Optional parsing hint for ToolCall.result: 'list', 'json', or "
+            "'text'. Results that don't parse as the hinted format SKIP."
+        ),
+    )
+    empty_markers: Optional[list[str]] = Field(
+        None,
+        description=(
+            "Literal no-result strings that count as an empty retrieval, "
+            "e.g. 'No results found' (case-insensitive exact match after strip)"
+        ),
+    )
+    refusal_markers: Optional[list[str]] = Field(
+        None,
+        description=(
+            "Answer substrings that count as a refusal for forbid_empty "
+            "(case-insensitive). Overrides the built-in refusal marker list."
+        ),
+    )
+
+    @field_validator("result_format")
+    @classmethod
+    def result_format_known(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None and v not in ("list", "json", "text"):
+            raise ValueError("result_format must be 'list', 'json', or 'text'")
+        return v
+
+
 # ── Root Models ────────────────────────────────────────────────────────────────
 
 
@@ -307,6 +382,7 @@ class GoldenQuery(BaseModel):
     )
     correctness: Optional[CorrectnessSpec] = None
     path: Optional[PathSpec] = None
+    retrieval: Optional[RetrievalSpec] = None
     cost: Optional[CostSpec] = None
     span_assertions: list[SpanAssertionSpec] = Field(
         default_factory=list,
@@ -342,6 +418,7 @@ class TurnChecks(BaseModel):
     """Layer checks applied inside a scenario (per-turn or as the outcome)."""
     correctness: Optional[CorrectnessSpec] = None
     path: Optional[PathSpec] = None
+    retrieval: Optional[RetrievalSpec] = None
     cost: Optional[CostSpec] = None
 
 

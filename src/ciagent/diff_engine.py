@@ -86,16 +86,25 @@ def load_baseline(name: str) -> dict[str, Trace]:
     return resolved
 
 
-def diff_traces(current: Trace, golden: Trace) -> list[DiffResult]:
+def diff_traces(
+    current: Trace,
+    golden: Trace,
+    retriever_tool: str | None = None,
+) -> list[DiffResult]:
     """Compare current trace against golden trace and return categorized diffs.
 
-    Detects 11 categories of regression: TOOLS_CHANGED, ARGS_CHANGED,
+    Detects categorized regressions: TOOLS_CHANGED, ARGS_CHANGED,
     SEQUENCE_CHANGED, COST_SPIKE, STEPS_CHANGED, STOP_REASON_CHANGED,
-    ROUTING_CHANGED, GUARDRAILS_CHANGED, AVAILABLE_HANDOFFS_CHANGED, etc.
+    ROUTING_CHANGED, GUARDRAILS_CHANGED, AVAILABLE_HANDOFFS_CHANGED,
+    RETRIEVAL_CHANGED, etc.
 
     Args:
         current: The trace from the current test run.
         golden: The known-good baseline trace.
+        retriever_tool: Name of the retriever tool (from the query's
+            `retrieval:` spec). When given and a source set is extractable
+            from BOTH traces' captured results, a changed source set emits
+            RETRIEVAL_CHANGED; otherwise no retrieval diff — never guessed.
 
     Returns:
         A list of DiffResult objects, each with diff_type, severity, and message.
@@ -152,6 +161,36 @@ def diff_traces(current: Trace, golden: Trace) -> list[DiffResult]:
                 "current_available": current_available,
             }
         ))
+
+    # 0c. RETRIEVAL DIFF (F4) — retrieved source set changed vs golden.
+    # Only when the retriever is named and a source set is extractable from
+    # both traces' captured results; anything else emits nothing (fail closed).
+    if retriever_tool:
+        from .engine.retrieval import extract_source_set
+
+        golden_sources = extract_source_set(golden, retriever_tool)
+        current_sources = extract_source_set(current, retriever_tool)
+        if (
+            golden_sources is not None
+            and current_sources is not None
+            and golden_sources != current_sources
+        ):
+            added_src = sorted(current_sources - golden_sources)
+            removed_src = sorted(golden_sources - current_sources)
+            diffs.append(DiffResult(
+                diff_type=DiffType.RETRIEVAL_CHANGED,
+                severity="warning",
+                message=(
+                    f"Retrieved source set changed: +{added_src or 'none'} "
+                    f"-{removed_src or 'none'}"
+                ),
+                details={
+                    "golden_sources": sorted(golden_sources),
+                    "current_sources": sorted(current_sources),
+                    "added": added_src,
+                    "removed": removed_src,
+                }
+            ))
 
     # 1. TOOL SEQUENCE DIFF
     current_tools = current.tool_call_sequence

@@ -18,6 +18,27 @@ from contextlib import contextmanager
 from .models import Trace, Span, LLMCall, ToolCall, SpanKind
 from .cost import compute_cost
 
+def _tool_result_content(content):
+    """Normalize a tool-result payload for ToolCall.result.
+
+    Strings pass through; a list of text blocks joins to text; anything else
+    (structured lists/dicts) is kept raw — the retrieval layer parses those
+    itself and must see them unmangled.
+    """
+    if isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict):
+                text = block.get('text') if block.get('type') == 'text' else None
+            else:
+                text = getattr(block, 'text', None)
+            if text is None:
+                return content  # not pure text blocks — keep raw
+            parts.append(str(text))
+        return "\n".join(parts)
+    return content
+
+
 # Global context var — allows nested agent calls to share a trace
 _active_trace: contextvars.ContextVar[Trace | None] = contextvars.ContextVar(
     '_active_trace', default=None
@@ -66,6 +87,11 @@ class TraceContext:
         self._start_time = 0.0
         self._trace_token = None
         self._span_token = None
+        # tool_call_id → ToolCall awaiting its result. Tool outputs come back
+        # in the NEXT request's messages (openai role="tool" entries /
+        # anthropic tool_result blocks); the patches backfill ToolCall.result
+        # from there so the retrieval layer (F4) can read it.
+        self._pending_tool_results: dict[str, ToolCall] = {}
 
     def __enter__(self):
         # Create root span
@@ -172,17 +198,21 @@ class TraceContext:
             original_create = openai.resources.chat.completions.Completions.create
             
             def patched_create(self_client, *args, **kwargs):
+                # Requests carry the results of PREVIOUS tool calls as
+                # role="tool" messages — backfill them before anything else.
+                self._backfill_openai_tool_results(kwargs.get('messages'))
+
                 start = time.perf_counter()
                 response = original_create(self_client, *args, **kwargs)
                 duration = (time.perf_counter() - start) * 1000
-                
+
                 span = _active_span.get()
                 if span is not None:
                     model = kwargs.get('model', getattr(response, 'model', ''))
                     usage = getattr(response, 'usage', None)
                     tokens_in = getattr(usage, 'prompt_tokens', 0) if usage else 0
                     tokens_out = getattr(usage, 'completion_tokens', 0) if usage else 0
-                    
+
                     llm_call = LLMCall(
                         model=model,
                         provider="openai",
@@ -192,7 +222,7 @@ class TraceContext:
                         duration_ms=duration,
                     )
                     span.llm_calls.append(llm_call)
-                    
+
                     # Capture tool calls from response
                     choices = getattr(response, 'choices', [])
                     if choices:
@@ -202,13 +232,17 @@ class TraceContext:
                             for tc in tool_calls:
                                 import json
                                 tool_args = json.loads(tc.function.arguments)
-                                span.tool_calls.append(ToolCall(
+                                tool_call = ToolCall(
                                     tool_name=tc.function.name,
                                     arguments=tool_args,
-                                ))
+                                )
+                                span.tool_calls.append(tool_call)
+                                call_id = getattr(tc, 'id', None)
+                                if call_id:
+                                    self._pending_tool_results[call_id] = tool_call
                                 # Propagate tool args into span attributes
                                 span.attributes[f"tool.args.{tc.function.name}"] = tool_args
-                
+
                 return response
             
             openai.resources.chat.completions.Completions.create = patched_create
@@ -229,17 +263,21 @@ class TraceContext:
             original_create = anthropic.resources.messages.Messages.create
             
             def patched_create(self_client, *args, **kwargs):
+                # Requests carry the results of PREVIOUS tool_use calls as
+                # tool_result blocks — backfill them before anything else.
+                self._backfill_anthropic_tool_results(kwargs.get('messages'))
+
                 start = time.perf_counter()
                 response = original_create(self_client, *args, **kwargs)
                 duration = (time.perf_counter() - start) * 1000
-                
+
                 span = _active_span.get()
                 if span is not None:
                     model = kwargs.get('model', getattr(response, 'model', ''))
                     usage = getattr(response, 'usage', None)
                     tokens_in = getattr(usage, 'input_tokens', 0) if usage else 0
                     tokens_out = getattr(usage, 'output_tokens', 0) if usage else 0
-                    
+
                     llm_call = LLMCall(
                         model=model,
                         provider="anthropic",
@@ -249,18 +287,22 @@ class TraceContext:
                         duration_ms=duration,
                     )
                     span.llm_calls.append(llm_call)
-                    
+
                     # Capture tool use blocks
                     for block in getattr(response, 'content', []):
                         if getattr(block, 'type', '') == 'tool_use':
                             tool_args = block.input if isinstance(block.input, dict) else {}
-                            span.tool_calls.append(ToolCall(
+                            tool_call = ToolCall(
                                 tool_name=block.name,
                                 arguments=tool_args,
-                            ))
+                            )
+                            span.tool_calls.append(tool_call)
+                            call_id = getattr(block, 'id', None)
+                            if call_id:
+                                self._pending_tool_results[call_id] = tool_call
                             # Propagate tool args into span attributes
                             span.attributes[f"tool.args.{block.name}"] = tool_args
-                
+
                 return response
             
             anthropic.resources.messages.Messages.create = patched_create
@@ -274,6 +316,60 @@ class TraceContext:
         except ImportError:
             pass
             
+    def _backfill_openai_tool_results(self, messages) -> None:
+        """Fill pending ToolCall.result from role="tool" messages.
+
+        OpenAI chat-completions tool outputs are produced by the agent and
+        sent back in the next request as {"role": "tool", "tool_call_id",
+        "content"} entries — the only place the wire protocol exposes them.
+        """
+        if not self._pending_tool_results or not messages:
+            return
+        for msg in messages:
+            role = msg.get('role') if isinstance(msg, dict) else getattr(msg, 'role', '')
+            if role != 'tool':
+                continue
+            call_id = (
+                msg.get('tool_call_id') if isinstance(msg, dict)
+                else getattr(msg, 'tool_call_id', None)
+            )
+            tool_call = self._pending_tool_results.pop(call_id, None) if call_id else None
+            if tool_call is not None and tool_call.result is None:
+                content = (
+                    msg.get('content') if isinstance(msg, dict)
+                    else getattr(msg, 'content', None)
+                )
+                tool_call.result = _tool_result_content(content)
+
+    def _backfill_anthropic_tool_results(self, messages) -> None:
+        """Fill pending ToolCall.result from tool_result content blocks.
+
+        Anthropic tool outputs come back in the next request as
+        {"type": "tool_result", "tool_use_id", "content"} blocks inside a
+        user message's content list.
+        """
+        if not self._pending_tool_results or not messages:
+            return
+        for msg in messages:
+            content = msg.get('content') if isinstance(msg, dict) else getattr(msg, 'content', None)
+            if not isinstance(content, list):
+                continue
+            for block in content:
+                btype = block.get('type') if isinstance(block, dict) else getattr(block, 'type', '')
+                if btype != 'tool_result':
+                    continue
+                call_id = (
+                    block.get('tool_use_id') if isinstance(block, dict)
+                    else getattr(block, 'tool_use_id', None)
+                )
+                tool_call = self._pending_tool_results.pop(call_id, None) if call_id else None
+                if tool_call is not None and tool_call.result is None:
+                    raw = (
+                        block.get('content') if isinstance(block, dict)
+                        else getattr(block, 'content', None)
+                    )
+                    tool_call.result = _tool_result_content(raw)
+
     def attach_langgraph_state(self, state: dict) -> None:
         """Parse a LangGraph MessagesState to extract tools and node executions.
 
@@ -299,9 +395,15 @@ class TraceContext:
             return
             
         span.graph_state = state
-        
+
+        # ToolMessages carry each executed tool's output keyed by
+        # tool_call_id — pair them so ToolCall.result is populated (the
+        # retrieval layer reads it; unpaired calls SKIP, never guess).
+        from .adapters.langgraph import _tool_results_by_id
+
         # Extract reasoning trajectory from LangGraph messages
         messages = state.get("messages", [])
+        results_by_id = _tool_results_by_id(messages)
         for msg in messages:
             msg_name = getattr(msg, "name", "")
             
@@ -319,16 +421,17 @@ class TraceContext:
                     # Langchain encodes tools as dicts
                     t_name = tc.get("name", "")
                     t_args = tc.get("args", {})
-                    
+
                     if not isinstance(t_args, dict):
                         try:
                             t_args = json.loads(t_args)
                         except:
                             t_args = {"raw": str(t_args)}
-                            
+
                     span.tool_calls.append(ToolCall(
                         tool_name=t_name,
-                        arguments=t_args
+                        arguments=t_args,
+                        result=results_by_id.get(tc.get("id")),
                     ))
 
     def attach(self, state: dict) -> None:

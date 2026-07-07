@@ -33,10 +33,11 @@ def evaluate_query(
     judge_config: Optional[dict[str, Any]] = None,
     spec_dir: Optional[str] = None,
 ) -> QueryResult:
-    """Evaluate a single golden query across all three evaluation layers.
+    """Evaluate a single golden query across all evaluation layers.
 
     Args:
-        query:          The GoldenQuery spec (correctness/path/cost assertions).
+        query:          The GoldenQuery spec (correctness/path/retrieval/cost
+                        assertions).
         trace:          The agent's execution trace for this query.
         baseline_trace: Optional golden baseline trace for comparison.
         judge_config:   Global LLM judge settings (model, temperature, ensemble).
@@ -105,6 +106,23 @@ def evaluate_query(
             messages=["No assertions configured"],
         )
 
+    # ── Layer 2.5: Retrieval (soft warn; SKIPs when it cannot read) ──────────
+    if query.retrieval:
+        from ciagent.engine.retrieval import evaluate_retrieval
+
+        retrieval = evaluate_retrieval(
+            trace=trace,
+            spec=query.retrieval,
+            correctness=query.correctness,
+            answer=answer,
+        )
+    else:
+        retrieval = LayerResult(
+            status=LayerStatus.SKIP,
+            details={},
+            messages=["No assertions configured"],
+        )
+
     # ── Layer 3: Cost (soft warn) ─────────────────────────────────────────────
     if query.cost:
         cost = evaluate_cost(
@@ -123,6 +141,7 @@ def evaluate_query(
         query=query.query,
         correctness=correctness,
         path=path,
+        retrieval=retrieval,
         cost=cost,
         trace=trace,
     )

@@ -2153,6 +2153,7 @@ def report(input_path, output_path):
             correctness=_to_layer(r.get("correctness", {})),
             path=_to_layer(r.get("path", {})),
             cost=_to_layer(r.get("cost", {})),
+            retrieval=_to_layer(r.get("retrieval", {})),
         ))
 
     _emit_html(results, spec_file="(from JSON)", output_path=output_path)
@@ -2652,6 +2653,7 @@ def judge_audit_cmd(config, baseline_dir, repeats, labels_path, sample, fmt, yes
     from .engine.judge_audit import (
         load_answers_from_baselines,
         load_labels_file,
+        load_retrieval_flags_from_baselines,
         run_judge_audit,
     )
     from .engine.reporter import report_judge_audit
@@ -2717,10 +2719,16 @@ def judge_audit_cmd(config, baseline_dir, repeats, labels_path, sample, fmt, yes
         if fmt == "console":
             console.print(f"  [dim]audited:[/] {q[:70]}")
 
+    # F4: was each judged query's recorded retrieval empty? (reported row)
+    retrieval_flags = load_retrieval_flags_from_baselines(
+        effective_baseline_dir, spec,
+    )
+
     try:
         report = run_judge_audit(
             spec, answers, repeats=repeats, labels=labels,
             sample=sample, progress=_progress,
+            retrieval_flags=retrieval_flags,
         )
     except Exception as e:  # noqa: BLE001
         console.print(f"[bold red]Audit error:[/] {e}")

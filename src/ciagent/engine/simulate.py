@@ -236,6 +236,7 @@ def _checks_to_query(user_message: str, checks) -> GoldenQuery:
         query=user_message,
         correctness=checks.correctness,
         path=checks.path,
+        retrieval=checks.retrieval,
         cost=checks.cost,
     )
 
@@ -496,6 +497,7 @@ def scenario_verdict(result: ScenarioResult) -> dict[str, Any]:
             "hard_fail": qr.hard_fail,
             "correctness": {"status": qr.correctness.status.value, "messages": qr.correctness.messages},
             "path": {"status": qr.path.status.value, "messages": qr.path.messages},
+            "retrieval": {"status": qr.retrieval.status.value, "messages": qr.retrieval.messages},
             "cost": {"status": qr.cost.status.value, "messages": qr.cost.messages},
         }
 

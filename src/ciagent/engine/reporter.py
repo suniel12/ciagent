@@ -127,6 +127,15 @@ def _emit_github_annotations(results: list[QueryResult], spec_file: str) -> None
                 else:
                     overflow_warnings.append(annotation)
 
+        if r.retrieval.status == LayerStatus.WARN:
+            for msg in r.retrieval.messages:
+                annotation = f"[RETRIEVAL] {query_short}: {msg}"
+                if warning_count < MAX_INLINE_ANNOTATIONS:
+                    print(f"::warning file={spec_file}::{annotation}")
+                    warning_count += 1
+                else:
+                    overflow_warnings.append(annotation)
+
         if r.cost.status == LayerStatus.WARN:
             for msg in r.cost.messages:
                 annotation = f"[COST] {query_short}: {msg}"
@@ -174,6 +183,7 @@ def emit_query_result(r: QueryResult) -> None:
 
     _print_layer("CORRECTNESS", r.correctness, fail_icon="❌", pass_icon="✅")
     _print_layer("PATH", r.path, fail_icon="⚠️", pass_icon="📈", warn_icon="⚠️")
+    _print_layer("RETRIEVAL", r.retrieval, fail_icon="⚠️", pass_icon="🔍", warn_icon="⚠️")
     _print_layer("COST", r.cost, fail_icon="⚠️", pass_icon="💰", warn_icon="⚠️")
 
     if r.hard_fail and getattr(r, "trace", None):
@@ -404,6 +414,16 @@ def emit_judge_audit_console(report: Any) -> None:
         print("Mode 1 (judge vs. checks) has nothing to compare. Add fact checks")
         print("to judged queries, or provide --labels for direct measurement.")
 
+    # F4 — judged against empty retrieval (the judge graded against nothing)
+    empty_retrieval = getattr(report, "empty_retrieval_judged", [])
+    if empty_retrieval:
+        print(f"\n⚠️  Judged against EMPTY retrieval ({len(empty_retrieval)}):")
+        print("   The judge graded these answers with their ground truth already")
+        print("   lost — the retriever returned nothing.")
+        for q in empty_retrieval:
+            verdict = "judge PASSED" if q.judge_verdict else "judge failed"
+            print(f"   • {_short(q.query, 60)}  ({verdict})")
+
     # Mode 2 — retest stability
     if report.flip_rate is not None:
         flipped = [q for q in report.judged if q.judge_flipped]
@@ -441,6 +461,9 @@ def _serialize_judge_audit(report: Any) -> dict[str, Any]:
         "low_sample": report.low_sample,
         "judge_errors": report.total_judge_errors,
         "scope_note": report.scope_note,
+        "judged_against_empty_retrieval": len(
+            getattr(report, "empty_retrieval_judged", [])
+        ),
         "queries": [
             {
                 "query": q.query,
@@ -449,6 +472,7 @@ def _serialize_judge_audit(report: Any) -> dict[str, Any]:
                 "judge_verdicts": q.judge_verdicts,
                 "judge_flipped": q.judge_flipped,
                 "false_pass": q.false_pass,
+                "retrieval_empty": q.retrieval_empty,
                 "label": q.label,
                 "rationales": q.judge_rationales,
             }
@@ -551,6 +575,11 @@ def _serialize_result(r: QueryResult) -> dict[str, Any]:
             "status": r.path.status.value,
             "messages": r.path.messages,
             "details": r.path.details,
+        },
+        "retrieval": {
+            "status": r.retrieval.status.value,
+            "messages": r.retrieval.messages,
+            "details": r.retrieval.details,
         },
         "cost": {
             "status": r.cost.status.value,

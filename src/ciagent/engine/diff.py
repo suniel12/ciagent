@@ -269,7 +269,11 @@ def diff_baselines(
 
     # ── Legacy compat: generate v1 DiffResult list ────────────────────────────
     if baseline_trace and compare_trace:
-        report.legacy_diffs = _generate_legacy_diffs(baseline_trace, compare_trace)
+        report.legacy_diffs = _generate_legacy_diffs(
+            baseline_trace,
+            compare_trace,
+            retriever_tool=_retriever_tool_for(spec, query_text),
+        )
 
     return report
 
@@ -414,14 +418,31 @@ def _compute_cost_deltas(baseline: "Trace", compare: "Trace") -> list[MetricDelt
     return deltas
 
 
-def _generate_legacy_diffs(baseline: "Trace", compare: "Trace") -> list[Any]:
+def _retriever_tool_for(
+    spec: Optional["AgentCISpec"],
+    query_text: Optional[str],
+) -> Optional[str]:
+    """The retriever tool named by this query's `retrieval:` spec, if any."""
+    if spec is None or not query_text:
+        return None
+    for q in spec.queries:
+        if q.query == query_text and q.retrieval is not None:
+            return q.retrieval.tool
+    return None
+
+
+def _generate_legacy_diffs(
+    baseline: "Trace",
+    compare: "Trace",
+    retriever_tool: Optional[str] = None,
+) -> list[Any]:
     """Generate v1 DiffResult list from the diff for backward compatibility."""
     from ciagent.diff_engine import diff_traces
     import warnings
     # Suppress the deprecation warning for this internal call
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", DeprecationWarning)
-        return diff_traces(compare, baseline)
+        return diff_traces(compare, baseline, retriever_tool=retriever_tool)
 
 
 def _extract_answer(trace: "Trace") -> str:
