@@ -241,15 +241,21 @@ def _assert_handoff_count(a: Assertion, t: Trace) -> tuple[bool, str]:
 def _get_final_output(t: Any) -> str:
     """Safely extract the final output from various Trace shapes.
 
-    Checks for spans[-1].output_data, then final_report, then output_data.
+    metadata["final_output"] is the canonical location (what the v2 engine's
+    _extract_answer reads); span output_data and legacy attributes are
+    fallbacks. A None never stringifies to "None" — an LLM judge grading the
+    literal string "None" fails answers that were captured fine elsewhere.
     """
-    if hasattr(t, "spans") and t.spans:
+    metadata = getattr(t, "metadata", None)
+    if isinstance(metadata, dict) and metadata.get("final_output") is not None:
+        return str(metadata["final_output"])
+    if hasattr(t, "spans") and t.spans and t.spans[-1].output_data is not None:
         return str(t.spans[-1].output_data)
-    if hasattr(t, "final_report"):
+    if getattr(t, "final_report", None) is not None:
         return str(t.final_report)
-    if hasattr(t, "output_data"):
+    if getattr(t, "output_data", None) is not None:
         return str(t.output_data)
-    return str(t)
+    return ""
 
 
 def _assert_output_contains(a: Assertion, t: Trace) -> tuple[bool, str]:
