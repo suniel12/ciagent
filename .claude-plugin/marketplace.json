@@ -1,23 +1,27 @@
 {
   "name": "ciagent",
   "owner": {
-    "name": "Sunil Pandey"
+    "name": "Sunil Pandey",
+    "url": "https://github.com/suniel12"
   },
-  "description": "CIAgent plugins: let your coding agent set up and run regression tests for the AI agent it is building.",
+  "metadata": {
+    "description": "CIAgent plugins: let your coding agent set up and run regression tests for the AI agent it is building."
+  },
   "plugins": [
     {
       "name": "ciagent",
-      "displayName": "CIAgent",
       "source": "./plugins/ciagent",
       "description": "Onboard CIAgent into a repo (runner + golden baselines + spec) and run its eval-reliability checks after every change to your AI agent.",
+      "version": "0.10.0",
       "author": {
-        "name": "Sunil Pandey"
+        "name": "Sunil Pandey",
+        "url": "https://github.com/suniel12"
       },
       "homepage": "https://github.com/suniel12/ciagent",
       "repository": "https://github.com/suniel12/ciagent",
       "license": "Apache-2.0",
-      "keywords": ["testing", "ai-agents", "evals", "regression", "llm-judge"],
-      "category": "testing"
+      "category": "testing",
+      "keywords": ["testing", "ai-agents", "evals", "regression", "llm-judge"]
     }
   ]
 }
