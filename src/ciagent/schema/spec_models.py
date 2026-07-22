@@ -485,6 +485,21 @@ class ScenarioSpec(BaseModel):
         return "scenario"
 
 
+class StagingSpec(BaseModel):
+    """Auto-staging config for failing `ciagent simulate` conversations.
+
+    v1: `enabled` defaults False (opt-in) until capture-time redaction exists —
+    raw conversation text must not hit disk by default. `staging: false` in the
+    spec is the bool shorthand; it is coerced to `StagingSpec(enabled=False)`.
+    """
+    enabled: bool = Field(
+        False,
+        description="Auto-stage failing conversations (v1 default OFF until redaction)",
+    )
+    cap: int = Field(10, ge=1, description="Max staged conversations kept per scenario")
+    max_age_days: int = Field(30, ge=1, description="Age GC cutoff for staged files")
+
+
 class AgentCISpec(BaseModel):
     """Root schema for agentci_spec.yaml."""
     version: int = Field(1, description="Schema version for forward compatibility")
@@ -536,6 +551,20 @@ class AgentCISpec(BaseModel):
         default_factory=list,
         description="Multi-turn conversation scenarios for `ciagent simulate`",
     )
+    staging: StagingSpec = Field(
+        default_factory=StagingSpec,
+        description="Auto-staging config for failing simulate conversations",
+    )
+
+    @field_validator("staging", mode="before")
+    @classmethod
+    def _coerce_staging_bool(cls, v: Any) -> Any:
+        # `staging: false` / `staging: true` shorthand → StagingSpec(enabled=...)
+        if isinstance(v, bool):
+            return StagingSpec(enabled=v)
+        if v is None:
+            return StagingSpec()
+        return v
 
     @model_validator(mode="after")
     def _spec_has_content(self) -> "AgentCISpec":

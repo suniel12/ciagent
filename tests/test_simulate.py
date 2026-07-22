@@ -206,7 +206,8 @@ class TestSimulateCLI:
         with runner.isolated_filesystem():
             self._write_spec()
             result = runner.invoke(cli, ["simulate", "--mock", "--format", "json"])
-        payload = json.loads(result.output[result.output.index("{"):])
+        # stdout is pure JSON (#39) — no banner-slicing workaround
+        payload = json.loads(result.stdout)
         assert payload["summary"]["passed"] == payload["summary"]["total"]
         sc = payload["scenarios"][0]
         assert sc["termination"] == "scripted-turns-exhausted"

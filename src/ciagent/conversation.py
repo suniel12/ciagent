@@ -56,6 +56,11 @@ class ConversationEnvelope(BaseModel):
     scenario: dict[str, Any] = Field(default_factory=dict)
     metadata: dict[str, Any] = Field(default_factory=dict)
     turns: list[ConversationTurn] = Field(default_factory=list)
+    # Additive, optional (schema stays version 2). Present on staged files only
+    # (`staging:`) and on promoted goldens only (`provenance:`). Old loaders
+    # ignore unknown keys by construction, so the backward-compat contract holds.
+    staging: Optional[dict[str, Any]] = None
+    provenance: Optional[dict[str, Any]] = None
 
     @property
     def is_single_turn(self) -> bool:
@@ -96,6 +101,8 @@ def normalize_to_envelope(data: dict[str, Any], source: str = "") -> Conversatio
             scenario=data.get("scenario") or {},
             metadata=data.get("metadata") or {},
             turns=turns,
+            staging=data.get("staging"),
+            provenance=data.get("provenance"),
         )
 
     # Shape 2: versioned single-trace wrapper (schema_version 1 or legacy/unversioned)
@@ -162,5 +169,10 @@ def save_envelope(
     p.parent.mkdir(parents=True, exist_ok=True)
     payload = json.loads(envelope.model_dump_json())
     payload["schema_version"] = ENVELOPE_SCHEMA_VERSION
+    # Additive optional blocks are dropped when absent so files without them
+    # stay byte-identical to pre-0.11 goldens (record/replay regression).
+    for optional_key in ("staging", "provenance"):
+        if payload.get(optional_key) is None:
+            payload.pop(optional_key, None)
     p.write_text(json.dumps(payload, indent=2), encoding="utf-8")
     return p
