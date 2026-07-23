@@ -255,6 +255,8 @@ ciagent report -i results.json # Generate HTML report from JSON results
 ciagent simulate --stage       # Auto-stage failing conversations (repro never lost)
 ciagent stage list             # Triage staged failures, best-to-promote first
 ciagent promote <id>           # One staged failure becomes a golden CI gate
+ciagent world freeze <id>      # Freeze the failing run's tool traffic
+ciagent simulate --replay ./golden --world worlds/x.world.json  # Frozen-backend replay
 ```
 ## Docs
 
@@ -268,6 +270,7 @@ ciagent promote <id>           # One staged failure becomes a golden CI gate
 - [Golden traces](docs/golden-traces.md) — record baselines, diff regressions
 - [Import production traces](docs/import.md) — turn an exported OTel (openllmetry/ADK), Langfuse, or LangSmith trace into a gated regression test
 - [Golden promotion](docs/promotion.md) — auto-stage failing simulate conversations, triage, one-command promote
+- [Simulated world](docs/world.md) — freeze a failing run's tool traffic, replay against it deterministically
 - [CI/CD integration](docs/ci-cd.md) — GitHub Actions setup
 - [LangGraph](docs/langgraph.md) — graph-based agent support
 - [Metrics reference](docs/metrics_reference.md) — every metric, defined

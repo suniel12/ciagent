@@ -3730,10 +3730,14 @@ def _print_conversation_diff(diff):
                    'files are redacted at capture time).')
 @click.option('--staged-dir', default=None, type=click.Path(),
               help='Staging root (default: .ciagent/staged)')
+@click.option('--world', 'world_path', default=None, type=click.Path(exists=True),
+              help='Replay against this frozen world (from `ciagent world '
+                   'freeze`): wrapped tools serve frozen responses, '
+                   'fail-closed. Requires --replay.')
 @click.option('--format', 'fmt', type=click.Choice(['console', 'json']),
               default='console', show_default=True, help='Output format')
 def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
-                 max_cost, yes, stage_flag, staged_dir, fmt):
+                 max_cost, yes, stage_flag, staged_dir, world_path, fmt):
     """Drive multi-turn conversation scenarios against your agent.
 
     Scripted scenarios (a `turns:` list of user messages) run
@@ -3827,6 +3831,15 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
         scenarios = spec.scenarios
         goldens = [None] * len(scenarios)
 
+    if world_path and not replay_path:
+        console.print("[bold red]--world requires --replay[/] — a world without "
+                      "a replay target has no defined turn source.")
+        sys.exit(2)
+    if world_path and mock:
+        console.print("[bold red]--world cannot combine with --mock[/] — the "
+                      "mock runner never executes your wrapped tools.")
+        sys.exit(2)
+
     run_mode = "replay" if replay_path else "scripted"
     # Bug-golden lifecycle per scenario (replay only): `gate` goldens keep
     # today's exit-1-on-failure; `xfail` goldens expect the failure (CI
@@ -3905,8 +3918,40 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
 
     budget = CostBudget(max_usd=max_cost) if max_cost is not None else None
 
+    # ── World activation (A4 plumbing) ───────────────────────────────────────
+    # The factory runs in the MAIN thread at submit time; the returned closure
+    # runs in the worker. Clone per (run, scenario) so sequence state is
+    # isolated; the coordinator-side registry powers the panel and exit fold.
+    world_clones: dict[tuple[int, int], _Any] = {}
+    _run_holder = [0]
+    if world_path:
+        import ciagent.world as _worldmod
+        from .world import World as _World, WorldError as _WorldError
+
+        try:
+            _loaded_world = _World.load(world_path)
+        except _WorldError as e:
+            console.print(f"[bold red]{e}[/]")
+            sys.exit(2)
+        _scen_index = {id(s): i for i, s in enumerate(scenarios)}
+        _inner_factory = conv_runner_for
+
+        def conv_runner_for(scenario, _inner=_inner_factory):  # noqa: F811
+            conv = _inner(scenario)
+            clone = _loaded_world.clone()
+            world_clones[(_run_holder[0], _scen_index[id(scenario)])] = clone
+
+            def conv_with_world(messages):
+                token = _worldmod._active_world.set(clone)
+                try:
+                    return conv(messages)
+                finally:
+                    _worldmod._active_world.reset(token)
+            return conv_with_world
+
     all_runs: list[list] = []
     for _run_index in range(max(1, runs)):
+        _run_holder[0] = _run_index
         if budget is not None and budget.exceeded:
             break  # session aborted — completed runs still report
         try:
@@ -3990,6 +4035,19 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
                 # error) — skip this golden, keep recording the rest.
                 console.print(f"[yellow]not recorded:[/] {e}")
 
+    # World miss data (A3/A7): recorded misses are authoritative. Run 0 feeds
+    # the report and xpass suppression; ALL runs feed the exit fold.
+    world_miss_run0: dict[int, int] = {
+        i: c.report().miss_count for (run, i), c in world_clones.items() if run == 0
+    }
+
+    def _xpass_ok(i: int, r) -> bool:
+        return (
+            i < len(lifecycles) and lifecycles[i] == "xfail"
+            and not r.hard_fail and not r.is_partial
+            and world_miss_run0.get(i, 0) == 0
+        )
+
     # ── Report ────────────────────────────────────────────────────────────────
     if fmt == "json":
         from .engine.reporter import _serialize_result
@@ -4006,10 +4064,9 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
                     "hard_fail": r.hard_fail,
                     "partial": r.is_partial,
                     "lifecycle": lifecycles[i] if i < len(lifecycles) else "gate",
-                    "xpass": (
-                        i < len(lifecycles) and lifecycles[i] == "xfail"
-                        and not r.hard_fail and not r.is_partial
-                    ),
+                    "xpass": _xpass_ok(i, r),
+                    **({"world_misses": world_miss_run0.get(i, 0)}
+                       if world_path else {}),
                     "cost_usd": round(r.cost_usd, 6),
                     "turns": [
                         {
@@ -4050,11 +4107,9 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
                     1 for i, r in enumerate(results)
                     if r.hard_fail and i < len(lifecycles) and lifecycles[i] == "xfail"
                 ),
-                "xpass": sum(
-                    1 for i, r in enumerate(results)
-                    if not r.hard_fail and not r.is_partial
-                    and i < len(lifecycles) and lifecycles[i] == "xfail"
-                ),
+                "xpass": sum(1 for i, r in enumerate(results) if _xpass_ok(i, r)),
+                **({"world_misses": sum(world_miss_run0.values())}
+                   if world_path else {}),
                 "infra_errors": sum(1 for r in results if r.is_infra_error),
                 "cost_aborted": sum(1 for r in results if r.is_cost_aborted),
             },
@@ -4082,12 +4137,22 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
                     "   [yellow]XFAIL — expected failure (bug-golden, fix not "
                     "landed yet); does not gate CI[/]"
                 )
-            elif is_xfail and not r.is_partial:
+            elif is_xfail and not r.is_partial and _xpass_ok(i, r):
                 gp = golden_paths[i]
                 console.print(
                     "   [bold green]XPASS — this xfail golden now passes.[/] "
                     f"Flip it: [cyan]ciagent promote --flip {gp}[/]"
                 )
+            elif is_xfail and not r.is_partial and world_miss_run0.get(i, 0):
+                console.print(
+                    "   [yellow]passed, but with world misses — not an XPASS "
+                    "(the verdict was not obtained on the frozen world).[/]"
+                )
+            if world_path and world_miss_run0.get(i, 0):
+                clone = world_clones.get((0, i))
+                if clone is not None:
+                    for m in clone.report().misses[:3]:
+                        console.print(f"   [red]world miss:[/] {m.tool} — {m.detail}")
             if r.is_partial:
                 console.print(
                     "   [yellow]PARTIAL — conversation did not complete; "
@@ -4130,6 +4195,21 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
             f"\nScenarios: {passed}/{len(results)} passed"
             + (f"  |  {sum(1 for r in results if r.is_partial)} partial/infra" if any(r.is_partial for r in results) else "")
         )
+        if world_path:
+            served_total = sum(
+                sum(c.report().served.values())
+                for (run, _i), c in world_clones.items() if run == 0
+            )
+            total_misses = sum(world_miss_run0.values())
+            console.print(
+                f"[bold]World:[/] served {served_total} frozen response(s), "
+                f"{total_misses} miss(es)."
+            )
+            if total_misses:
+                console.print(
+                    "   [yellow]after the first miss the conversation continued "
+                    "against the LIVE model — --world does not cap cost.[/]"
+                )
 
     # Exit codes consider every run, not just the reported first one.
     # Lifecycle-aware fold: only `gate` failures block; an `xfail` golden's
@@ -4137,6 +4217,16 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
     if any(
         r.hard_fail and (lifecycles[i] if i < len(lifecycles) else "gate") == "gate"
         for rr in all_runs for i, r in enumerate(rr)
+    ):
+        sys.exit(1)
+    # World-miss clause (A7), BEFORE the infra clause (A3: a propagated miss
+    # otherwise lands in infra → exit 2). gate: any recorded miss in ANY run
+    # means the verdict was not obtained on the frozen world → exit 1.
+    # xfail: misses never flip the exit; they only suppressed xpass above.
+    if any(
+        c.report().miss_count
+        and (lifecycles[i] if i < len(lifecycles) else "gate") == "gate"
+        for (_run, i), c in world_clones.items()
     ):
         sys.exit(1)
     if cost_aborted or any(r.is_infra_error for rr in all_runs for r in rr):
@@ -4521,9 +4611,14 @@ def stage_show(stage_id, config, staged_dir, export_path, fmt):
                    'conversation reproduce." Scripted scenarios have no '
                    'persona; --reroll degenerates to the verbatim replay.')
 @click.option('--mock', is_flag=True, help='Verify with synthetic traces (zero keys)')
+@click.option('--world', 'world_path', default=None, type=click.Path(exists=True),
+              help='Verify against this frozen world: does the agent still '
+                   'fail given the frozen backend? Runs with world misses are '
+                   'excluded from re-classification (A6).')
 @click.option('--workers', '-w', default=4, show_default=True, type=int)
 @click.option('--yes', '-y', is_flag=True, help='Skip the live-run confirmation')
-def stage_verify(stage_id, config, staged_dir, runs, reroll, mock, workers, yes):
+def stage_verify(stage_id, config, staged_dir, runs, reroll, mock, world_path,
+                 workers, yes):
     """Re-run one staged scenario N times and re-classify it in place.
 
     The cheap path from `unverified` → `consistent` (or a downgrade). Zero-key
@@ -4611,21 +4706,64 @@ def stage_verify(stage_id, config, staged_dir, runs, reroll, mock, workers, yes)
                 console.print("[yellow]Aborted.[/]")
                 sys.exit(0)
 
-    all_runs = []
-    for _ in range(max(1, runs)):
+    _verify_world = None
+    if world_path:
+        from .world import World as _World, WorldError as _WorldError
+
         try:
-            r = run_scenario(
-                scenario, conv_runner,
-                agent_name=spec.agent, judge_config=spec.judge_config,
-                turn_source=turn_source,
-                persona_config=(
-                    spec.persona_config if verify_mode == "reroll" else None
-                ),
-            )
+            _verify_world = _World.load(world_path)
+        except _WorldError as e:
+            console.print(f"[bold red]{e}[/]")
+            sys.exit(2)
+
+    from contextlib import nullcontext
+
+    from .world import activate as _activate_world
+
+    all_runs = []
+    _missed_runs = 0
+    _first_miss_detail = ""
+    for _ in range(max(1, runs)):
+        clone = _verify_world.clone() if _verify_world is not None else None
+        try:
+            with (_activate_world(clone) if clone is not None else nullcontext()):
+                r = run_scenario(
+                    scenario, conv_runner,
+                    agent_name=spec.agent, judge_config=spec.judge_config,
+                    turn_source=turn_source,
+                    persona_config=(
+                        spec.persona_config if verify_mode == "reroll" else None
+                    ),
+                )
         except Exception as e:  # noqa: BLE001
+            if clone is not None and clone.report().miss_count:
+                _missed_runs += 1
+                _first_miss_detail = _first_miss_detail or clone.report().misses[0].detail
+                continue
             console.print(f"[bold red]Verify error:[/] {e}")
             sys.exit(2)
+        # A6: a run that diverged from the frozen world is not a clean signal;
+        # exclude it from re-classification rather than misattributing it.
+        if clone is not None and clone.report().miss_count:
+            _missed_runs += 1
+            _first_miss_detail = _first_miss_detail or clone.report().misses[0].detail
+            continue
         all_runs.append([r])
+
+    if _verify_world is not None and not all_runs:
+        console.print(
+            f"[bold red]every run diverged from the frozen world[/] "
+            f"({_missed_runs} run(s) with misses) — staging block left "
+            "untouched."
+        )
+        if _first_miss_detail:
+            console.print(f"   [red]first miss:[/] {_first_miss_detail}")
+        sys.exit(1)
+    if _missed_runs:
+        console.print(
+            f"[yellow]{_missed_runs} run(s) excluded from re-classification "
+            "(world misses).[/]"
+        )
 
     stabilities = build_scenario_stability(all_runs)
     stab = stabilities[0] if stabilities else None
@@ -4644,8 +4782,11 @@ def stage_verify(stage_id, config, staged_dir, runs, reroll, mock, workers, yes)
         failure_summary=summary,
     )
     # A reroll-based classification answers a different question than a
-    # verbatim replay — record which one produced it.
-    block["verified_via"] = verify_mode
+    # verbatim replay — record which one produced it (and whether the frozen
+    # world was in the loop).
+    block["verified_via"] = (
+        f"{verify_mode}+world" if world_path else verify_mode
+    )
     store.update_staging_block(stage_id, block)
     console.print(
         f"[green]re-classified[/] {stage_id} → [cyan]{klass.value}[/] "
@@ -4849,6 +4990,164 @@ def promote_cmd(stage_id, config, staged_dir, baseline_dir, force, xfail, flip,
             )
         else:
             console.print("[dim]`ciagent simulate --replay` now gates on it (exit 1 while the bug reproduces).[/]")
+    sys.exit(0)
+
+
+# ── Simulated World: world-from-failure (Plan_docs/world_sim_mvp.md) ────────────
+
+
+@cli.group(name="world")
+def world_group():
+    """Freeze a failing run's tool traffic into a deterministic world.
+
+    A world file holds per-tool fixtures (arguments → frozen response)
+    extracted from a staged entry or golden envelope. Replay against it with
+    `simulate --replay --world` — same backend behavior every time, even when
+    the real backend is stateful or gone. Fail-closed: unmatched calls are
+    world misses, never guesses.
+    """
+
+
+@world_group.command(name="freeze")
+@click.argument('source')
+@click.option('--output', '-o', default=None, type=click.Path(),
+              help='World file path (default: worlds/<name>.world.json)')
+@click.option('--config', '-c', default='agentci_spec.yaml', show_default=True)
+@click.option('--staged-dir', default=None, type=click.Path())
+@click.option('--tools', 'tools_csv', default=None,
+              help='Only freeze these tools (comma-separated)')
+@click.option('--allow-gaps', is_flag=True,
+              help='Freeze even when some calls have no recorded result '
+                   '(those calls WILL miss on replay; recorded as gaps).')
+@click.option('--force-redact', is_flag=True,
+              help='Proceed when redacting an UNREDACTED source would make '
+                   'fixtures diverge from the golden\'s raw turns/checks.')
+def world_freeze(source, output, config, staged_dir, tools_csv, allow_gaps,
+                 force_redact):
+    """Freeze SOURCE (a stage id, or a path to a golden envelope) to a world.
+
+    \b
+    Exit codes:
+        0 — world written
+        1 — nothing freezable (no tool calls, gaps without --allow-gaps,
+            SOURCE not found)
+        2 — config error / unredacted-source refusal
+    """
+    from pathlib import Path
+
+    from .conversation import load_envelope
+    from .engine.simulate import scenario_slug
+    from .promotion import StageAmbiguous, StageNotFound, _identity
+    from .world import WorldError, freeze_envelope
+
+    spec, store = _stage_store(config, staged_dir)
+
+    src = Path(source)
+    if src.is_file():
+        env = load_envelope(src)
+        frozen_from = {"source": "golden", "id": str(src),
+                       "envelope_mode": env.mode}
+    else:
+        try:
+            _path, env = store.load(source)
+        except (StageNotFound, StageAmbiguous) as e:
+            console.print(f"[bold red]{e}[/]")
+            sys.exit(1)
+        frozen_from = {"source": "stage", "id": source,
+                       "envelope_mode": env.mode}
+
+    # A8: redact the WHOLE envelope once (never per-string) before extraction.
+    redactor = _resolve_redactor(spec)
+    if redactor is not _identity:
+        already = bool(((env.staging or {}).get("redaction") or {}).get("applied"))
+        env2, counts, _degraded = redactor.redact_with_counts(env)
+        substitutions = sum(counts.values())
+        if substitutions and not already and not force_redact:
+            console.print(
+                f"[bold red]Refusing:[/] the source is unredacted and freezing "
+                f"would scrub {substitutions} value(s), making fixtures diverge "
+                "from the golden's raw turns and check literals. Re-run with "
+                "[cyan]--force-redact[/] to proceed anyway."
+            )
+            sys.exit(2)
+        env = env2
+
+    name = (env.scenario or {}).get("name") or "world"
+    try:
+        w = freeze_envelope(
+            env,
+            name=scenario_slug(name),
+            tools_filter=[t.strip() for t in tools_csv.split(",")] if tools_csv else None,
+            allow_gaps=allow_gaps,
+        )
+    except WorldError as e:
+        console.print(f"[bold red]{e}[/]")
+        sys.exit(1)
+    w.frozen_from = frozen_from
+
+    # A11: pseudo-tools (e.g. graph-node emissions) have no argument schema.
+    for tool, tw in w.tools.items():
+        if all(not f.match for f in tw.fixtures):
+            console.print(
+                f"[yellow]warning:[/] tool '{tool}' has no argument-shaped "
+                "fixtures (a graph-node emission?). Consider excluding it "
+                "with --tools."
+            )
+
+    out = Path(output) if output else Path("worlds") / f"{scenario_slug(name)}.world.json"
+    w.save(out)
+    console.print(f"[green]✅ world frozen[/] → [cyan]{out}[/]")
+    for tool, tw in w.tools.items():
+        seq = " [magenta](sequence)[/]" if tw.sequence else ""
+        hint = (f"  [dim]suggested ignore: {tw.suggested_ignore}[/]"
+                if tw.suggested_ignore else "")
+        console.print(f"   {tool}: {len(tw.fixtures)} fixture(s){seq}{hint}")
+    if w.gaps:
+        console.print(f"   [yellow]{len(w.gaps)} gap(s) recorded — those calls "
+                      "will miss on replay.[/]")
+    sys.exit(0)
+
+
+@world_group.command(name="show")
+@click.argument('path', type=click.Path(exists=True))
+@click.option('--format', 'fmt', type=click.Choice(['console', 'json']),
+              default='console', show_default=True)
+def world_show(path, fmt):
+    """Show a world file's tool surface.
+
+    \b
+    Exit codes:
+        0 — shown
+        1 — invalid world file
+    """
+    _route_chrome(fmt)
+    import json as _json
+
+    from .world import World, WorldError
+
+    try:
+        w = World.load(path)
+    except WorldError as e:
+        console.print(f"[bold red]{e}[/]")
+        sys.exit(1)
+
+    if fmt == "json":
+        print(_json.dumps(w.to_dict(), indent=2, default=str))
+        sys.exit(0)
+
+    console.print(f"[bold]{path}[/] — world '[cyan]{w.name}[/]' "
+                  f"(agent: [cyan]{w.agent}[/], from: {w.frozen_from.get('source', '?')})")
+    for tool, tw in w.tools.items():
+        seq = " [magenta](sequence)[/]" if tw.sequence else ""
+        console.print(f"  {tool}: {len(tw.fixtures)} fixture(s){seq}")
+        ignored = sorted({k for f in tw.fixtures for k in f.ignore})
+        if ignored:
+            console.print(f"    [dim]ignored fields: {ignored}[/]")
+        if tw.suggested_ignore:
+            console.print(f"    [dim]suggested ignore: {tw.suggested_ignore}[/]")
+    if w.gaps:
+        console.print(f"  [yellow]{len(w.gaps)} gap(s): calls recorded without "
+                      "a result at freeze time (will miss on replay).[/]")
     sys.exit(0)
 
 

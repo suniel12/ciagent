@@ -46,6 +46,7 @@ class FlipSource(str, Enum):
     MIXED = "mixed"                    # near-identical paraphrase + judge → ambiguous
     SIMULATION_VARIANCE = "simulation-variance"  # simulated user said different things → persona, not agent
     RETRIEVAL_VARIANCE = "retrieval-variance"    # same tool sequence, retrieved set changed → retriever, not prompt
+    WORLD_MISS = "world-miss"          # replay diverged from the frozen world → not a clean agent signal
 
 
 @dataclass

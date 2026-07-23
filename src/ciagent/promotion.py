@@ -98,6 +98,7 @@ FLIP_SOURCE_TO_CLASS: dict[FlipSource, Classification] = {
     FlipSource.JUDGE_FLAKE: Classification.HELD,
     FlipSource.MIXED: Classification.HELD,
     FlipSource.INFRA_ERROR: Classification.HELD_INFRA,
+    FlipSource.WORLD_MISS: Classification.HELD,
 }
 
 
