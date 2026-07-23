@@ -2,9 +2,9 @@ name: CIAgent Checks
 
 on:
   push:
-    branches: [main, master, v2]
+    branches: [main]
   pull_request:
-    branches: [main, master, v2]
+    branches: [main]
 
 jobs:
   agentci-deterministic:
