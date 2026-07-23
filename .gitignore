@@ -46,6 +46,7 @@ README_v2.md
 # Local config
 agentci.yaml
 agentci_spec.yaml
+!src/ciagent/examples/**/agentci_spec.yaml
 
 # Claude context
 .claude/

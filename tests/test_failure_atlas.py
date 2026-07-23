@@ -29,6 +29,13 @@ SIMPLE_ENTRIES = ["money-out-no-verification", "transcript-poisoning"]
 
 
 def _run_in_copy(entry: str, argv: list[str], tmp_path: Path) -> subprocess.CompletedProcess:
+    # Guard against the gitignore trap: agentci_spec.yaml is globally ignored
+    # (it's a user-config filename), so an atlas spec that isn't force-added is
+    # absent in a fresh checkout and the entry silently can't run. Fail loudly.
+    assert (ATLAS / entry / "agentci_spec.yaml").is_file(), (
+        f"{entry}: agentci_spec.yaml missing — is it tracked? "
+        "(.gitignore un-ignores src/ciagent/examples/**/agentci_spec.yaml)"
+    )
     work = tmp_path / entry
     shutil.copytree(ATLAS / entry, work)
     return subprocess.run(
