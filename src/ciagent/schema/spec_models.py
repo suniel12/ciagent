@@ -488,13 +488,23 @@ class ScenarioSpec(BaseModel):
 class StagingSpec(BaseModel):
     """Auto-staging config for failing `ciagent simulate` conversations.
 
-    v1: `enabled` defaults False (opt-in) until capture-time redaction exists —
-    raw conversation text must not hit disk by default. `staging: false` in the
-    spec is the bool shorthand; it is coerced to `StagingSpec(enabled=False)`.
+    `enabled` defaults True since capture-time redaction ships (0.12): staged
+    files are scrubbed of secrets and PII before they hit disk (see
+    Plan_docs/redaction_capture.md). `staging: false` in the spec is the bool
+    shorthand; it is coerced to `StagingSpec(enabled=False)`. `redact: false`
+    is an explicit escape hatch and prints a warning at stage time.
     """
     enabled: bool = Field(
-        False,
-        description="Auto-stage failing conversations (v1 default OFF until redaction)",
+        True,
+        description="Auto-stage failing conversations (default ON; staged files are redacted)",
+    )
+    redact: bool = Field(
+        True,
+        description="Scrub secrets and PII from staged files at capture time",
+    )
+    redact_patterns: list[str] = Field(
+        default_factory=list,
+        description="Extra regexes to redact (replaced with [SECRET:custom#n])",
     )
     cap: int = Field(10, ge=1, description="Max staged conversations kept per scenario")
     max_age_days: int = Field(30, ge=1, description="Age GC cutoff for staged files")

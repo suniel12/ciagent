@@ -77,10 +77,21 @@ class TestSimulateAutoStage:
             assert env.staging["classification"] == "consistent"
             assert env.staging["runs_observed"] == 3
 
-    def test_staging_off_by_default_prints_notice(self):
+    def test_staging_on_by_default_stages_and_gitignores(self):
+        # 0.12 default flip (redaction ADR D5): a spec with no `staging:` key
+        # stages on failure and scaffolds the gitignore entry.
         runner = CliRunner()
         with runner.isolated_filesystem():
             _write()
+            result = _invoke(["simulate", "--yes"])
+            assert result.exit_code == 1, result.output
+            assert list(Path(".ciagent/staged").rglob("*.json"))
+            assert ".ciagent/staged/" in Path(".gitignore").read_text()
+
+    def test_staging_disabled_in_spec_prints_notice(self):
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            _write("staging: false\n")
             result = _invoke(["simulate", "--yes"])
             assert result.exit_code == 1, result.output
             assert "enable staging" in result.output
@@ -126,3 +137,115 @@ class TestSimulateAutoStage:
             result = CliRunner().invoke(cli, ["simulate", "--mock", "--stage"])
             assert result.exit_code == 0, result.output
             assert not Path(".ciagent/staged").exists()
+
+
+class TestCaptureTimeRedaction:
+    """Integration for the redaction slice (Plan_docs/redaction_capture.md)."""
+
+    LEAKY_AGENT = (
+        "def respond(messages):\n"
+        "    return 'contact alice@corp.example.org, key sk-abc123DEF456ghi789jkl'\n"
+    )
+
+    def _write_leaky(self, spec_extra=""):
+        Path("agentci_spec.yaml").write_text(BASE_SPEC + spec_extra)
+        Path("toy_failing_agent.py").write_text(self.LEAKY_AGENT)
+
+    def test_staged_file_is_scrubbed_with_counts(self):
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._write_leaky()
+            result = _invoke(["simulate", "--yes"])
+            assert result.exit_code == 1, result.output
+            staged = list(Path(".ciagent/staged").rglob("*.json"))
+            assert len(staged) == 1
+            raw = staged[0].read_text()
+            assert "sk-abc123DEF456ghi789jkl" not in raw
+            assert "alice@corp.example.org" not in raw
+            env = load_envelope(staged[0])
+            red = env.staging["redaction"]
+            assert red["applied"] is True
+            assert red["counts"]["secret"] == 1
+            assert red["counts"]["email"] == 1
+
+    def test_failure_summary_scrubbed(self):
+        # ADR A1: the correctness message embeds a raw answer preview; the
+        # block is attached before the walk so it cannot leak.
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._write_leaky()
+            result = _invoke(["simulate", "--yes"])
+            assert result.exit_code == 1, result.output
+            staged = list(Path(".ciagent/staged").rglob("*.json"))
+            env = load_envelope(staged[0])
+            assert "sk-abc123DEF456ghi789jkl" not in env.staging["failure_summary"]
+
+    def test_redact_false_warns_and_writes_raw(self):
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._write_leaky("staging:\n  enabled: true\n  redact: false\n")
+            result = _invoke(["simulate", "--yes"])
+            assert result.exit_code == 1, result.output
+            assert "redact is disabled" in result.output
+            staged = list(Path(".ciagent/staged").rglob("*.json"))
+            env = load_envelope(staged[0])
+            assert env.staging["redaction"]["applied"] is False
+
+    def test_custom_pattern_from_spec(self):
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            Path("agentci_spec.yaml").write_text(
+                BASE_SPEC + 'staging:\n  redact_patterns: ["cannot help"]\n'
+            )
+            Path("toy_failing_agent.py").write_text(FAILING_AGENT)
+            result = _invoke(["simulate", "--yes"])
+            assert result.exit_code == 1, result.output
+            staged = list(Path(".ciagent/staged").rglob("*.json"))
+            raw = staged[0].read_text()
+            assert "cannot help" not in raw
+            assert "[SECRET:custom#1]" in raw
+
+    def test_show_and_export_scrub_pre_redaction_file(self):
+        # A staged file written raw (redact: false) is scrubbed on every
+        # show/export path with the current (default) config.
+        import json as _json
+
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._write_leaky("staging:\n  enabled: true\n  redact: false\n")
+            result = _invoke(["simulate", "--yes"])
+            assert result.exit_code == 1, result.output
+            staged = list(Path(".ciagent/staged").rglob("*.json"))
+            assert "sk-abc123DEF456ghi789jkl" in staged[0].read_text()
+
+            # flip the spec back to default redact-on for the read paths
+            Path("agentci_spec.yaml").write_text(BASE_SPEC)
+            sid = staged[0].stem
+            res = CliRunner().invoke(cli, ["stage", "show", sid, "--format", "json"])
+            assert res.exit_code == 0, res.output
+            assert "sk-abc123DEF456ghi789jkl" not in res.stdout
+            _json.loads(res.stdout)
+
+            res = CliRunner().invoke(
+                cli, ["stage", "show", sid, "--export", "shared.json"]
+            )
+            assert res.exit_code == 0, res.output
+            assert "exported redacted copy" in res.output
+            assert "sk-abc123DEF456ghi789jkl" not in Path("shared.json").read_text()
+
+    def test_verify_preserves_redaction_block(self):
+        runner = CliRunner()
+        with runner.isolated_filesystem():
+            self._write_leaky()
+            result = _invoke(["simulate", "--yes"])
+            assert result.exit_code == 1, result.output
+            from ciagent.promotion import StageStore
+
+            sid = StageStore(Path(".ciagent/staged")).list()[0].stage_id
+            res = CliRunner().invoke(
+                cli, ["stage", "verify", sid, "--mock", "--runs", "2"]
+            )
+            assert res.exit_code == 0, res.output
+            staged = list(Path(".ciagent/staged").rglob("*.json"))
+            env = load_envelope(staged[0])
+            assert env.staging["redaction"]["applied"] is True

@@ -3442,6 +3442,49 @@ def _simulation_turn_plan(scenarios) -> tuple[int, int, int]:
     return agent_turns, persona_turns, judged_turns
 
 
+def _resolve_redactor(spec):
+    """Redactor per spec staging config: the real one unless `redact: false`.
+
+    StageStore's constructor default stays `_identity` (storage is policy-free,
+    ADR A8) — policy is resolved here, at the CLI layer, in the two places
+    that construct stores.
+    """
+    from .promotion import _identity
+    from .redaction import Redactor
+
+    staging = getattr(spec, "staging", None)
+    if staging is not None and not getattr(staging, "redact", True):
+        return _identity
+    patterns = list(getattr(staging, "redact_patterns", []) or [])
+    return Redactor(extra_patterns=patterns)
+
+
+def _warn_redacted_check_literals(env) -> None:
+    """ADR A4: a `not_in_answer` check whose literal was redacted is vacuous,
+    and an `expected_in_answer` on a redacted literal can never match a live
+    answer. This never self-surfaces, so verify/promote must warn."""
+    from .redaction import contains_placeholder
+
+    def _strings(node):
+        if isinstance(node, str):
+            yield node
+        elif isinstance(node, dict):
+            for v in node.values():
+                yield from _strings(v)
+        elif isinstance(node, list):
+            for v in node:
+                yield from _strings(v)
+
+    spec_dict = (env.scenario or {}).get("spec") or {}
+    if any(contains_placeholder(s) for s in _strings(spec_dict)):
+        console.print(
+            "[yellow]warning:[/] this scenario's checks reference redacted "
+            "values — verify semantics are degraded. A `not_in_answer` check "
+            "on a redacted literal is vacuous; express leak-gates as regex "
+            "checks (regex values are not rewritten by redaction)."
+        )
+
+
 def _auto_stage_failures(results, stability, spec, staged_dir, source):
     """Stage every failing scenario result (best-effort).
 
@@ -3460,11 +3503,17 @@ def _auto_stage_failures(results, stability, spec, staged_dir, source):
     )
 
     try:
+        if not getattr(spec.staging, "redact", True):
+            console.print(
+                "[yellow]staging warning:[/] redact is disabled — staged files "
+                "will contain RAW conversation text (possibly PII/secrets)."
+            )
         root = Path(staged_dir or DEFAULT_STAGED_DIR)
         store = StageStore(
             root,
             cap=getattr(spec.staging, "cap", 10),
             max_age_days=getattr(spec.staging, "max_age_days", 30),
+            redactor=_resolve_redactor(spec),
         )
         run_id = datetime.now(timezone.utc).strftime("sim-%Y%m%dT%H%M%S")
         # stability is aligned to results by index when runs > 1
@@ -3495,6 +3544,13 @@ def _auto_stage_failures(results, stability, spec, staged_dir, source):
             except Exception as e:  # noqa: BLE001 — best-effort, never fail the run
                 console.print(f"[yellow]staging warning:[/] {name}: {e}")
         if staged:
+            # Existing repos never re-run `init`, so protect them here: the
+            # scaffold is idempotent and staged files must not be committed
+            # (redaction reduces blast radius, it does not make them public).
+            try:
+                _scaffold_staging_gitignore()
+            except OSError:
+                pass
             console.print(
                 f"[dim]staged {staged} failing conversation(s) → "
                 f"[cyan]ciagent stage list[/] / [cyan]ciagent promote[/][/]"
@@ -3560,7 +3616,8 @@ def _print_conversation_diff(diff):
 @click.option('--yes', '-y', is_flag=True, help='Skip the live-run confirmation')
 @click.option('--stage/--no-stage', 'stage_flag', default=None,
               help='Auto-stage failing conversations for later promotion '
-                   '(overrides spec staging.enabled; v1 default OFF until redaction).')
+                   '(overrides spec staging.enabled; default ON — staged '
+                   'files are redacted at capture time).')
 @click.option('--staged-dir', default=None, type=click.Path(),
               help='Staging root (default: .ciagent/staged)')
 @click.option('--format', 'fmt', type=click.Choice(['console', 'json']),
@@ -4147,6 +4204,7 @@ def _stage_store(config, staged_dir):
         root,
         cap=getattr(spec.staging, "cap", 10),
         max_age_days=getattr(spec.staging, "max_age_days", 30),
+        redactor=_resolve_redactor(spec),
     )
     return spec, store
 
@@ -4232,9 +4290,10 @@ def stage_list(config, staged_dir, agent, klass, fmt):
 @click.option('--config', '-c', default='agentci_spec.yaml', show_default=True)
 @click.option('--staged-dir', default=None, type=click.Path())
 @click.option('--export', 'export_path', default=None, type=click.Path(),
-              help='Write a copy of the staged envelope here for sharing '
-                   '(issue/PR). v1 has NO redactor wired: the export contains '
-                   'the raw conversation text — review before sharing.')
+              help='Write a REDACTED copy of the staged envelope here for '
+                   'sharing (issue/PR). Redaction runs with the current config '
+                   'on every show/export, so pre-0.12 unredacted staged files '
+                   'are scrubbed too.')
 @click.option('--format', 'fmt', type=click.Choice(['console', 'json']),
               default='console', show_default=True)
 def stage_show(stage_id, config, staged_dir, export_path, fmt):
@@ -4263,6 +4322,13 @@ def stage_show(stage_id, config, staged_dir, export_path, fmt):
         console.print(f"[bold red]{e}[/]")
         sys.exit(1)
 
+    # Everything `stage show` emits is a sharing path (ADR A11): re-redact
+    # with the current config. Covers pre-0.12 files staged before redaction
+    # existed; on already-redacted files this is a no-op by construction.
+    redactor = _resolve_redactor(_spec)
+    if redactor is not _identity:
+        env = redactor(env)
+
     if fmt == "json":
         print(_json.dumps(_json.loads(env.model_dump_json()), indent=2))
     else:
@@ -4276,14 +4342,15 @@ def stage_show(stage_id, config, staged_dir, export_path, fmt):
             console.print(f"  [dim]turn {t.turn_index + 1}:[/] {t.user_message[:50]!r} → {answer!r}")
 
     if export_path:
-        # _identity is the redactor seam; in v1 it is a declared no-op, so the
-        # export is raw. Say so — never imply PII safety that doesn't exist.
-        out = save_envelope(_identity(env), Path(export_path))
-        console.print(f"[green]exported:[/] {out}")
-        console.print(
-            "[yellow]note:[/] v1 applies no redaction — this file contains the "
-            "raw conversation text. Review it before sharing."
-        )
+        out = save_envelope(env, Path(export_path))
+        if redactor is _identity:
+            console.print(f"[green]exported:[/] {out}")
+            console.print(
+                "[yellow]note:[/] redact is disabled in your spec — this file "
+                "contains the raw conversation text. Review it before sharing."
+            )
+        else:
+            console.print(f"[green]exported redacted copy:[/] {out}")
     sys.exit(0)
 
 
@@ -4330,6 +4397,7 @@ def stage_verify(stage_id, config, staged_dir, runs, mock, workers, yes):
     except ValueError as e:
         console.print(f"[bold red]Cannot replay:[/] {e}")
         sys.exit(2)
+    _warn_redacted_check_literals(env)
 
     if mock:
         from .engine.mock_runner import mock_conversation_runner
@@ -4513,6 +4581,11 @@ def promote_cmd(stage_id, config, staged_dir, baseline_dir, force, yes, fmt):
             sys.exit(0)
 
     svc = PromotionService(store)
+    try:
+        _, env_preview = store.load(stage_id)
+        _warn_redacted_check_literals(env_preview)
+    except Exception:  # noqa: BLE001 — warning only; promote() re-resolves
+        pass
     try:
         out = svc.promote(stage_id, baseline_dir=effective_baseline, force=force)
     except (StageNotFound, StageAmbiguous) as e:

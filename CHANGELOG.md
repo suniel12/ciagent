@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — capture-time redaction; staging is now ON by default
+- New deterministic redactor (`ciagent.redaction`) scrubs staged
+  conversations before they hit disk: known secret-key prefixes (OpenAI,
+  Anthropic, AWS, GitHub, Slack, Google, Stripe), key/Bearer contexts, a
+  key-aware walk (`api_key`, `token`, `password`, ... values redacted
+  whatever their shape), emails, phones, Luhn-checked card numbers, plus
+  spec-configured `staging.redact_patterns`. No LLM, no entropy scanning.
+  Placeholders are shape-preserving and stable within an envelope, so
+  replays keep behaving like the original conversation; re-redaction is a
+  byte-level no-op
+- BREAKING-ish default: `staging.enabled` now defaults to **true** (the
+  0.11.0 changelog promised default-ON with the redaction release). Disable
+  with `staging: false` or `--no-stage`. Note: a bare `staging:` key (null)
+  coerces to defaults and is now enabled. The `.ciagent/staged/` gitignore
+  entry is scaffolded on the first auto-stage for repos that never re-ran
+  `init`
+- `stage show` (console and json) and `--export` now re-redact with the
+  current config on every read, retroactively covering staged files written
+  by 0.11.0; the staging block records `redaction: {applied, counts}`;
+  `stage verify` preserves it. `stage verify`/`promote` warn when a
+  scenario's check literals reference redacted values (a `not_in_answer`
+  leak-gate on a redacted literal is vacuous; use regex checks, which
+  redaction does not rewrite)
+- Design: Plan_docs/redaction_capture.md (adversarial architect pass folded
+  in: staging block inside the walk, parse-safety guards, degraded fallback)
+
 ## [0.11.0] - 2026-07-22
 
 ### Added — Golden Promotion Pipeline v1: auto-stage → triage → one-command promote

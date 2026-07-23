@@ -14,27 +14,54 @@ ciagent promote <id>                # one staged failure becomes a golden CI gat
 ciagent simulate --replay ./golden  # exit 1 while the bug reproduces
 ```
 
-## Enabling staging (opt-in in v1)
+## Staging is on by default, with capture-time redaction
 
-Staged files contain the raw conversation text (possibly PII) and no redactor
-is wired yet, so staging is **off by default**. Turn it on per run with
-`--stage`, or in the spec:
+Since 0.12, staging is **on by default**: every failing simulate conversation
+is captured automatically, and staged files are scrubbed of secrets and PII
+before they hit disk. Spec surface:
 
 ```yaml
 staging:
-  enabled: true
-  cap: 10           # staged conversations kept per scenario (newest win)
-  max_age_days: 30  # age cutoff for retention GC
+  enabled: true        # default; `staging: false` disables
+  redact: true         # default; false writes RAW text and warns
+  redact_patterns: []  # extra regexes to scrub, optional
+  cap: 10              # staged conversations kept per scenario (newest win)
+  max_age_days: 30     # age cutoff for retention GC
 ```
 
-`staging: true` is accepted as a bool shorthand. Files land under
-`.ciagent/staged/<agent>/<scenario-id>/<run-ts>-<hash>.json`; `ciagent init`
-adds `.ciagent/staged/` to `.gitignore` so they are never committed. When a
-failure is found with staging off, simulate prints a one-line notice instead
-of writing anything.
+`staging: false` is accepted as a bool shorthand. Files land under
+`.ciagent/staged/<agent>/<scenario-id>/<run-ts>-<hash>.json`; the gitignore
+entry for `.ciagent/staged/` is scaffolded by `ciagent init` and on the
+first auto-stage, so staged files are never committed. When a failure is
+found with staging explicitly disabled, simulate prints a one-line notice
+instead of writing anything.
 
 Staging is best-effort by contract: a staging error prints a warning and
 never changes the run's exit code.
+
+### What redaction scrubs
+
+Deterministic patterns only (no LLM, no entropy scanning), applied over every
+string in the envelope with a key-aware walk (a value under `api_key`,
+`token`, `password`, and similar keys is redacted whatever its shape):
+
+- Known key prefixes: OpenAI/Anthropic `sk-…`, AWS `AKIA…`, GitHub `ghp_…`,
+  Slack `xox…`, Google `AIza…`, Stripe `sk_live_…`.
+- `key=value` / `Authorization: Bearer …` contexts inside strings.
+- Emails, phone numbers, card numbers (Luhn-checked). Placeholders are
+  shape-preserving (`redacted-1@example.com`, `+1-555-0100`) so replays keep
+  behaving like the original conversation; the same value always maps to the
+  same placeholder within an envelope.
+- Your own `redact_patterns` regexes.
+
+The staging block records what happened
+(`redaction: {applied, counts, degraded?}`). `stage show` and `--export`
+re-redact with the current config on every read, which also covers staged
+files written before 0.12. One caveat: if a scenario's check literals get
+redacted (say a `not_in_answer` leak-gate on a real key), `stage verify` and
+`promote` warn that the check semantics are degraded; express leak-gates as
+regex checks, which redaction does not rewrite. Full design:
+`Plan_docs/redaction_capture.md`.
 
 ## Triage classification
 

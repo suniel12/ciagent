@@ -215,8 +215,22 @@ class StageStore:
         scenario_dir = self.root / agent / scenario_id
         scenario_dir.mkdir(parents=True, exist_ok=True)
 
-        redacted = self._redactor(env)
-        redacted.staging = dict(staging_block)
+        # Ordering matters (ADR A1): attach the staging block BEFORE redacting
+        # so its failure_summary (which embeds a raw answer preview) is inside
+        # the walk, then merge the redaction metadata into the redacted block.
+        work = env.model_copy(deep=True)
+        work.staging = dict(staging_block)
+        if hasattr(self._redactor, "redact_with_counts"):
+            redacted, counts, degraded = self._redactor.redact_with_counts(work)
+            redaction_meta: dict[str, Any] = {"applied": True, "counts": counts}
+            if degraded:
+                redaction_meta["degraded"] = True
+        else:
+            redacted = self._redactor(work)
+            redaction_meta = {"applied": False, "counts": {}}
+        block = dict(redacted.staging or {})
+        block["redaction"] = redaction_meta
+        redacted.staging = block
 
         stamp = self._now().strftime("%Y%m%dT%H%M%S")
         suffix = self._content_hash(redacted, staging_block)
@@ -340,10 +354,18 @@ class StageStore:
         path.unlink(missing_ok=True)
 
     def update_staging_block(self, stage_id: str, block: dict[str, Any]) -> Path:
-        """Rewrite one staged file's staging block in place (used by verify)."""
+        """Rewrite one staged file's staging block in place (used by verify).
+
+        The incumbent `redaction` record is carried forward when the new block
+        lacks one — verify rebuilds blocks from scratch and must not erase the
+        transparency record (ADR A7; this is the single choke point)."""
         path = self._resolve(stage_id)
         env = load_envelope(path)
-        env.staging = dict(block)
+        new_block = dict(block)
+        incumbent = (env.staging or {}).get("redaction")
+        if "redaction" not in new_block and incumbent is not None:
+            new_block["redaction"] = incumbent
+        env.staging = new_block
         self._atomic_write(env, path)
         return path
 

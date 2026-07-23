@@ -60,10 +60,10 @@ class TestSimulateJsonStdout:
             res = r.invoke(cli, ["simulate", "--mock"])
         assert "CIAgent" in res.stdout
 
-    def test_repro_notice_not_on_stdout(self):
-        # The staging-off notice is chrome too — a FAILING run's JSON must
-        # still parse. Mock always satisfies checks, so use a toy agent that
-        # never says "refund".
+    def test_staging_notices_not_on_stdout(self):
+        # Staging chrome (staged notice, gitignore scaffold line) must be
+        # stderr — a FAILING run's JSON must still parse. Mock always
+        # satisfies checks, so use a toy agent that never says "refund".
         import sys
 
         spec = SIM_SPEC + 'conversation_runner: "toy_agent:respond"\n'
@@ -83,6 +83,30 @@ class TestSimulateJsonStdout:
                 sys.modules.pop("toy_agent", None)
         payload = json.loads(res.stdout)
         assert payload["summary"]["passed"] < payload["summary"]["total"]
+        # staging is default-ON: the staged notice is chrome, on stderr
+        assert "staged 1 failing conversation" in res.stderr
+        assert "staged" not in res.stdout or json.loads(res.stdout)
+
+    def test_disabled_staging_repro_notice_not_on_stdout(self):
+        import sys
+
+        spec = (SIM_SPEC + 'conversation_runner: "toy_agent:respond"\n'
+                + 'staging: false\n')
+        r = CliRunner()
+        with r.isolated_filesystem():
+            Path("agentci_spec.yaml").write_text(spec)
+            Path("toy_agent.py").write_text(
+                "def respond(messages):\n    return 'i cannot help'\n"
+            )
+            sys.path.insert(0, ".")
+            try:
+                res = r.invoke(
+                    cli, ["simulate", "--yes", "--format", "json"]
+                )
+            finally:
+                sys.path.remove(".")
+                sys.modules.pop("toy_agent", None)
+        json.loads(res.stdout)
         assert "repro was found" in res.stderr
 
 
