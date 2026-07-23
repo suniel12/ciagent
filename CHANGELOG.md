@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — world mutations: chaos engineering on frozen fixtures
+- `ciagent world mutate <world> --op <operator>` derives a NEW world file
+  (source never modified) that flows through the existing replay machinery,
+  so "my agent survives a degraded or hostile backend" is a deterministic
+  gate, not a robustness score. Operators: `empty`, `error`, `inject`
+  (adversarial payload into every string leaf), `rewrite` (OLD=NEW),
+  `truncate-sequence`, `swap`. `ciagent world operators` lists them
+- Flagship: prompt injection via tool output. `inject` an override into a
+  tool's frozen response, replay, and a `forbidden_tools`/`not_in_answer`
+  gate fires the moment the agent obeys it — promotable as a permanent gate
+  or xfail. Built-in payloads are benign-but-representative; real ones via
+  --payload-file; payloads are never redacted
+- Two signal channels documented: response-changing operators surface via
+  check verdicts (same call args → no misses); truncate/swap are designed
+  misses, xfail-only for gate lifecycles. `mutated_from` provenance is a
+  first-class world field (survives round-trips, shown by `world show`)
+- MCP: `ciagent_world_mutate` + `ciagent_world_operators`
+- Design: Plan_docs/world_mutations.md (adversarial review, M1-M10 folded in)
+
 ### Added — MCP server: agents that gate the agents they build
 - `ciagent mcp` (new `ciagent[mcp]` extra) runs a stdio MCP server exposing
   the loop to coding agents: test, simulate (incl. frozen-world replay),

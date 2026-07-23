@@ -32,7 +32,7 @@ from typing import Any, Optional
 # guaranteed click UsageError (exit 2).
 SUPPORTS_JSON = {
     ("test",), ("simulate",), ("stage", "list"), ("stage", "show"),
-    ("promote",), ("world", "show"),
+    ("promote",), ("world", "show"), ("world", "mutate"), ("world", "operators"),
 }
 SUPPORTS_YES = {
     ("test",), ("simulate",), ("stage", "verify"), ("stage", "drop"),
@@ -356,6 +356,41 @@ async def tool_world_freeze(cfg: ServerConfig, *, source: str,
     return env
 
 
+async def tool_world_mutate(cfg: ServerConfig, *, world_file: str, op: str,
+                            tools: Optional[str] = None,
+                            fixture: Optional[int] = None,
+                            payload_id: Optional[str] = None,
+                            payload: Optional[str] = None,
+                            error_text: Optional[str] = None,
+                            rewrite: Optional[str] = None,
+                            output: Optional[str] = None) -> dict[str, Any]:
+    # Mirrors world_freeze (M6): a pure file transform, no live gate, jailed.
+    try:
+        src = jail(cfg, world_file, must_exist=True)
+        args = [src, "--op", op]
+        if tools:
+            args += ["--tools", tools]
+        if fixture is not None:
+            args += ["--fixture", str(fixture)]
+        if payload_id:
+            args += ["--payload-id", payload_id]
+        if payload:
+            args += ["--payload", payload]
+        if error_text:
+            args += ["--error-text", error_text]
+        if rewrite:
+            args += ["--rewrite", rewrite]
+        if output:
+            args += ["--output", jail(cfg, output)]
+    except GuardrailRefused as e:
+        return _refused("ciagent world mutate", e)
+    return await invoke(cfg, ("world", "mutate"), args, mutating=True)
+
+
+async def tool_world_operators(cfg: ServerConfig) -> dict[str, Any]:
+    return await invoke(cfg, ("world", "operators"), [])
+
+
 async def tool_world_show(cfg: ServerConfig, *, path: str) -> dict[str, Any]:
     try:
         p = jail(cfg, path, must_exist=True)
@@ -481,6 +516,31 @@ def build_server(cfg: ServerConfig):
     async def _world_show(path: str) -> dict:
         """Show a world file's tool surface."""
         return await tool_world_show(cfg, path=path)
+
+    @s.tool(name="ciagent_world_mutate")
+    async def _world_mutate(world_file: str, op: str,
+                            tools: Optional[str] = None,
+                            fixture: Optional[int] = None,
+                            payload_id: Optional[str] = None,
+                            payload: Optional[str] = None,
+                            error_text: Optional[str] = None,
+                            rewrite: Optional[str] = None,
+                            output: Optional[str] = None) -> dict:
+        """Derive a mutated world (chaos on frozen tool fixtures) to test a
+        degraded or hostile backend. op: empty|error|inject|rewrite|
+        truncate-sequence|swap. inject an adversarial payload to test prompt
+        injection via tool output. Replay the result with ciagent_simulate
+        (replay=golden, world=<derived>). See ciagent_world_operators."""
+        return await tool_world_mutate(cfg, world_file=world_file, op=op,
+                                       tools=tools, fixture=fixture,
+                                       payload_id=payload_id, payload=payload,
+                                       error_text=error_text, rewrite=rewrite,
+                                       output=output)
+
+    @s.tool(name="ciagent_world_operators")
+    async def _world_operators() -> dict:
+        """List mutation operators and built-in injection payloads."""
+        return await tool_world_operators(cfg)
 
     @s.tool(name="ciagent_import")
     async def _import(trace_file: str, dry_run: bool = False,
