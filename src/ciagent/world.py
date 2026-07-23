@@ -162,11 +162,13 @@ class World:
     def __init__(self, tools: dict[str, ToolWorld], *,
                  name: str = "", agent: str = "",
                  frozen_from: Optional[dict[str, Any]] = None,
-                 gaps: Optional[list[dict[str, Any]]] = None) -> None:
+                 gaps: Optional[list[dict[str, Any]]] = None,
+                 mutated_from: Optional[dict[str, Any]] = None) -> None:
         self.tools = tools
         self.name = name
         self.agent = agent
         self.frozen_from = frozen_from or {}
+        self.mutated_from = mutated_from or {}
         self.gaps = gaps or []
         self._served: dict[str, int] = {}
         self._misses: list[MissRecord] = []
@@ -264,7 +266,8 @@ class World:
             for name, tw in self.tools.items()
         }
         return World(tools, name=self.name, agent=self.agent,
-                     frozen_from=self.frozen_from, gaps=self.gaps)
+                     frozen_from=self.frozen_from, gaps=self.gaps,
+                     mutated_from=self.mutated_from)
 
     def report(self) -> WorldReport:
         unconsumed = {
@@ -287,6 +290,7 @@ class World:
             "name": self.name,
             "agent": self.agent,
             "frozen_from": self.frozen_from,
+            **({"mutated_from": self.mutated_from} if self.mutated_from else {}),
             "gaps": self.gaps,
             "tools": {
                 name: {
@@ -349,6 +353,7 @@ class World:
             name=data.get("name") or "",
             agent=data.get("agent") or "",
             frozen_from=data.get("frozen_from") or {},
+            mutated_from=data.get("mutated_from") or {},
             gaps=list(data.get("gaps") or []),
         )
 

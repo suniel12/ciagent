@@ -5165,6 +5165,13 @@ def world_show(path, fmt):
 
     console.print(f"[bold]{path}[/] — world '[cyan]{w.name}[/]' "
                   f"(agent: [cyan]{w.agent}[/], from: {w.frozen_from.get('source', '?')})")
+    if w.mutated_from:
+        mf = w.mutated_from
+        console.print(
+            f"  [magenta]mutated:[/] {mf.get('operator')} on "
+            f"{mf.get('tools')} of '{mf.get('source_name')}'"
+            + (f" (payload: {mf['payload_id']})" if mf.get('payload_id') else "")
+        )
     for tool, tw in w.tools.items():
         seq = " [magenta](sequence)[/]" if tw.sequence else ""
         console.print(f"  {tool}: {len(tw.fixtures)} fixture(s){seq}")
@@ -5176,6 +5183,120 @@ def world_show(path, fmt):
     if w.gaps:
         console.print(f"  [yellow]{len(w.gaps)} gap(s): calls recorded without "
                       "a result at freeze time (will miss on replay).[/]")
+    sys.exit(0)
+
+
+@world_group.command(name="operators")
+@click.option('--format', 'fmt', type=click.Choice(['console', 'json']),
+              default='console', show_default=True)
+def world_operators(fmt):
+    """List mutation operators and the built-in injection payloads.
+
+    \b
+    Exit codes:
+        0 — listed
+    """
+    _route_chrome(fmt)
+    import json as _json
+
+    from .world_mutations import OPERATORS, PAYLOAD_LIBRARY_VERSION, PAYLOADS
+
+    if fmt == "json":
+        print(_json.dumps({
+            "operators": OPERATORS,
+            "payload_library_version": PAYLOAD_LIBRARY_VERSION,
+            "payloads": {k: v["class"] for k, v in PAYLOADS.items()},
+        }, indent=2))
+        sys.exit(0)
+    console.print("[bold]Mutation operators[/]")
+    for name, desc in OPERATORS.items():
+        console.print(f"  [cyan]{name}[/] — {desc}")
+    console.print(f"\n[bold]Injection payloads[/] (library v{PAYLOAD_LIBRARY_VERSION})")
+    for pid, entry in PAYLOADS.items():
+        console.print(f"  [cyan]{pid}[/] — {entry['class']}")
+    console.print("\n[dim]Custom payloads: --payload \"...\" or --payload-file. "
+                  "Real red-team payloads belong in your repo, not this one.[/]")
+    sys.exit(0)
+
+
+@world_group.command(name="mutate")
+@click.argument('world_file', type=click.Path(exists=True))
+@click.option('--op', required=True,
+              type=click.Choice(['empty', 'error', 'inject', 'rewrite',
+                                 'truncate-sequence', 'swap']),
+              help='Mutation operator (see `ciagent world operators`)')
+@click.option('--tools', 'tools_csv', default=None,
+              help='Only mutate these tools (comma-separated; default: all)')
+@click.option('--fixture', 'fixture_index', default=None, type=int,
+              help='Only mutate this fixture index within each scoped tool')
+@click.option('--payload-id', default=None, help='Built-in injection payload id')
+@click.option('--payload', default=None, help='Custom injection payload string')
+@click.option('--payload-file', default=None, type=click.Path(exists=True),
+              help='Read a custom injection payload from this file')
+@click.option('--error-text', default=None, help='Response for --op error')
+@click.option('--rewrite', default=None, help='OLD=NEW for --op rewrite')
+@click.option('--output', '-o', default=None, type=click.Path(),
+              help='Derived world path (default: <world>.<op>.world.json)')
+@click.option('--format', 'fmt', type=click.Choice(['console', 'json']),
+              default='console', show_default=True)
+def world_mutate(world_file, op, tools_csv, fixture_index, payload_id, payload,
+                 payload_file, error_text, rewrite, output, fmt):
+    """Derive a mutated world (chaos on frozen tool fixtures).
+
+    The source world is never modified. Replay the derived world with
+    `simulate --replay <golden> --world <derived>` — response-changing
+    operators (empty/error/inject/rewrite) surface through your scenario's
+    checks; truncate-sequence/swap are designed misses (xfail-only for gate
+    lifecycles).
+    \b
+    Exit codes:
+        0 — derived world written
+        1 — invalid mutation (unknown tool/op, no string leaf, empty rewrite)
+    """
+    _route_chrome(fmt)
+    import json as _json
+    from pathlib import Path
+
+    from .world import World, WorldError
+    from .world_mutations import MutationError, mutate_world
+
+    if payload_file:
+        payload = Path(payload_file).read_text(encoding="utf-8")
+
+    try:
+        w = World.load(world_file)
+    except WorldError as e:
+        console.print(f"[bold red]{e}[/]")
+        sys.exit(1)
+    try:
+        derived, notices = mutate_world(
+            w, op, source_path=str(world_file),
+            tools=[t.strip() for t in tools_csv.split(",")] if tools_csv else None,
+            fixture_index=fixture_index, payload=payload, payload_id=payload_id,
+            error_text=error_text, rewrite=rewrite,
+        )
+    except MutationError as e:
+        console.print(f"[bold red]{e}[/]")
+        sys.exit(1)
+
+    src = Path(world_file)
+    suffix = op + (f"-{payload_id}" if payload_id else "")
+    out = Path(output) if output else src.with_name(
+        f"{src.name.replace('.world.json', '')}.{suffix}.world.json")
+    derived.save(out)
+
+    if fmt == "json":
+        print(_json.dumps({
+            "world_file": str(out), "operator": op,
+            "tools_affected": derived.mutated_from.get("tools"),
+            "mutated_from": derived.mutated_from, "notices": notices,
+        }, indent=2))
+        sys.exit(0)
+    console.print(f"[green]✅ mutated[/] {op} → [cyan]{out}[/]")
+    for n in notices:
+        console.print(f"   [yellow]{n}[/]")
+    console.print(f"   [dim]replay it: ciagent simulate --replay <golden> "
+                  f"--world {out}[/]")
     sys.exit(0)
 
 

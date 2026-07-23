@@ -117,3 +117,44 @@ Runs that recorded a world miss are excluded from re-classification (a
 divergent run is not a clean agent signal); if every run missed, the staging
 block is left untouched and verify exits 1. The block records
 `verified_via: replay+world`.
+
+## Mutations: chaos on frozen fixtures
+
+A frozen world captures the backend that happened. `ciagent world mutate`
+derives the backends that could have happened, and each derived world flows
+through the same replay machinery, so "my agent survives a degraded or
+hostile backend" becomes a deterministic CI gate.
+
+```bash
+ciagent world operators                       # list operators + payloads
+ciagent world mutate w.world.json --op inject --payload-id role-override -o evil.world.json
+ciagent simulate --replay ./golden --world evil.world.json
+```
+
+Operators: `empty`, `error`, `inject` (adversarial payload into every string
+leaf of a tool response), `rewrite` (OLD=NEW over string leaves),
+`truncate-sequence`, `swap`. The source world is never modified; the derived
+world records `mutated_from` provenance and carries a name suffix.
+
+Two signal channels, stated plainly:
+
+- **Response-changing operators** (`empty`, `error`, `inject`, `rewrite`)
+  surface through your scenario's own checks. The agent calls the same tools
+  with the same arguments, so there are no world misses; the injected or
+  degraded response changes what the agent *does*, and a `not_in_answer` or
+  `forbidden_tools` check catches it. This is the injection gate.
+- **Designed-miss operators** (`truncate-sequence`, `swap`) make the agent's
+  repeat call miss on purpose. Because any gate-lifecycle miss exits 1, these
+  are meaningful only under the `xfail` lifecycle (bank the known weakness,
+  flip when fixed).
+
+### Prompt injection via tool output
+
+The flagship use: `inject` an override string into a tool's frozen response,
+replay, and a money-out `forbidden_tools` gate or a `not_in_answer` check
+turns red the moment your agent obeys the tool output. Unlike a robustness
+score, the result is a permanent gate: promote it (or `--xfail` it) and every
+future change is checked against that exact injection. Built-in payloads are
+benign-but-representative; real red-team strings go via `--payload-file` from
+your own repo. Payloads are never redacted (a scrubbed payload would silently
+neuter the gate).
