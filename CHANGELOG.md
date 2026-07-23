@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Agent Failure Atlas (seed) + a safety-gap fix it surfaced
+- New `src/ciagent/examples/failure-atlas/`: runnable, OWASP-mapped agent
+  failure patterns, each a toy vulnerable agent (no LLM, no API key) that
+  fails a deterministic gate. Seed: money-out-no-verification (LLM06
+  Excessive Agency), transcript-poisoning (guardrail design, from the
+  50-conversation study), tool-output-injection (LLM01, multi-step recipe).
+  A conformance test runs every entry live and asserts its gate fires, so
+  the atlas can't rot into prose. Ships in the wheel
+- Fixed a real safety gap the atlas dogfooding surfaced: a `forbidden_tools`
+  violation printed "PATH: FAIL" but the run exited 0 — QueryResult.hard_fail
+  read correctness alone and ignored the path layer's only hard-fail state
+  (forbidden tools). A documented safety boundary now actually gates the
+  build. Regression-tested
+
 ### Added — source-aware flaky gating (lean into the wedge)
 - New `--flaky-sources` on `ciagent test`: gate only on selected flip
   sources (e.g. `--flaky-sources=agent` fails on agent-variance /
