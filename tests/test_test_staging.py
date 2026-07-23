@@ -147,12 +147,17 @@ class TestSingleTurnStaging:
             assert g.provenance["lifecycle"] == "gate"
             assert g.mode == "single"
 
-    def test_json_stdout_stays_pure_with_staging(self):
+    def test_json_stdout_stays_pure_with_staging(self, monkeypatch):
         import json as _json
 
+        # Simulate GitHub Actions: report_results must NOT print `::error`
+        # workflow-command annotations to stdout in json mode (the CI-only
+        # regression that broke the slice-3 matrix).
+        monkeypatch.setenv("GITHUB_ACTIONS", "true")
         r = CliRunner()
         with r.isolated_filesystem():
             _write()
             res = _invoke(["test", "--yes", "--format", "json"])
             _json.loads(res.stdout)
+            assert "::error" not in res.stdout
             assert "staged" in res.stderr

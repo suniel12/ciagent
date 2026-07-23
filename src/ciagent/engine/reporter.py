@@ -65,8 +65,11 @@ def report_results(
     else:
         has_hard_failures = any(r.hard_fail for r in results)
 
-    # Always emit annotations when running in GitHub Actions
-    if format == "github" or _is_github_actions():
+    # Emit annotations when running in GitHub Actions — except in json mode,
+    # where stdout must carry exactly one JSON document (#39): a `::error`
+    # workflow-command line before the payload corrupts `json.load` for
+    # anyone piping `--format json > out.json` in CI.
+    if format == "github" or (format != "json" and _is_github_actions()):
         _emit_github_annotations(results, spec_file)
         if stability is not None:
             _emit_stability_github(stability, spec_file)
