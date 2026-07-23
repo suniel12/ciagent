@@ -53,19 +53,22 @@ def dump(env) -> str:
 
 
 class TestSecretPrefixes:
+    # Every fixture is SYNTHETIC, and every provider-shaped one is assembled
+    # at runtime (prefix + tail as separate literals) so that no secret
+    # scanner — GitHub push protection, GitHub secret scanning, or a user's
+    # own — ever flags this file. Two of these were flagged as live keys
+    # before the split (Slack at push time, Google by async scanning).
     @pytest.mark.parametrize("secret", [
-        "sk-abc123DEF456ghi789jkl",
-        "sk-proj-abc123DEF456ghi789",
-        "sk-ant-api03-abcdef123456789012",
-        "AKIAIOSFODNN7EXAMPLE",
-        "ghp_16C7e42F292c6912E7710c838347Ae178B4a",
-        "github_pat_11ABCDEFG0123456789_abcdef",
-        # assembled at runtime so GitHub push protection doesn't flag the
-        # synthetic fixture as a live Slack token
+        "sk-" + "abc123DEF456ghi789jkl",
+        "sk-proj-" + "abc123DEF456ghi789",
+        "sk-ant-" + "api03-abcdef123456789012",
+        "AKIA" + "IOSFODNN7EXAMPLE",  # AWS's own documented example key
+        "ghp_" + "16C7e42F292c6912E7710c838347Ae178B4a",
+        "github_pat_" + "11ABCDEFG0123456789_abcdef",
         "xox" + "b-1234567890-abcdefghijklmnop",
-        "AIzaSyA-1234567890abcdefghijklmnopqrstu",
-        "sk_live_abcdefghijklmnop1234",
-        "pk_live_abcdefghijklmnop1234",
+        "AIza" + "SyA-1234567890abcdefghijklmnopqrstu",
+        "sk_live_" + "abcdefghijklmnop1234",
+        "pk_live_" + "abcdefghijklmnop1234",
     ])
     def test_prefix_scrubbed_everywhere(self, secret):
         env = redact(make_env(answer=f"your key is {secret} ok"))
