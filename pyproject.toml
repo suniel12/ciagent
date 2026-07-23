@@ -1,6 +1,6 @@
 [project]
 name = "ciagent"
-version = "0.10.0"
+version = "0.11.0"
 description = "Find out whether your AI agent's evals are lying to you: stability reports with flip attribution, LLM judge audits, and deterministic checks mined from your KB."
 readme = "README.md"
 license = {text = "Apache-2.0"}
