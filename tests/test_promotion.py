@@ -328,3 +328,72 @@ class TestPromotionServiceUnit:
         svc = PromotionService(store, now=clock)
         with pytest.raises(PromotionRefused):
             svc.promote(sid, baseline_dir=str(tmp_path / "golden"))
+
+
+class TestXfailLifecycle:
+    """Slice 2: lifecycle stamping + flip (state machine:
+    staged → promoted(gate|xfail) → fixed(flip))."""
+
+    def _seed(self, tmp_path, clock, classification="consistent"):
+        store = StageStore(tmp_path / "staged", now=clock)
+        store.stage(
+            make_envelope(),
+            staging_block=staging_block(classification=classification),
+        )
+        return store, store.list()[0].stage_id
+
+    def test_promote_xfail_stamps_lifecycle(self, tmp_path):
+        clock = FakeClock(datetime(2026, 7, 22, tzinfo=timezone.utc))
+        store, sid = self._seed(tmp_path, clock)
+        svc = PromotionService(store, now=clock)
+        out = svc.promote(sid, baseline_dir=str(tmp_path / "golden"),
+                          lifecycle="xfail")
+        from ciagent.conversation import load_envelope
+
+        env = load_envelope(out)
+        assert env.provenance["lifecycle"] == "xfail"
+
+    def test_promote_unknown_lifecycle_raises(self, tmp_path):
+        clock = FakeClock(datetime(2026, 7, 22, tzinfo=timezone.utc))
+        store, sid = self._seed(tmp_path, clock)
+        svc = PromotionService(store, now=clock)
+        with pytest.raises(ValueError):
+            svc.promote(sid, baseline_dir=str(tmp_path / "golden"),
+                        lifecycle="banana")
+
+    def test_flip_xfail_to_gate(self, tmp_path):
+        clock = FakeClock(datetime(2026, 7, 22, tzinfo=timezone.utc))
+        store, sid = self._seed(tmp_path, clock)
+        svc = PromotionService(store, now=clock)
+        out = svc.promote(sid, baseline_dir=str(tmp_path / "golden"),
+                          lifecycle="xfail")
+        flipped = svc.flip(str(out), baseline_dir=str(tmp_path / "golden"))
+        from ciagent.conversation import load_envelope
+
+        env = load_envelope(flipped)
+        assert env.provenance["lifecycle"] == "gate"
+        assert env.provenance["flipped_at"].startswith("2026-07-22")
+
+    def test_flip_refuses_gate_golden(self, tmp_path):
+        clock = FakeClock(datetime(2026, 7, 22, tzinfo=timezone.utc))
+        store, sid = self._seed(tmp_path, clock)
+        svc = PromotionService(store, now=clock)
+        out = svc.promote(sid, baseline_dir=str(tmp_path / "golden"))
+        with pytest.raises(PromotionRefused):
+            svc.flip(str(out), baseline_dir=str(tmp_path / "golden"))
+
+    def test_flip_resolves_by_name(self, tmp_path):
+        clock = FakeClock(datetime(2026, 7, 22, tzinfo=timezone.utc))
+        store, sid = self._seed(tmp_path, clock)
+        svc = PromotionService(store, now=clock)
+        out = svc.promote(sid, baseline_dir=str(tmp_path / "golden"),
+                          lifecycle="xfail")
+        flipped = svc.flip(out.stem, baseline_dir=str(tmp_path / "golden"))
+        assert flipped == out
+
+    def test_flip_unknown_raises(self, tmp_path):
+        clock = FakeClock(datetime(2026, 7, 22, tzinfo=timezone.utc))
+        store, _sid = self._seed(tmp_path, clock)
+        svc = PromotionService(store, now=clock)
+        with pytest.raises(StageNotFound):
+            svc.flip("nope", baseline_dir=str(tmp_path / "golden"))
