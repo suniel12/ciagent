@@ -274,6 +274,7 @@ ciagent mcp --project .        # MCP server: coding agents run this loop themsel
 - [Simulated world](docs/world.md) — freeze a failing run's tool traffic, replay against it deterministically
 - [MCP server](docs/mcp.md) — the whole loop, operable by coding agents (Claude Code, Cursor)
 - [World-file format](docs/world-file-schema.md) — the frozen-tool-state format, published with a JSON Schema
+- [Failure Atlas](src/ciagent/examples/failure-atlas/) — runnable, OWASP-mapped agent failure patterns
 - [CI/CD integration](docs/ci-cd.md) — GitHub Actions setup
 - [LangGraph](docs/langgraph.md) — graph-based agent support
 - [Metrics reference](docs/metrics_reference.md) — every metric, defined
