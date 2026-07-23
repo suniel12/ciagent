@@ -57,8 +57,18 @@ class QueryResult:
 
     @property
     def hard_fail(self) -> bool:
-        """True if correctness failed (or a forbidden tool was used)."""
-        return self.correctness.status == LayerStatus.FAIL
+        """True if correctness failed, or a forbidden tool was used.
+
+        The path layer is otherwise soft (warn-only); it reaches FAIL status
+        only on a forbidden_tools violation (engine/path.py), which is a
+        documented safety boundary and must gate the build. Historically
+        this property read correctness alone, so a forbidden-tools violation
+        printed 'PATH: FAIL' yet the run exited 0 — a silent safety gap
+        surfaced by dogfooding the failure atlas."""
+        return (
+            self.correctness.status == LayerStatus.FAIL
+            or self.path.status == LayerStatus.FAIL
+        )
 
     @property
     def has_warnings(self) -> bool:
