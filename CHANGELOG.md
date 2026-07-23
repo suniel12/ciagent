@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — MCP server: agents that gate the agents they build
+- `ciagent mcp` (new `ciagent[mcp]` extra) runs a stdio MCP server exposing
+  the loop to coding agents: test, simulate (incl. frozen-world replay),
+  stage list/show/verify/drop, promote/flip, world freeze/show, import.
+  One JSON envelope per call; exit 1 is "the gate detected a failure",
+  reported as such, not as an error
+- Server-enforced guardrails: live runs refused without `max_cost`
+  (simulate) or `allow_live` (test/verify/import) — under MCP the CLI's
+  cost confirms are all bypassed, so the server is the only speed bump;
+  symlink-safe project jail for path arguments; process-group-killing
+  timeouts; oversized results written to `.ciagent/mcp/` with a summary
+  returned
+- `python -m ciagent` now works (new `__main__.py`); the server invokes
+  the CLI via the same interpreter, PATH-independent
+- Design: Plan_docs/mcp_server.md (adversarial review, 13 findings folded
+  in — incl. the per-command flag-capability matrix and the finding that
+  4 of 11 commands report outcomes on stdout without a JSON mode)
+
 ## [0.13.0] - 2026-07-22
 
 ### Added — Simulated World MVP: world-from-failure

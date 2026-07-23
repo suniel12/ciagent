@@ -4993,6 +4993,34 @@ def promote_cmd(stage_id, config, staged_dir, baseline_dir, force, xfail, flip,
     sys.exit(0)
 
 
+@cli.command(name="mcp")
+@click.option('--project', default='.', show_default=True,
+              type=click.Path(exists=True, file_okay=False),
+              help='Project root the tools operate in (the jail boundary)')
+@click.option('--timeout', default=600, show_default=True, type=int,
+              help='Hard per-command subprocess timeout in seconds')
+def mcp_cmd(project, timeout):
+    """Run the MCP server (stdio): the test/stage/promote/world loop,
+    operable by coding agents.
+
+    Live runs are refused server-side unless the caller passes max_cost or
+    allow_live — under MCP the CLI's own cost confirms are all bypassed, so
+    the server is the only speed bump. Install: pip install 'ciagent[mcp]'.
+    """
+    from .mcp_server import main as _mcp_main
+
+    try:
+        _mcp_main(project=project, timeout=timeout)
+    except ModuleNotFoundError as e:
+        if "mcp" in str(e):
+            console.print(
+                "[bold red]The MCP SDK is not installed.[/] "
+                "Run: [cyan]pip install 'ciagent[mcp]'[/]"
+            )
+            sys.exit(2)
+        raise
+
+
 # ── Simulated World: world-from-failure (Plan_docs/world_sim_mvp.md) ────────────
 
 

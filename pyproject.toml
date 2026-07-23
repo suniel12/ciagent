@@ -37,8 +37,9 @@ openai = ["openai>=1.0"]
 anthropic = ["anthropic>=0.20"]
 langgraph = ["langgraph>=0.1"]
 jsonschema = ["jsonschema>=4.0"]
-all = ["ciagent[openai,anthropic,langgraph,jsonschema]"]
-dev = ["pytest>=8.0", "ruff", "mypy"]
+mcp = ["mcp>=1.2,<2"]
+all = ["ciagent[openai,anthropic,langgraph,jsonschema,mcp]"]
+dev = ["pytest>=8.0", "ruff", "mypy", "mcp>=1.2,<2"]
 
 [project.scripts]
 ciagent = "ciagent.cli:cli"
