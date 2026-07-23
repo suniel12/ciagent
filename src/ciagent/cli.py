@@ -4852,5 +4852,163 @@ def promote_cmd(stage_id, config, staged_dir, baseline_dir, force, xfail, flip,
     sys.exit(0)
 
 
+# ── Simulated World: world-from-failure (Plan_docs/world_sim_mvp.md) ────────────
+
+
+@cli.group(name="world")
+def world_group():
+    """Freeze a failing run's tool traffic into a deterministic world.
+
+    A world file holds per-tool fixtures (arguments → frozen response)
+    extracted from a staged entry or golden envelope. Replay against it with
+    `simulate --replay --world` — same backend behavior every time, even when
+    the real backend is stateful or gone. Fail-closed: unmatched calls are
+    world misses, never guesses.
+    """
+
+
+@world_group.command(name="freeze")
+@click.argument('source')
+@click.option('--output', '-o', default=None, type=click.Path(),
+              help='World file path (default: worlds/<name>.world.json)')
+@click.option('--config', '-c', default='agentci_spec.yaml', show_default=True)
+@click.option('--staged-dir', default=None, type=click.Path())
+@click.option('--tools', 'tools_csv', default=None,
+              help='Only freeze these tools (comma-separated)')
+@click.option('--allow-gaps', is_flag=True,
+              help='Freeze even when some calls have no recorded result '
+                   '(those calls WILL miss on replay; recorded as gaps).')
+@click.option('--force-redact', is_flag=True,
+              help='Proceed when redacting an UNREDACTED source would make '
+                   'fixtures diverge from the golden\'s raw turns/checks.')
+def world_freeze(source, output, config, staged_dir, tools_csv, allow_gaps,
+                 force_redact):
+    """Freeze SOURCE (a stage id, or a path to a golden envelope) to a world.
+
+    \b
+    Exit codes:
+        0 — world written
+        1 — nothing freezable (no tool calls, gaps without --allow-gaps,
+            SOURCE not found)
+        2 — config error / unredacted-source refusal
+    """
+    from pathlib import Path
+
+    from .conversation import load_envelope
+    from .engine.simulate import scenario_slug
+    from .promotion import StageAmbiguous, StageNotFound, _identity
+    from .world import WorldError, freeze_envelope
+
+    spec, store = _stage_store(config, staged_dir)
+
+    src = Path(source)
+    if src.is_file():
+        env = load_envelope(src)
+        frozen_from = {"source": "golden", "id": str(src),
+                       "envelope_mode": env.mode}
+    else:
+        try:
+            _path, env = store.load(source)
+        except (StageNotFound, StageAmbiguous) as e:
+            console.print(f"[bold red]{e}[/]")
+            sys.exit(1)
+        frozen_from = {"source": "stage", "id": source,
+                       "envelope_mode": env.mode}
+
+    # A8: redact the WHOLE envelope once (never per-string) before extraction.
+    redactor = _resolve_redactor(spec)
+    if redactor is not _identity:
+        already = bool(((env.staging or {}).get("redaction") or {}).get("applied"))
+        env2, counts, _degraded = redactor.redact_with_counts(env)
+        substitutions = sum(counts.values())
+        if substitutions and not already and not force_redact:
+            console.print(
+                f"[bold red]Refusing:[/] the source is unredacted and freezing "
+                f"would scrub {substitutions} value(s), making fixtures diverge "
+                "from the golden's raw turns and check literals. Re-run with "
+                "[cyan]--force-redact[/] to proceed anyway."
+            )
+            sys.exit(2)
+        env = env2
+
+    name = (env.scenario or {}).get("name") or "world"
+    try:
+        w = freeze_envelope(
+            env,
+            name=scenario_slug(name),
+            tools_filter=[t.strip() for t in tools_csv.split(",")] if tools_csv else None,
+            allow_gaps=allow_gaps,
+        )
+    except WorldError as e:
+        console.print(f"[bold red]{e}[/]")
+        sys.exit(1)
+    w.frozen_from = frozen_from
+
+    # A11: pseudo-tools (e.g. graph-node emissions) have no argument schema.
+    for tool, tw in w.tools.items():
+        if all(not f.match for f in tw.fixtures):
+            console.print(
+                f"[yellow]warning:[/] tool '{tool}' has no argument-shaped "
+                "fixtures (a graph-node emission?). Consider excluding it "
+                "with --tools."
+            )
+
+    out = Path(output) if output else Path("worlds") / f"{scenario_slug(name)}.world.json"
+    w.save(out)
+    console.print(f"[green]✅ world frozen[/] → [cyan]{out}[/]")
+    for tool, tw in w.tools.items():
+        seq = " [magenta](sequence)[/]" if tw.sequence else ""
+        hint = (f"  [dim]suggested ignore: {tw.suggested_ignore}[/]"
+                if tw.suggested_ignore else "")
+        console.print(f"   {tool}: {len(tw.fixtures)} fixture(s){seq}{hint}")
+    if w.gaps:
+        console.print(f"   [yellow]{len(w.gaps)} gap(s) recorded — those calls "
+                      "will miss on replay.[/]")
+    sys.exit(0)
+
+
+@world_group.command(name="show")
+@click.argument('path', type=click.Path(exists=True))
+@click.option('--format', 'fmt', type=click.Choice(['console', 'json']),
+              default='console', show_default=True)
+def world_show(path, fmt):
+    """Show a world file's tool surface.
+
+    \b
+    Exit codes:
+        0 — shown
+        1 — invalid world file
+    """
+    _route_chrome(fmt)
+    import json as _json
+
+    from .world import World, WorldError
+
+    try:
+        w = World.load(path)
+    except WorldError as e:
+        console.print(f"[bold red]{e}[/]")
+        sys.exit(1)
+
+    if fmt == "json":
+        print(_json.dumps(w.to_dict(), indent=2, default=str))
+        sys.exit(0)
+
+    console.print(f"[bold]{path}[/] — world '[cyan]{w.name}[/]' "
+                  f"(agent: [cyan]{w.agent}[/], from: {w.frozen_from.get('source', '?')})")
+    for tool, tw in w.tools.items():
+        seq = " [magenta](sequence)[/]" if tw.sequence else ""
+        console.print(f"  {tool}: {len(tw.fixtures)} fixture(s){seq}")
+        ignored = sorted({k for f in tw.fixtures for k in f.ignore})
+        if ignored:
+            console.print(f"    [dim]ignored fields: {ignored}[/]")
+        if tw.suggested_ignore:
+            console.print(f"    [dim]suggested ignore: {tw.suggested_ignore}[/]")
+    if w.gaps:
+        console.print(f"  [yellow]{len(w.gaps)} gap(s): calls recorded without "
+                      "a result at freeze time (will miss on replay).[/]")
+    sys.exit(0)
+
+
 if __name__ == '__main__':
     cli()
