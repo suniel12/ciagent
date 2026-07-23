@@ -420,3 +420,175 @@ class TestWorldCLI:
             # is a no-op and requires no flag
             [f] = w.tools["lookup"].fixtures
             assert f.match["email"] == "redacted-1@example.com"
+
+
+# ── Slice 2: replay integration ─────────────────────────────────────────────────
+
+WORLD_SPEC = """
+agent: sim-test
+baseline_dir: ./golden
+conversation_runner: "toy_world_agent:respond"
+scenarios:
+  - name: refund path
+    turns: ["i want a refund for INV-1"]
+    outcome:
+      correctness:
+        expected_in_answer: ["refund initiated"]
+"""
+
+# A deterministic toy agent: answers from its (wrapped) tool. When BACKEND_UP
+# is deleted, a live call raises — proving replay hit the frozen world.
+TOY_AGENT = '''
+import os
+from ciagent.world import world_tool
+from ciagent.models import Span, SpanKind, Trace, ToolCall
+
+@world_tool
+def process_refund(invoice_id: str) -> str:
+    if not os.path.exists("BACKEND_UP"):
+        raise RuntimeError("backend is gone")
+    return "refund is stuck"          # the bug: never says "initiated"
+
+def respond(messages):
+    result = process_refund("INV-1")
+    span = Span(kind=SpanKind.AGENT, name="agent")
+    span.tool_calls = [ToolCall(tool_name="process_refund",
+                                arguments={"invoice_id": "INV-1"},
+                                result=result)]
+    span.output_data = result
+    t = Trace(agent_name="sim-test", test_name="q", spans=[span])
+    t.metadata["final_output"] = result
+    t.compute_metrics()
+    return t
+'''
+
+# Divergent agent: calls the tool with DIFFERENT args than the frozen run.
+TOY_AGENT_DIVERGED = TOY_AGENT.replace(
+    'process_refund("INV-1")', 'process_refund("INV-999")'
+).replace('if not os.path.exists("BACKEND_UP"):\n        raise', 'if False:\n        raise')
+
+
+def _winvoke(args):
+    import sys as _sys
+    _sys.path.insert(0, ".")
+    try:
+        return CliRunner().invoke(cli, args)
+    finally:
+        _sys.path.remove(".")
+        _sys.modules.pop("toy_world_agent", None)
+
+
+class TestWorldReplayLoop:
+    def _setup(self):
+        Path("agentci_spec.yaml").write_text(WORLD_SPEC)
+        Path("toy_world_agent.py").write_text(TOY_AGENT)
+        Path("BACKEND_UP").write_text("1")
+
+    def test_full_loop_freeze_then_replay_without_backend(self):
+        r = CliRunner()
+        with r.isolated_filesystem():
+            self._setup()
+            # 1. live failing run stages (default-ON staging)
+            res = _winvoke(["simulate", "--yes"])
+            assert res.exit_code == 1, res.output
+            from ciagent.promotion import StageStore
+            store = StageStore(Path(".ciagent/staged"))
+            sid = store.list()[0].stage_id
+
+            # 2. freeze the failing run's tool traffic
+            res = _winvoke(["world", "freeze", sid])
+            assert res.exit_code == 0, res.output
+            world_file = next(Path("worlds").glob("*.world.json"))
+
+            # 3. promote the repro to a golden
+            res = _winvoke(["promote", sid, "--yes", "--force"])
+            assert res.exit_code == 0, res.output
+
+            # 4. the backend dies — live replay would crash; world replay
+            #    serves the frozen response and the gate still fires (exit 1,
+            #    the bug still reproduces on the frozen world)
+            Path("BACKEND_UP").unlink()
+            res = _winvoke(["simulate", "--yes", "--replay", "./golden",
+                            "--world", str(world_file)])
+            assert res.exit_code == 1, res.output
+            assert "World:" in res.output
+            assert "0 miss(es)" in res.output
+
+    def test_divergence_is_world_miss_exit_1(self):
+        import json as _json
+
+        r = CliRunner()
+        with r.isolated_filesystem():
+            self._setup()
+            _winvoke(["simulate", "--yes"])
+            from ciagent.promotion import StageStore
+            sid = StageStore(Path(".ciagent/staged")).list()[0].stage_id
+            _winvoke(["world", "freeze", sid])
+            world_file = next(Path("worlds").glob("*.world.json"))
+            _winvoke(["promote", sid, "--yes", "--force"])
+
+            # agent now calls the tool with different args → fail-closed miss
+            Path("toy_world_agent.py").write_text(TOY_AGENT_DIVERGED)
+            res = _winvoke(["simulate", "--yes", "--replay", "./golden",
+                            "--world", str(world_file), "--format", "json"])
+            assert res.exit_code == 1, res.output
+            payload = _json.loads(res.stdout)
+            assert payload["summary"]["world_misses"] >= 1
+            assert payload["scenarios"][0]["world_misses"] >= 1
+
+    def test_world_requires_replay(self):
+        r = CliRunner()
+        with r.isolated_filesystem():
+            self._setup()
+            Path("w.world.json").write_text('{"world_schema": 1, "tools": {}}')
+            res = _winvoke(["simulate", "--yes", "--world", "w.world.json"])
+            assert res.exit_code == 2, res.output
+            assert "requires --replay" in res.output
+
+    def test_world_rejects_mock(self):
+        r = CliRunner()
+        with r.isolated_filesystem():
+            self._setup()
+            Path("w.world.json").write_text('{"world_schema": 1, "tools": {}}')
+            res = _winvoke(["simulate", "--mock", "--replay", ".",
+                            "--world", "w.world.json"])
+            assert res.exit_code == 2, res.output
+
+    def test_verify_with_world(self):
+        r = CliRunner()
+        with r.isolated_filesystem():
+            self._setup()
+            _winvoke(["simulate", "--yes", "--runs", "2"])
+            from ciagent.promotion import StageStore
+            store = StageStore(Path(".ciagent/staged"))
+            sid = store.list()[0].stage_id
+            res = _winvoke(["world", "freeze", sid])
+            assert res.exit_code == 0, res.output
+            world_file = next(Path("worlds").glob("*.world.json"))
+
+            Path("BACKEND_UP").unlink()   # backend gone; world serves
+            res = _winvoke(["stage", "verify", sid, "--yes", "--runs", "2",
+                            "--world", str(world_file)])
+            assert res.exit_code == 0, res.output
+            _path, env = store.load(sid)
+            assert env.staging["verified_via"] == "replay+world"
+            assert env.staging["classification"] == "consistent"
+
+    def test_verify_all_runs_missed_leaves_block_untouched(self):
+        r = CliRunner()
+        with r.isolated_filesystem():
+            self._setup()
+            _winvoke(["simulate", "--yes"])
+            from ciagent.promotion import StageStore
+            store = StageStore(Path(".ciagent/staged"))
+            sid = store.list()[0].stage_id
+            _winvoke(["world", "freeze", sid])
+            world_file = next(Path("worlds").glob("*.world.json"))
+            before = store.load(sid)[1].staging["classification"]
+
+            Path("toy_world_agent.py").write_text(TOY_AGENT_DIVERGED)
+            res = _winvoke(["stage", "verify", sid, "--yes", "--runs", "2",
+                            "--world", str(world_file)])
+            assert res.exit_code == 1, res.output
+            assert "diverged from the frozen world" in res.output
+            assert store.load(sid)[1].staging["classification"] == before

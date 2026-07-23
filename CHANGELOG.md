@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — Simulated World MVP: world-from-failure
+- `ciagent world freeze <stage-id|golden>` extracts a failing run's tool
+  traffic (arguments → frozen response) into a versioned, human-editable
+  world file; `ciagent world show` prints the tool surface. Envelope-level
+  redaction on freeze; unredacted sources refuse without `--force-redact`;
+  result-less calls refuse without `--allow-gaps` (recorded as gaps)
+- `@world_tool` (innermost decorator, framework-agnostic, async-aware):
+  zero-overhead passthrough normally; during `simulate --replay --world`
+  it serves frozen responses instead of hitting real backends. Fail-closed:
+  unmatched calls raise + record `WorldMiss` with a nearest-fixture diff
+  and a ready-to-paste `ignore:` suggestion — never a guess
+- Matching crosses the framework validation layer (type coercion, defaults
+  filled for omitted optionals); `ignore` marks mutable fields;
+  `sequence: true` encodes state transitions (FIFO consumption, set
+  automatically at freeze when the same args produced different results);
+  ambiguity is validated at load
+- Exit semantics are lifecycle-aware: for gate goldens any recorded miss in
+  any run exits 1 (the verdict was not on the frozen world); for xfail
+  goldens misses suppress XPASS but never flip the exit. `--format json`
+  adds per-scenario and summary `world_misses`
+- `stage verify --world`: runs with world misses are excluded from
+  re-classification; all-missed leaves the staging block untouched (exit 1);
+  block records `verified_via: replay+world`. New `world-miss` flip source
+  maps to `held`
+- Scope, honestly: the world removes BACKEND variance; the model is not
+  frozen. Design: Plan_docs/world_sim_mvp.md (adversarial review A1-A14
+  folded in)
+
 ## [0.12.0] - 2026-07-22
 
 ### Added — capture-time redaction; staging is now ON by default
