@@ -3071,8 +3071,14 @@ def _finish_stability_session(fmt, config, output, run_results, stability, fail_
                    'flip-source attribution (agent-variance vs judge-flake)')
 @click.option('--fail-on-flaky', is_flag=True,
               help='With --runs > 1: exit 1 if any query flips verdicts across runs')
+@click.option('--stage/--no-stage', 'stage_flag', default=None,
+              help='Auto-stage failing queries for later promotion (overrides '
+                   'spec staging.enabled; live runs only — mock failures are '
+                   'synthetic and never staged).')
+@click.option('--staged-dir', default=None, type=click.Path(),
+              help='Staging root (default: .ciagent/staged)')
 def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, mock, yes,
-             runs, fail_on_flaky):
+             runs, fail_on_flaky, stage_flag, staged_dir):
     """Run CIAgent v2 evaluation against a spec file.
 
     Loads agentci_spec.yaml, runs the agent for each query (capturing traces),
@@ -3335,6 +3341,13 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
                 console.print(f"Run {run_index + 1}/{runs}: {passed}/{len(results)} passed")
 
         stability = build_stability_report(spec, run_results)
+        # Single-turn staging (live only): classification from QueryStability,
+        # incl. the `mixed` attribution state that only exists here.
+        _maybe_stage_test_failures(
+            run_results[-1],
+            {qs.query: qs for qs in stability.queries},
+            spec, staged_dir, stage_flag,
+        )
         _finish_stability_session(
             fmt, config, output, run_results, stability, fail_on_flaky,
         )
@@ -3382,6 +3395,9 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
 
     # ── Report summary / non-console formats ──────────────────────────────
     results = streaming_results
+    # Single-turn staging (live only; single run → unverified until
+    # `stage verify` upgrades it).
+    _maybe_stage_test_failures(results, None, spec, staged_dir, stage_flag)
     if stream_console:
         # Individual results already printed; just emit summary + annotations
         emit_summary(results)
@@ -3457,6 +3473,100 @@ def _resolve_redactor(spec):
         return _identity
     patterns = list(getattr(staging, "redact_patterns", []) or [])
     return Redactor(extra_patterns=patterns)
+
+
+def _auto_stage_query_failures(results, stability_by_query, spec, staged_dir):
+    """Stage every failing single-turn `test` query (best-effort).
+
+    Mirrors _auto_stage_failures for QueryResult/Trace space via the
+    query_result_to_envelope adapter. Same contract: any error prints a
+    warning and never changes the run's exit code.
+    """
+    from datetime import datetime, timezone
+    from pathlib import Path
+
+    from .engine.simulate import scenario_slug
+    from .promotion import (
+        DEFAULT_STAGED_DIR,
+        StageStore,
+        TriageClassifier,
+        build_staging_block,
+        query_result_to_envelope,
+    )
+
+    try:
+        if not getattr(spec.staging, "redact", True):
+            console.print(
+                "[yellow]staging warning:[/] redact is disabled — staged files "
+                "will contain RAW conversation text (possibly PII/secrets)."
+            )
+        checks_by_query = {q.query: q.correctness for q in (spec.queries or [])}
+        root = Path(staged_dir or DEFAULT_STAGED_DIR)
+        store = StageStore(
+            root,
+            cap=getattr(spec.staging, "cap", 10),
+            max_age_days=getattr(spec.staging, "max_age_days", 30),
+            redactor=_resolve_redactor(spec),
+        )
+        run_id = datetime.now(timezone.utc).strftime("test-%Y%m%dT%H%M%S")
+        staged = 0
+        for r in results:
+            if not r.hard_fail or r.trace is None:
+                continue
+            stab = stability_by_query.get(r.query) if stability_by_query else None
+            runs = stab.runs if stab is not None else 1
+            klass = TriageClassifier.classify(stab, runs=runs)
+            summary = "; ".join(r.correctness.messages[:1]) or "correctness failed"
+            block = build_staging_block(
+                run_id=run_id,
+                scenario_id=scenario_slug(r.query),
+                source="test",
+                classification=klass,
+                stability=stab,
+                runs_observed=runs,
+                failure_summary=summary,
+            )
+            try:
+                env = query_result_to_envelope(
+                    r.query, r.trace, agent=spec.agent,
+                    checks=checks_by_query.get(r.query),
+                )
+                store.stage(env, staging_block=block)
+                staged += 1
+            except Exception as e:  # noqa: BLE001 — best-effort, never fail the run
+                console.print(f"[yellow]staging warning:[/] {r.query[:40]}: {e}")
+        if staged:
+            try:
+                _scaffold_staging_gitignore()
+            except OSError:
+                pass
+            console.print(
+                f"[dim]staged {staged} failing quer{'y' if staged == 1 else 'ies'} → "
+                f"[cyan]ciagent stage list[/] / [cyan]ciagent promote[/][/]"
+            )
+        return staged
+    except Exception as e:  # noqa: BLE001 — staging is never load-bearing
+        console.print(f"[yellow]staging warning:[/] {e}")
+        return 0
+
+
+def _maybe_stage_test_failures(results, stability_by_query, spec, staged_dir,
+                               stage_flag):
+    """Resolve the staging gate for `test` (flag overrides spec) and stage."""
+    enabled = (
+        stage_flag if stage_flag is not None
+        else getattr(spec.staging, "enabled", False)
+    )
+    failing = [r for r in results if r.hard_fail and r.trace is not None]
+    if not failing:
+        return
+    if enabled:
+        _auto_stage_query_failures(failing, stability_by_query, spec, staged_dir)
+    else:
+        console.print(
+            "[dim]a repro was found — enable staging (spec staging.enabled or "
+            "--stage) to keep it for promotion.[/]"
+        )
 
 
 def _warn_redacted_check_literals(env) -> None:

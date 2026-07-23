@@ -31,6 +31,7 @@ from typing import Any, Callable, Optional, Protocol
 
 from .conversation import (
     ConversationEnvelope,
+    ConversationTurn,
     load_envelope,
     normalize_to_envelope,
     save_envelope,
@@ -147,6 +148,30 @@ def build_staging_block(
         "flip_reason": getattr(stability, "flip_reason", "") or "",
         "failure_summary": failure_summary,
     }
+
+
+def query_result_to_envelope(query: str, trace: Any, *, agent: str,
+                             checks: Any = None) -> ConversationEnvelope:
+    """Adapt a single-turn `test` failure (query + Trace) to an envelope.
+
+    `test_cmd` lives in QueryResult/Trace space; staging and promotion live in
+    envelope space. The embedded scenario spec reconstructs a one-turn
+    scripted scenario (turns=[query]) carrying the query's correctness checks
+    as the outcome, so verify/replay/promote work on it unchanged. `checks`
+    is any pydantic model with model_dump (duck-typed to avoid a schema
+    import here).
+    """
+    spec_dict: dict[str, Any] = {"name": query, "turns": [query]}
+    if checks is not None:
+        dumped = checks.model_dump(exclude_none=True)
+        if dumped:
+            spec_dict["outcome"] = {"correctness": dumped}
+    return ConversationEnvelope(
+        mode="single",
+        agent=agent,
+        scenario={"name": query, "spec": spec_dict},
+        turns=[ConversationTurn(turn_index=0, user_message=query, trace=trace)],
+    )
 
 
 # ── Staging store ────────────────────────────────────────────────────────────────

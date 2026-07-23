@@ -397,3 +397,40 @@ class TestXfailLifecycle:
         svc = PromotionService(store, now=clock)
         with pytest.raises(StageNotFound):
             svc.flip("nope", baseline_dir=str(tmp_path / "golden"))
+
+
+class TestQueryResultAdapter:
+    def test_adapter_shape(self):
+        from ciagent.promotion import query_result_to_envelope
+        from ciagent.schema.spec_models import CorrectnessSpec
+
+        env = query_result_to_envelope(
+            "what is x?", make_trace("no idea", "what is x?"), agent="qa",
+            checks=CorrectnessSpec(expected_in_answer=["x is 42"]),
+        )
+        assert env.mode == "single"
+        assert env.agent == "qa"
+        assert env.turns[0].user_message == "what is x?"
+        spec = env.scenario["spec"]
+        assert spec["turns"] == ["what is x?"]
+        assert spec["outcome"]["correctness"]["expected_in_answer"] == ["x is 42"]
+
+    def test_adapter_without_checks(self):
+        from ciagent.promotion import query_result_to_envelope
+
+        env = query_result_to_envelope("q", make_trace("a", "q"), agent="qa")
+        assert "outcome" not in env.scenario["spec"]
+
+    def test_adapter_envelope_replayable(self):
+        # envelope_to_scenario must reconstruct the one-turn scenario —
+        # verify/replay/promote all depend on this.
+        from ciagent.engine.simulate import envelope_to_scenario
+        from ciagent.promotion import query_result_to_envelope
+        from ciagent.schema.spec_models import CorrectnessSpec
+
+        env = query_result_to_envelope(
+            "q", make_trace("a", "q"), agent="qa",
+            checks=CorrectnessSpec(expected_in_answer=["b"]),
+        )
+        scenario = envelope_to_scenario(env)
+        assert scenario.turns == ["q"]

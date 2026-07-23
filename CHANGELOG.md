@@ -47,6 +47,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   block. `--format json` adds per-scenario `lifecycle`/`xpass` and summary
   `xfail_expected`/`xpass` counts
 
+### Added — single-turn `test` staging
+- Failing `ciagent test` queries now stage too (live runs only): a failing
+  query becomes a one-turn envelope (mode `single`) carrying its
+  correctness checks as a replayable scenario spec, so `stage verify`,
+  `promote`, and replay work on it unchanged. New `--stage/--no-stage` and
+  `--staged-dir` on `test`, same defaults and redaction as simulate
+- Classification comes from `QueryStability` with `--runs N`, including the
+  `mixed` attribution state that only exists in single-turn stability
+  (mapped to `held`)
+- Mock failures are synthetic and never stage (test data is never promoted
+  toward production goldens)
+
 ## [0.11.0] - 2026-07-22
 
 ### Added — Golden Promotion Pipeline v1: auto-stage → triage → one-command promote

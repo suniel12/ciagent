@@ -29,6 +29,11 @@ staging:
   max_age_days: 30     # age cutoff for retention GC
 ```
 
+Staging covers both surfaces: multi-turn `simulate` scenarios and single-turn
+`test` queries (live runs only — mock failures are synthetic and never
+stage). A failing query stages as a one-turn envelope carrying its
+correctness checks, so verify, replay, and promote work on it unchanged.
+
 `staging: false` is accepted as a bool shorthand. Files land under
 `.ciagent/staged/<agent>/<scenario-id>/<run-ts>-<hash>.json`; the gitignore
 entry for `.ciagent/staged/` is scaffolded by `ciagent init` and on the
