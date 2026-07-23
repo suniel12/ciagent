@@ -105,7 +105,13 @@ ciagent stage gc
 - **`verify`** re-runs the scenario N times, replaying the staged user turns
   verbatim (the persona is never re-rolled — it verifies agent-side
   reproducibility, not simulation luck), then re-classifies in place. This is
-  the cheap path from `unverified` to `consistent`.
+  the cheap path from `unverified` to `consistent`. **`verify --reroll`**
+  asks the other question: it re-runs the persona FRESH from the original
+  `persona:`/`goal:`, verifying that the scenario *class* reproduces rather
+  than this exact conversation. The staging block records which mode
+  produced the classification (`verified_via: replay | reroll`); scripted
+  scenarios have no persona, so `--reroll` degenerates to the verbatim
+  replay with a note.
 - **`gc`** applies retention: the per-scenario `cap`, the `max_age_days`
   cutoff, and a global cap (500 files / 50 MB) so staging can never leak disk.
   The same GC also runs automatically on every write.

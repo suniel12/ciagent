@@ -4514,14 +4514,22 @@ def stage_show(stage_id, config, staged_dir, export_path, fmt):
               help='Re-run this scenario N times, replaying the staged user turns '
                    'verbatim (persona NOT re-rolled — verifies agent-side '
                    'reproducibility, not simulation luck).')
+@click.option('--reroll', is_flag=True,
+              help='Re-run the persona FRESH from the original persona/goal '
+                   'instead of replaying recorded turns. Answers "does this '
+                   'scenario CLASS reproduce," not "does this exact '
+                   'conversation reproduce." Scripted scenarios have no '
+                   'persona; --reroll degenerates to the verbatim replay.')
 @click.option('--mock', is_flag=True, help='Verify with synthetic traces (zero keys)')
 @click.option('--workers', '-w', default=4, show_default=True, type=int)
 @click.option('--yes', '-y', is_flag=True, help='Skip the live-run confirmation')
-def stage_verify(stage_id, config, staged_dir, runs, mock, workers, yes):
+def stage_verify(stage_id, config, staged_dir, runs, reroll, mock, workers, yes):
     """Re-run one staged scenario N times and re-classify it in place.
 
     The cheap path from `unverified` → `consistent` (or a downgrade). Zero-key
-    verification only in --mock.
+    verification only in --mock. Default is verbatim replay (agent-side
+    reproducibility); --reroll re-rolls the persona (scenario-class
+    reproducibility) and records which mode produced the classification.
     \b
     Exit codes:
         0 — verified and re-classified (regardless of new class)
@@ -4544,16 +4552,46 @@ def stage_verify(stage_id, config, staged_dir, runs, mock, workers, yes):
         console.print(f"[bold red]{e}[/]")
         sys.exit(1)
 
-    try:
-        scenario = envelope_to_scenario(env)
-    except ValueError as e:
-        console.print(f"[bold red]Cannot replay:[/] {e}")
-        sys.exit(2)
+    verify_mode = "replay"
+    if reroll:
+        from .schema.spec_models import ScenarioSpec
+
+        spec_dict = dict((env.scenario or {}).get("spec") or {})
+        if not spec_dict.get("name"):
+            spec_dict["name"] = (env.scenario or {}).get("name")
+        try:
+            original = ScenarioSpec(**spec_dict)
+        except Exception as e:  # noqa: BLE001
+            console.print(f"[bold red]Cannot rebuild original scenario:[/] {e}")
+            sys.exit(2)
+        if original.persona:
+            scenario = original
+            verify_mode = "reroll"
+        else:
+            console.print(
+                "[yellow]note:[/] scenario is scripted (no persona) — "
+                "--reroll is identical to the verbatim replay."
+            )
+            try:
+                scenario = envelope_to_scenario(env)
+            except ValueError as e:
+                console.print(f"[bold red]Cannot replay:[/] {e}")
+                sys.exit(2)
+    else:
+        try:
+            scenario = envelope_to_scenario(env)
+        except ValueError as e:
+            console.print(f"[bold red]Cannot replay:[/] {e}")
+            sys.exit(2)
     _warn_redacted_check_literals(env)
 
+    turn_source = None
     if mock:
         from .engine.mock_runner import mock_conversation_runner
         conv_runner = mock_conversation_runner(scenario)
+        if verify_mode == "reroll":
+            from .engine.mock_runner import mock_persona_turn_source
+            turn_source = mock_persona_turn_source(scenario)
     else:
         if not spec.conversation_runner:
             console.print(
@@ -4579,6 +4617,10 @@ def stage_verify(stage_id, config, staged_dir, runs, mock, workers, yes):
             r = run_scenario(
                 scenario, conv_runner,
                 agent_name=spec.agent, judge_config=spec.judge_config,
+                turn_source=turn_source,
+                persona_config=(
+                    spec.persona_config if verify_mode == "reroll" else None
+                ),
             )
         except Exception as e:  # noqa: BLE001
             console.print(f"[bold red]Verify error:[/] {e}")
@@ -4601,10 +4643,13 @@ def stage_verify(stage_id, config, staged_dir, runs, mock, workers, yes):
         runs_observed=n,
         failure_summary=summary,
     )
+    # A reroll-based classification answers a different question than a
+    # verbatim replay — record which one produced it.
+    block["verified_via"] = verify_mode
     store.update_staging_block(stage_id, block)
     console.print(
         f"[green]re-classified[/] {stage_id} → [cyan]{klass.value}[/] "
-        f"({stab.verdict_string if stab else '—'})"
+        f"({stab.verdict_string if stab else '—'}, via {verify_mode})"
     )
     sys.exit(0)
 

@@ -59,6 +59,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mock failures are synthetic and never stage (test data is never promoted
   toward production goldens)
 
+### Added — `stage verify --reroll`
+- `ciagent stage verify --reroll` re-runs the persona FRESH from the
+  original `persona:`/`goal:` instead of replaying recorded turns —
+  answering "does this scenario class reproduce," not "does this exact
+  conversation reproduce." The staging block records which mode produced
+  the classification (`verified_via: replay | reroll`); scripted scenarios
+  degenerate to the verbatim replay with a note. Zero-key via --mock
+  (mock persona)
+
+### Fixed
+- In GitHub Actions, `--format json` printed `::error` workflow-command
+  annotation lines to stdout before the JSON payload, corrupting the
+  one-JSON-document contract from #39. Annotations still emit for
+  console/github/html/prometheus formats, never in json mode
+
 ## [0.11.0] - 2026-07-22
 
 ### Added — Golden Promotion Pipeline v1: auto-stage → triage → one-command promote

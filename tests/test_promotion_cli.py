@@ -355,3 +355,67 @@ class TestXfailReplayLoop:
             res = _invoke(["promote", "--flip", golden, "--yes"])
             assert res.exit_code == 1, res.output
             assert "nothing to flip" in res.output
+
+
+def make_generative_env(name="angry-customer"):
+    """Staged envelope whose ORIGINAL spec is generative (persona/goal, no
+    turns) — the recorded turns exist only in the envelope."""
+    return ConversationEnvelope(
+        mode="simulated", agent="sim-test",
+        scenario={"name": name, "spec": {
+            "name": name,
+            "persona": "frustrated customer, discontinued product",
+            "goal": "get a refund routed correctly",
+            "max_turns": 3,
+            "outcome": {"correctness": {"any_expected_in_answer": ["refund"]}},
+        }},
+        turns=[ConversationTurn(turn_index=0, user_message="hi", trace=make_trace("no"))],
+    )
+
+
+class TestVerifyReroll:
+    """Slice 4: stage verify --reroll re-rolls the persona fresh (scenario-
+    class reproducibility) instead of replaying recorded turns verbatim."""
+
+    def test_reroll_generative_records_mode(self):
+        r = CliRunner()
+        with r.isolated_filesystem():
+            Path("agentci_spec.yaml").write_text(SPEC)
+            store = StageStore(Path(".ciagent/staged"))
+            store.stage(make_generative_env(),
+                        staging_block=block("unverified", "angry-customer"))
+            sid = store.list()[0].stage_id
+            res = r.invoke(cli, ["stage", "verify", sid, "--reroll",
+                                 "--mock", "--runs", "2"])
+            assert res.exit_code == 0, res.output
+            assert "via reroll" in res.output
+            env = store.load(sid)[1]
+            assert env.staging["verified_via"] == "reroll"
+
+    def test_reroll_scripted_degenerates_to_replay(self):
+        r = CliRunner()
+        with r.isolated_filesystem():
+            Path("agentci_spec.yaml").write_text(SPEC)
+            store = StageStore(Path(".ciagent/staged"))
+            store.stage(make_env("refund-flow"),
+                        staging_block=block("unverified", "refund-flow"))
+            sid = store.list()[0].stage_id
+            res = r.invoke(cli, ["stage", "verify", sid, "--reroll",
+                                 "--mock", "--runs", "2"])
+            assert res.exit_code == 0, res.output
+            assert "identical to the verbatim" in res.output
+            env = store.load(sid)[1]
+            assert env.staging["verified_via"] == "replay"
+
+    def test_default_verify_records_replay_mode(self):
+        r = CliRunner()
+        with r.isolated_filesystem():
+            Path("agentci_spec.yaml").write_text(SPEC)
+            store = StageStore(Path(".ciagent/staged"))
+            store.stage(make_env("refund-flow"),
+                        staging_block=block("unverified", "refund-flow"))
+            sid = store.list()[0].stage_id
+            res = r.invoke(cli, ["stage", "verify", sid, "--mock", "--runs", "2"])
+            assert res.exit_code == 0, res.output
+            env = store.load(sid)[1]
+            assert env.staging["verified_via"] == "replay"
