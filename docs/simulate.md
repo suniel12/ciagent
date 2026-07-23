@@ -100,6 +100,11 @@ gate.
 `baseline_dir` (and implies `--record`). `--replay` accepts a single
 envelope `.json` or a directory.
 
+`--record` requires deciding to record up front. To capture failures you
+did **not** anticipate, enable [staging](promotion.md): every failing
+conversation is auto-staged, and `ciagent promote <id>` turns one into a
+golden CI gate after the fact.
+
 ## Stability: `--runs N`
 
 Multi-turn sessions have three ways to flip, not two. `--runs N` executes

@@ -252,6 +252,9 @@ ciagent doctor                 # Health check: spec, deps, API keys
 ciagent record <test>          # Record golden baseline
 ciagent diff                   # Diff against baseline
 ciagent report -i results.json # Generate HTML report from JSON results
+ciagent simulate --stage       # Auto-stage failing conversations (repro never lost)
+ciagent stage list             # Triage staged failures, best-to-promote first
+ciagent promote <id>           # One staged failure becomes a golden CI gate
 ```
 ## Docs
 
@@ -264,6 +267,7 @@ ciagent report -i results.json # Generate HTML report from JSON results
 - [Cost tracking](docs/cost-tracking.md) — budgets and spike detection
 - [Golden traces](docs/golden-traces.md) — record baselines, diff regressions
 - [Import production traces](docs/import.md) — turn an exported OTel (openllmetry/ADK), Langfuse, or LangSmith trace into a gated regression test
+- [Golden promotion](docs/promotion.md) — auto-stage failing simulate conversations, triage, one-command promote
 - [CI/CD integration](docs/ci-cd.md) — GitHub Actions setup
 - [LangGraph](docs/langgraph.md) — graph-based agent support
 - [Metrics reference](docs/metrics_reference.md) — every metric, defined

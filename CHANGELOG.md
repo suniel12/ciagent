@@ -5,6 +5,38 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — Golden Promotion Pipeline v1: auto-stage → triage → one-command promote
+- Failing `ciagent simulate` conversations are auto-staged under
+  `.ciagent/staged/` when staging is enabled (`--stage` or spec
+  `staging.enabled`), so a nondeterministic persona repro is never lost at
+  the moment it is produced. Staging is opt-in in v1 (no redactor exists
+  yet — raw conversation text hits disk) and best-effort: a staging error
+  never changes the run's exit code
+- Each staged failure is triaged from the existing stability attribution:
+  `consistent` (reproducible — NOT attributed to the agent), `flaky-agent`,
+  `unverified`, `held`, `held-infra`. New `ciagent stage` group:
+  `list` (best-to-promote first), `show` (`--export` for sharing, clearly
+  labeled unredacted), `verify` (re-run N×, re-classify in place), `drop`,
+  `gc` (per-scenario cap + age cutoff + global 500-file/50 MB cap)
+- `ciagent promote <id>` moves one staged conversation into
+  `<baseline_dir>/<agent>/scenarios/` — where `--record` writes — swapping
+  `staging:` for an additive `provenance:` block. Gated: held/unverified
+  classes refuse without `--force`, the envelope must pass the same
+  structural replay gate the record path uses, and the staged copy is
+  consumed only on success. No bulk promote by design
+- Envelope schema: additive optional `staging:` and `provenance:` fields;
+  files without them are byte-identical to pre-0.11 goldens
+- `ciagent init` now gitignores `.ciagent/staged/`
+
+### Fixed
+- `--format json` wrote the console banner to stdout, corrupting the JSON
+  stream (`json.load` failed on line 1). All rich chrome now routes to
+  stderr in JSON mode — stdout carries exactly one JSON document — across
+  `test`, `simulate`, `eval`, `diff`, `judge-audit`, `stage list/show`, and
+  `promote` (#39)
+
 ## [0.10.0] - 2026-07-07
 
 ### Added — `ciagent import`: a production trace becomes a regression test (F7)

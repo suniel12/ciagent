@@ -82,6 +82,60 @@ class TestEnvelopeRoundTrip:
         assert env.final_trace().metadata["final_output"] == "a"
 
 
+# ── Additive staging/provenance blocks (0.11 golden-promotion) ──────────────────
+
+
+class TestStagingProvenanceBlocks:
+    def test_blocks_round_trip(self, tmp_path):
+        staging = {"run_id": "r1", "classification": "consistent", "runs_observed": 3}
+        provenance = {"staged_run_id": "r1", "lifecycle": "gate"}
+        env = ConversationEnvelope(
+            mode="scripted",
+            agent="support-agent",
+            turns=[ConversationTurn(user_message="hi", trace=make_trace("hello", "hi"))],
+            staging=staging,
+            provenance=provenance,
+        )
+        path = save_envelope(env, tmp_path / "staged.json")
+        raw = json.loads(path.read_text())
+        assert raw["staging"] == staging
+        assert raw["provenance"] == provenance
+        loaded = load_envelope(path)
+        assert loaded.staging == staging
+        assert loaded.provenance == provenance
+
+    def test_absent_blocks_are_omitted_byte_identical(self, tmp_path):
+        # A golden without staging/provenance must not gain `null` keys — the
+        # record/replay byte-identical regression.
+        env = ConversationEnvelope(
+            mode="scripted",
+            agent="a",
+            turns=[ConversationTurn(user_message="hi", trace=make_trace("hello", "hi"))],
+        )
+        path = save_envelope(env, tmp_path / "clean.json")
+        raw = json.loads(path.read_text())
+        assert "staging" not in raw
+        assert "provenance" not in raw
+
+    def test_old_envelope_without_blocks_still_loads(self, tmp_path):
+        # Backward-compat regression: a pre-0.11 envelope file (no staging/
+        # provenance keys) loads with the fields defaulting to None.
+        old = {
+            "schema_version": 2,
+            "mode": "scripted",
+            "agent": "legacy",
+            "turns": [
+                {"turn_index": 0, "user_message": "hi", "trace": make_trace("hello", "hi").model_dump()}
+            ],
+        }
+        env = normalize_to_envelope(old, source="old")
+        assert env.staging is None
+        assert env.provenance is None
+        # and it can be re-saved cleanly
+        path = save_envelope(env, tmp_path / "reloaded.json")
+        assert "staging" not in json.loads(path.read_text())
+
+
 # ── Legacy fixture loading (pre-0.9 files must keep working) ────────────────────
 
 
