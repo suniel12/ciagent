@@ -33,6 +33,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Design: Plan_docs/redaction_capture.md (adversarial architect pass folded
   in: staging block inside the walk, parse-safety guards, degraded fallback)
 
+### Added — xfail bug-golden lifecycle
+- `ciagent promote --xfail`: promote a repro as an expected-fail golden.
+  Replay stays green (exit 0) while the bug reproduces, reported as XFAIL;
+  the repro is banked in CI without blocking merges. When a replay suddenly
+  passes it is flagged XPASS (still green, pytest non-strict semantics)
+  with the exact flip command
+- `ciagent promote --flip <golden>`: converts a passing xfail golden to a
+  normal gate golden (stamps `flipped_at`), so replay exits 1 if the bug
+  regresses. Refused on non-xfail goldens. State machine:
+  staged → promoted(gate|xfail) → fixed(flip)
+- `simulate --replay` exit fold is lifecycle-aware: only `gate` failures
+  block. `--format json` adds per-scenario `lifecycle`/`xpass` and summary
+  `xfail_expected`/`xpass` counts
+
 ## [0.11.0] - 2026-07-22
 
 ### Added — Golden Promotion Pipeline v1: auto-stage → triage → one-command promote

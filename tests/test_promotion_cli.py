@@ -268,3 +268,90 @@ class TestPromoteRefusalDetail:
             # --force promotes anyway
             res = _invoke(["promote", sid, "--yes", "--force"])
             assert res.exit_code == 0, res.output
+
+
+class TestXfailReplayLoop:
+    """Full xfail loop: promote --xfail → replay green while failing (XFAIL)
+    → fix → replay green with XPASS flag → promote --flip → gate again."""
+
+    def test_xfail_loop(self):
+        import json as _json
+
+        r = CliRunner()
+        with r.isolated_filesystem():
+            Path("agentci_spec.yaml").write_text(PROMOTE_SPEC)
+            Path("toy_agent.py").write_text(FAILING)
+
+            res = _invoke(["simulate", "--yes", "--runs", "3"])
+            assert res.exit_code == 1, res.output
+
+            from ciagent.promotion import StageStore
+            sid = StageStore(Path(".ciagent/staged")).list()[0].stage_id
+
+            # promote as xfail
+            res = _invoke(["promote", sid, "--yes", "--xfail"])
+            assert res.exit_code == 0, res.output
+            golden = Path("golden/sim-test/scenarios/refund-path.json")
+            g = load_envelope(golden)
+            assert g.provenance["lifecycle"] == "xfail"
+
+            # replay while the bug reproduces: XFAIL → CI green (exit 0)
+            res = _invoke(["simulate", "--yes", "--replay", "./golden"])
+            assert res.exit_code == 0, res.output
+            assert "XFAIL" in res.output
+
+            # json surface carries the lifecycle fold
+            res = _invoke(["simulate", "--yes", "--replay", "./golden",
+                           "--format", "json"])
+            assert res.exit_code == 0, res.output
+            payload = _json.loads(res.stdout)
+            assert payload["scenarios"][0]["lifecycle"] == "xfail"
+            assert payload["summary"]["xfail_expected"] == 1
+
+            # fix the agent → XPASS, still green, flip suggested
+            Path("toy_agent.py").write_text(FIXED)
+            res = _invoke(["simulate", "--yes", "--replay", "./golden"])
+            assert res.exit_code == 0, res.output
+            assert "XPASS" in res.output
+            assert "promote --flip" in res.output
+
+            # flip → gate lifecycle with flipped_at
+            res = _invoke(["promote", "--flip", str(golden), "--yes"])
+            assert res.exit_code == 0, res.output
+            g = load_envelope(golden)
+            assert g.provenance["lifecycle"] == "gate"
+            assert g.provenance["flipped_at"]
+
+            # regression returns → gate golden goes red again
+            Path("toy_agent.py").write_text(FAILING)
+            res = _invoke(["simulate", "--yes", "--replay", "./golden"])
+            assert res.exit_code == 1, res.output
+
+    def test_flip_bad_combo_exits_2(self):
+        r = CliRunner()
+        with r.isolated_filesystem():
+            Path("agentci_spec.yaml").write_text(PROMOTE_SPEC)
+            res = r.invoke(cli, ["promote", "--flip", "x", "--xfail"])
+            assert res.exit_code == 2, res.output
+
+    def test_flip_without_target_exits_2(self):
+        r = CliRunner()
+        with r.isolated_filesystem():
+            Path("agentci_spec.yaml").write_text(PROMOTE_SPEC)
+            res = r.invoke(cli, ["promote", "--flip"])
+            assert res.exit_code == 2, res.output
+
+    def test_flip_gate_golden_refused(self):
+        r = CliRunner()
+        with r.isolated_filesystem():
+            Path("agentci_spec.yaml").write_text(PROMOTE_SPEC)
+            Path("toy_agent.py").write_text(FAILING)
+            _invoke(["simulate", "--yes", "--runs", "3"])
+            from ciagent.promotion import StageStore
+            sid = StageStore(Path(".ciagent/staged")).list()[0].stage_id
+            res = _invoke(["promote", sid, "--yes"])  # gate lifecycle
+            assert res.exit_code == 0, res.output
+            golden = "golden/sim-test/scenarios/refund-path.json"
+            res = _invoke(["promote", "--flip", golden, "--yes"])
+            assert res.exit_code == 1, res.output
+            assert "nothing to flip" in res.output

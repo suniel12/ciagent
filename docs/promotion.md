@@ -129,10 +129,25 @@ Two gates protect the golden suite:
    the record path uses before anything is written. A golden that cannot
    replay is never created.
 
-Promoted goldens use the `gate` lifecycle: `simulate --replay` exits 1 while
-the bug still reproduces, and goes green on its own once the agent is fixed.
-An `--xfail` lifecycle (expected-fail until fixed, then flip) is deferred to
-v2.
+### Lifecycles: gate and xfail
+
+The state machine is `staged → promoted(gate|xfail) → fixed(flip)`:
+
+- **`gate`** (default): `simulate --replay` exits 1 while the bug still
+  reproduces. CI is red until the fix lands, and goes green on its own once
+  the agent is fixed. Honest, but harsh if the fix isn't landing this sprint.
+- **`xfail`** (`promote --xfail`): the failure is EXPECTED, so replay stays
+  green (exit 0) while the bug reproduces, shown as `XFAIL` in the report.
+  The repro is banked in CI without blocking merges. When a replay suddenly
+  passes, it is flagged `XPASS` with the exact flip command; CI stays green
+  (non-strict xpass, same semantics as pytest).
+- **`promote --flip <golden>`**: the human acknowledgment that the fix
+  landed. Converts the xfail golden to a normal `gate` golden (stamping
+  `flipped_at`), so replay exits 1 if the bug ever comes back. Flipping a
+  non-xfail golden is refused.
+
+`--format json` carries the fold: each scenario reports `lifecycle` and
+`xpass`, and the summary adds `xfail_expected` and `xpass` counts.
 
 ## Envelope compatibility
 

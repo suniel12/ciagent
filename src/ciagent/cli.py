@@ -3718,6 +3718,14 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
         goldens = [None] * len(scenarios)
 
     run_mode = "replay" if replay_path else "scripted"
+    # Bug-golden lifecycle per scenario (replay only): `gate` goldens keep
+    # today's exit-1-on-failure; `xfail` goldens expect the failure (CI
+    # green) and flag XPASS when the replay suddenly passes.
+    lifecycles = [
+        ((g[1].provenance or {}).get("lifecycle", "gate") if g else "gate")
+        for g in goldens
+    ]
+    golden_paths = [g[0] if g else None for g in goldens]
     if replay_path:
         mode_str = "mock replay" if mock else "replay"
     else:
@@ -3887,6 +3895,11 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
                     "error": r.error,
                     "hard_fail": r.hard_fail,
                     "partial": r.is_partial,
+                    "lifecycle": lifecycles[i] if i < len(lifecycles) else "gate",
+                    "xpass": (
+                        i < len(lifecycles) and lifecycles[i] == "xfail"
+                        and not r.hard_fail and not r.is_partial
+                    ),
                     "cost_usd": round(r.cost_usd, 6),
                     "turns": [
                         {
@@ -3900,7 +3913,7 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
                     "outcome": _serialize_result(r.outcome) if r.outcome else None,
                     "diff": d.summary_json() if d is not None else None,
                 }
-                for r, d in zip(results, diffs)
+                for i, (r, d) in enumerate(zip(results, diffs))
             ],
             "recorded": [str(p) for p in recorded_paths],
             "stability": (
@@ -3923,6 +3936,15 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
                 "total": len(results),
                 "passed": sum(1 for r in results if not r.hard_fail and not r.is_partial),
                 "failed": sum(1 for r in results if r.hard_fail),
+                "xfail_expected": sum(
+                    1 for i, r in enumerate(results)
+                    if r.hard_fail and i < len(lifecycles) and lifecycles[i] == "xfail"
+                ),
+                "xpass": sum(
+                    1 for i, r in enumerate(results)
+                    if not r.hard_fail and not r.is_partial
+                    and i < len(lifecycles) and lifecycles[i] == "xfail"
+                ),
                 "infra_errors": sum(1 for r in results if r.is_infra_error),
                 "cost_aborted": sum(1 for r in results if r.is_cost_aborted),
             },
@@ -3934,13 +3956,28 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
                 f"\n[bold red]SESSION ABORTED — --max-cost ${budget.max_usd:.2f} breached "
                 f"(spent ~${budget.spent_usd:.4f}). Results below are PARTIAL.[/]"
             )
-        for r, d in zip(results, diffs):
-            icon = "❌" if r.hard_fail else ("⚠️ " if r.is_partial else "✅")
+        for i, (r, d) in enumerate(zip(results, diffs)):
+            is_xfail = i < len(lifecycles) and lifecycles[i] == "xfail"
+            if is_xfail and r.hard_fail:
+                icon = "🟡"
+            else:
+                icon = "❌" if r.hard_fail else ("⚠️ " if r.is_partial else "✅")
             tag = " [magenta](simulated)[/]" if r.mode == "simulated" else ""
             console.print(
                 f"\n{icon} [bold]{r.scenario.display_name()}[/]{tag} — "
                 f"{len(r.turns)} turn(s), ended: [cyan]{r.termination}[/]"
             )
+            if is_xfail and r.hard_fail:
+                console.print(
+                    "   [yellow]XFAIL — expected failure (bug-golden, fix not "
+                    "landed yet); does not gate CI[/]"
+                )
+            elif is_xfail and not r.is_partial:
+                gp = golden_paths[i]
+                console.print(
+                    "   [bold green]XPASS — this xfail golden now passes.[/] "
+                    f"Flip it: [cyan]ciagent promote --flip {gp}[/]"
+                )
             if r.is_partial:
                 console.print(
                     "   [yellow]PARTIAL — conversation did not complete; "
@@ -3984,8 +4021,13 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
             + (f"  |  {sum(1 for r in results if r.is_partial)} partial/infra" if any(r.is_partial for r in results) else "")
         )
 
-    # Exit codes consider every run, not just the reported first one
-    if any(r.hard_fail for rr in all_runs for r in rr):
+    # Exit codes consider every run, not just the reported first one.
+    # Lifecycle-aware fold: only `gate` failures block; an `xfail` golden's
+    # failure is expected (and its pass is XPASS, flagged above, still green).
+    if any(
+        r.hard_fail and (lifecycles[i] if i < len(lifecycles) else "gate") == "gate"
+        for rr in all_runs for i, r in enumerate(rr)
+    ):
         sys.exit(1)
     if cost_aborted or any(r.is_infra_error for rr in all_runs for r in rr):
         sys.exit(2)
@@ -4532,24 +4574,41 @@ def stage_gc(config, staged_dir):
 @click.option('--force', is_flag=True,
               help='Promote a held/held-infra/unverified entry anyway (prints why '
                    'it was gated).')
+@click.option('--xfail', is_flag=True,
+              help='Promote as an expected-fail bug-golden: replay is XFAIL '
+                   '(CI green) while the bug reproduces; a passing replay is '
+                   'flagged XPASS. Default is `gate` (replay exits 1 while '
+                   'the bug reproduces).')
+@click.option('--flip', is_flag=True,
+              help='Flip a previously-promoted xfail golden to expected-pass '
+                   'after its fix landed (STAGE_ID = the promoted golden, a '
+                   'path or unique name under baseline_dir).')
 @click.option('--yes', '-y', is_flag=True, help='Skip the interactive picker/confirm')
 @click.option('--format', 'fmt', type=click.Choice(['console', 'json']),
               default='console', show_default=True)
-def promote_cmd(stage_id, config, staged_dir, baseline_dir, force, yes, fmt):
+def promote_cmd(stage_id, config, staged_dir, baseline_dir, force, xfail, flip,
+                yes, fmt):
     """Promote a staged failing conversation to a permanent golden CI gate.
 
     The human "yes" — and only that. `ciagent promote` with no id opens an
     interactive picker sorted best-first; `promote <id>` promotes one. The
     envelope moves into <baseline_dir>/<agent>/scenarios/ (exactly where
-    --record writes) with an additive `provenance:` block; `simulate --replay`
-    then gates on it unchanged (the `gate` lifecycle: replay exits 1 while the
-    bug reproduces).
+    --record writes) with an additive `provenance:` block.
+
+    \b
+    Lifecycles (state machine: staged → promoted(gate|xfail) → fixed(flip)):
+        gate  (default) — `simulate --replay` exits 1 while the bug
+                          reproduces; CI is red until the fix lands.
+        xfail (--xfail) — replay treats the failure as EXPECTED (CI green);
+                          when the replay suddenly passes it is flagged
+                          XPASS, and `promote --flip <golden>` converts it
+                          to a normal gate golden.
     \b
     Exit codes:
-        0 — promoted
-        1 — refused: classification gated and --force not given, or STAGE_ID
-            not found
-        2 — config error
+        0 — promoted (or flipped)
+        1 — refused: classification gated and --force not given, STAGE_ID
+            not found, or --flip target is not an xfail golden
+        2 — config error / bad flag combination
     """
     _route_chrome(fmt)
     import json as _json
@@ -4563,6 +4622,27 @@ def promote_cmd(stage_id, config, staged_dir, baseline_dir, force, yes, fmt):
 
     spec, store = _stage_store(config, staged_dir)
     effective_baseline = baseline_dir or spec.baseline_dir
+
+    if flip:
+        if xfail or force:
+            console.print("[bold red]--flip cannot be combined with --xfail/--force.[/]")
+            sys.exit(2)
+        if not stage_id:
+            console.print("[bold red]--flip needs the promoted golden:[/] "
+                          "ciagent promote --flip <path-or-name>")
+            sys.exit(2)
+        svc = PromotionService(store)
+        try:
+            out = svc.flip(stage_id, baseline_dir=effective_baseline)
+        except (StageNotFound, StageAmbiguous, PromotionRefused) as e:
+            console.print(f"[bold red]{e}[/]")
+            sys.exit(1)
+        if fmt == "json":
+            print(_json.dumps({"flipped": str(out)}, indent=2))
+        else:
+            console.print(f"[green]✅ flipped[/] → [cyan]{out}[/]")
+            console.print("[dim]lifecycle is now `gate`: replay exits 1 if the bug ever comes back.[/]")
+        sys.exit(0)
 
     if not stage_id:
         entries = store.list()
@@ -4586,8 +4666,12 @@ def promote_cmd(stage_id, config, staged_dir, baseline_dir, force, yes, fmt):
         _warn_redacted_check_literals(env_preview)
     except Exception:  # noqa: BLE001 — warning only; promote() re-resolves
         pass
+    lifecycle = "xfail" if xfail else "gate"
     try:
-        out = svc.promote(stage_id, baseline_dir=effective_baseline, force=force)
+        out = svc.promote(
+            stage_id, baseline_dir=effective_baseline, lifecycle=lifecycle,
+            force=force,
+        )
     except (StageNotFound, StageAmbiguous) as e:
         console.print(f"[bold red]{e}[/]")
         sys.exit(1)
@@ -4596,10 +4680,20 @@ def promote_cmd(stage_id, config, staged_dir, baseline_dir, force, yes, fmt):
         sys.exit(1)
 
     if fmt == "json":
-        print(_json.dumps({"promoted": str(out), "stage_id": stage_id}, indent=2))
+        print(_json.dumps(
+            {"promoted": str(out), "stage_id": stage_id, "lifecycle": lifecycle},
+            indent=2,
+        ))
     else:
         console.print(f"[green]✅ promoted[/] {stage_id} → [cyan]{out}[/]")
-        console.print("[dim]`ciagent simulate --replay` now gates on it (exit 1 while the bug reproduces).[/]")
+        if lifecycle == "xfail":
+            console.print(
+                "[dim]xfail lifecycle: replay stays green while the bug "
+                "reproduces; a passing replay is flagged XPASS → "
+                "[cyan]ciagent promote --flip[/] converts it to a gate.[/]"
+            )
+        else:
+            console.print("[dim]`ciagent simulate --replay` now gates on it (exit 1 while the bug reproduces).[/]")
     sys.exit(0)
 
 

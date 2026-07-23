@@ -438,6 +438,14 @@ class PromotionRefused(Exception):
     """Raised when a staged entry's class is gated and --force was not given."""
 
 
+# Bug-golden lifecycle state machine (ADR):
+#   staged → promoted(gate|xfail) → fixed(flip: xfail → gate + flipped_at)
+# `gate`: replay exits 1 while the bug reproduces (CI red until the fix).
+# `xfail`: replay treats the failure as expected (CI green); a passing replay
+# is XPASS — flag it, and `promote --flip` converts to a normal gate golden.
+LIFECYCLES = ("gate", "xfail")
+
+
 class PromotionService:
     """Move a staged conversation into the golden dir with provenance.
 
@@ -459,6 +467,9 @@ class PromotionService:
         force: bool = False,
     ) -> Path:
         from .engine.artifact_gate import gate_conversation_envelope
+
+        if lifecycle not in LIFECYCLES:
+            raise ValueError(f"unknown lifecycle '{lifecycle}' (one of {LIFECYCLES})")
 
         path, env = self._store.load(stage_id)
         staging = env.staging or {}
@@ -489,6 +500,43 @@ class PromotionService:
         # any failure above leaves the staged file untouched.
         path.unlink(missing_ok=True)
         return out
+
+    def flip(self, golden_ref: str, *, baseline_dir: str) -> Path:
+        """Flip a promoted xfail golden to a normal gate golden after its fix.
+
+        `golden_ref` is a path to the golden, or a unique substring of one
+        under `<baseline_dir>` (e.g. the scenario slug). Refuses when the
+        golden's lifecycle is not `xfail` — there is nothing to flip on a
+        gate golden, and re-flipping is a no-op worth surfacing.
+        """
+        path = self._resolve_golden(golden_ref, baseline_dir)
+        env = load_envelope(path)
+        prov = dict(env.provenance or {})
+        if prov.get("lifecycle") != "xfail":
+            raise PromotionRefused(
+                f"'{golden_ref}' is not an xfail golden "
+                f"(lifecycle: {prov.get('lifecycle') or 'none'}) — nothing to flip."
+            )
+        prov["lifecycle"] = "gate"
+        prov["flipped_at"] = self._now().isoformat()
+        env.provenance = prov
+        return save_envelope(env, path)
+
+    @staticmethod
+    def _resolve_golden(golden_ref: str, baseline_dir: str) -> Path:
+        direct = Path(golden_ref)
+        if direct.is_file():
+            return direct
+        root = Path(baseline_dir)
+        candidates = [
+            p for p in (sorted(root.rglob("*.json")) if root.exists() else [])
+            if golden_ref in str(p.relative_to(root)) or p.stem == golden_ref
+        ]
+        if len(candidates) == 1:
+            return candidates[0]
+        if not candidates:
+            raise StageNotFound(golden_ref)
+        raise StageAmbiguous(golden_ref, [str(c) for c in candidates])
 
     def _stamp_provenance(
         self,
