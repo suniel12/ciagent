@@ -1,9 +1,9 @@
 #!/bin/sh
-# Reject pushes whose commits carry an AI co-author trailer.
+# Reject pushes whose commits carry AI attribution (trailer or footer).
 # Enable once per clone: git config core.hooksPath .githooks
 
 zero=0000000000000000000000000000000000000000
-pattern='co-authored-by:.*(claude|anthropic)'
+pattern='co-authored-by:.*(claude|anthropic)|generated (with|by).*(claude|anthropic)'
 
 while read -r local_ref local_sha remote_ref remote_sha; do
     # Branch deletion: nothing to check.
@@ -19,9 +19,9 @@ while read -r local_ref local_sha remote_ref remote_sha; do
     # shellcheck disable=SC2086
     bad=$(git log $range -i -E --grep="$pattern" --format='%h %s')
     if [ -n "$bad" ]; then
-        echo "push rejected: AI co-author trailer in commit message(s):" >&2
+        echo "push rejected: AI attribution in commit message(s):" >&2
         echo "$bad" >&2
-        echo "Amend or rebase to drop the Co-Authored-By trailer, then push again." >&2
+        echo "Amend or rebase to drop the attribution line, then push again." >&2
         exit 1
     fi
 done
