@@ -1,4 +1,4 @@
-# agentci.yaml — LangGraph Research Agent Test Suite
+# ciagent.yaml — LangGraph Research Agent Test Suite
 name: "langgraph_research_agent_tests"
 agent: "examples.langgraph_example.agent:run_agent"
 framework: "langgraph"

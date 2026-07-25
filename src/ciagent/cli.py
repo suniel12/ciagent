@@ -1,4 +1,4 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
 CIAgent Command Line Interface.
@@ -733,7 +733,7 @@ def _build_golden_queries(pairs: list[dict]) -> list[dict]:
     return queries
 
 
-_RUNNER_FN_NAMES = {"run_for_agentci", "run_agent", "run_for_agent", "run"}
+_RUNNER_FN_NAMES = {"run_for_ciagent", "run_agent", "run_for_agent", "run"}
 _RUNNER_BODY_HINTS = (
     # Existing: explicit CIAgent trace usage
     "ctx.trace", "-> Trace", "TraceContext", "langgraph_trace",
@@ -779,7 +779,7 @@ def _detect_runner(project_dir) -> str | None:
 
         for fn_name in fn_pattern.findall(content):
             priority = (
-                0 if fn_name == "run_for_agentci" else
+                0 if fn_name == "run_for_ciagent" else
                 1 if fn_name == "run_agent" else
                 2 if fn_name in _RUNNER_FN_NAMES else
                 3
@@ -864,19 +864,19 @@ def _generate_runner_file(
     """Auto-generate a runner.py file based on detected agent code.
 
     Scans agent files to determine which SDK is used (anthropic, openai, langgraph)
-    and generates a runner that:
+    and generates an adapter that:
     1. Imports the relevant SDK
     2. Defines tool schemas matching detected tools
     3. Implements a ReAct-style agent loop
     4. Returns a str (TraceContext auto-wrapping handles the rest)
 
-    Returns the module:function path (e.g., "agentci_runner:run_agent") or None.
+    Returns the module:function path (e.g., "ciagent_adapter:run_agent") or None.
     """
     import re
     from pathlib import Path
 
     project_dir = Path(project_dir)
-    runner_path = project_dir / "agentci_runner.py"
+    runner_path = project_dir / "ciagent_adapter.py"
 
     # Detect which SDK the project uses
     sdk = None
@@ -913,7 +913,7 @@ def _generate_runner_file(
             '"""Auto-generated CIAgent runner.\n'
             'Created by: ciagent init --generate\n'
             '\n'
-            'This runner wraps your agent\'s tools using the Anthropic SDK.\n'
+            'This adapter wraps your agent\'s tools using the Anthropic SDK.\n'
             'CIAgent automatically captures all LLM calls and tool invocations\n'
             'via monkey-patching — just return the final answer as a string.\n'
             '\n'
@@ -1024,7 +1024,7 @@ def _generate_runner_file(
         return None
 
     runner_path.write_text(runner_code, encoding="utf-8")
-    return "agentci_runner:run_agent"
+    return "ciagent_adapter:run_agent"
 
 
 def _prompt_for_queries_interactive() -> list[str]:
@@ -1049,7 +1049,7 @@ def _generate_skeleton_spec(
     detected_tools: list[str],
     runner_path: str,
 ) -> str:
-    """Generate a skeleton agentci_spec.yaml with TODO placeholders.
+    """Generate a skeleton ciagent_spec.yaml with TODO placeholders.
 
     Used when mock mode is selected and no queries are provided (golden file
     or interactive). Creates template queries based on detected agent type.
@@ -1111,7 +1111,7 @@ def _generate_skeleton_spec(
 """
 
     return f"""agent: my-agent
-runner: "{runner_path}"
+adapter: "{runner_path}"
 version: 1.0
 
 judge_config:
@@ -1131,14 +1131,14 @@ def _build_next_steps(run_mode: str, created_workflow: bool, has_queries: bool) 
     run_mode : str
         "live" or "mock"
     created_workflow : bool
-        Whether .github/workflows/agentci.yml was created
+        Whether .github/workflows/ciagent.yml was created
     has_queries : bool
         Whether real queries were generated (vs skeleton template)
     """
     steps: list[str] = []
 
     if not has_queries:
-        steps.append("1. Fill in the TODO queries in [cyan]agentci_spec.yaml[/]")
+        steps.append("1. Fill in the TODO queries in [cyan]ciagent_spec.yaml[/]")
 
     if run_mode == "mock":
         n = len(steps) + 1
@@ -1155,7 +1155,7 @@ def _build_next_steps(run_mode: str, created_workflow: bool, has_queries: bool) 
 
     if created_workflow:
         n = len(steps) + 1
-        steps.append(f"{n}. Commit: [cyan]git add .github/ agentci_spec.yaml[/]")
+        steps.append(f"{n}. Commit: [cyan]git add .github/ ciagent_spec.yaml[/]")
         n += 1
         steps.append(f"{n}. Add your API key to GitHub repository secrets")
         n += 1
@@ -1241,7 +1241,7 @@ def _generate_queries(context: dict, runner_path: str, interview: dict | None = 
         )
 
     prompt = f"""You are an expert AI agent test engineer. Given the following agent project context,
-generate a diverse set of test queries for CIAgent's agentci_spec.yaml.
+generate a diverse set of test queries for CIAgent's ciagent_spec.yaml.
 
 {interview_section}
 
@@ -1552,9 +1552,9 @@ def _scaffold_staging_gitignore(gitignore_path: str = ".gitignore") -> bool:
 @cli.command()
 @click.option('--hook', is_flag=True, help='Also install a .git/hooks/pre-push script')
 @click.option('--force', is_flag=True, help='Overwrite existing files')
-@click.option('--example', is_flag=True, help='Generate a pre-populated agentci_spec.yaml with RAG example')
+@click.option('--example', is_flag=True, help='Generate a pre-populated ciagent_spec.yaml with RAG example')
 @click.option('--generate', is_flag=True,
-              help='Scan project code + knowledge base and auto-generate agentci_spec.yaml using AI')
+              help='Scan project code + knowledge base and auto-generate ciagent_spec.yaml using AI')
 @click.option('--agent-description', default=None,
               help='DEPRECATED: Agent type is now auto-detected from code. Kept for backwards compatibility.')
 @click.option('--kb-path', default=None, type=click.Path(exists=True),
@@ -1567,8 +1567,9 @@ def _scaffold_staging_gitignore(gitignore_path: str = ".gitignore") -> bool:
                    'a list, a {"rows"/"data": [...]} wrapper, or one object per '
                    'line, and question/prompt/query/input + answer/expected/gold/'
                    'ground_truth keys. Exits 1 if the file yields no pairs.')
-@click.option('--runner', default=None,
-              help='Runner import path (e.g. myagent.run:run_agent). Skips prompt.')
+@click.option('--adapter', '--runner', 'runner', default=None,
+              help='Adapter import path (e.g. myagent.run:run_for_ciagent). '
+                   'Skips prompt. (--runner is a deprecated alias.)')
 def init(hook, force, example, generate, agent_description, kb_path, run_mode, golden_file, runner):
     """Scaffold a new CIAgent test suite and CI/CD pipeline."""
     import jinja2
@@ -1588,8 +1589,8 @@ def init(hook, force, example, generate, agent_description, kb_path, run_mode, g
     has_queries = True
     interview: dict = {}
 
-    # 0. Generate agentci_spec.yaml
-    spec_dest = Path("agentci_spec.yaml")
+    # 0. Generate ciagent_spec.yaml
+    spec_dest = Path("ciagent_spec.yaml")
     if spec_dest.exists() and not force:
         console.print(f"[yellow]Skipped:[/] {spec_dest} already exists. Use --force to overwrite.")
     else:
@@ -1728,30 +1729,30 @@ def init(hook, force, example, generate, agent_description, kb_path, run_mode, g
 
             # If no runner found, generate one automatically
             if not detected_runner and detected_tools and interview.get("run_mode") == "live":
-                console.print("\n[dim]No runner found — generating agentci_runner.py...[/]")
+                console.print("\n[dim]No adapter found — generating ciagent_adapter.py...[/]")
                 generated_runner = _generate_runner_file(
                     Path("."), context, detected_tools, agent_type,
                 )
                 if generated_runner:
                     detected_runner = generated_runner
-                    console.print(f"[green]\u2713[/] Generated runner: [cyan]{generated_runner}[/]")
+                    console.print(f"[green]\u2713[/] Generated adapter: [cyan]{generated_runner}[/]")
                     console.print(
-                        "[dim]  Edit agentci_runner.py to implement your tool logic "
+                        "[dim]  Edit ciagent_adapter.py to implement your tool logic "
                         "(look for TODO comments)[/]"
                     )
 
-            runner_default = detected_runner or "myagent.run:run_agent"
+            runner_default = detected_runner or "myagent.run:run_for_ciagent"
             if runner:
                 runner_path = runner
             elif non_interactive:
                 runner_path = runner_default
                 if detected_runner:
-                    console.print(f"Auto-detected runner: [cyan]{detected_runner}[/]")
+                    console.print(f"Auto-detected adapter: [cyan]{detected_runner}[/]")
             else:
                 if detected_runner:
-                    console.print(f"\nDetected runner: [cyan]{detected_runner}[/]")
+                    console.print(f"\nDetected adapter: [cyan]{detected_runner}[/]")
                 runner_path = Prompt.ask(
-                    "Runner import path",
+                    "Adapter import path",
                     default=runner_default,
                 )
 
@@ -1858,7 +1859,7 @@ def init(hook, force, example, generate, agent_description, kb_path, run_mode, g
                 console.print(f"[green]✓[/] {len(queries)} test queries ready")
                 spec_dict = {
                     "agent": "my-agent",
-                    "runner": runner_path,
+                    "adapter": runner_path,
                     "version": 1.0,
                     "judge_config": {"model": _get_judge_model_for_spec(), "temperature": 0},
                     "baseline_dir": "./baselines",
@@ -1869,13 +1870,13 @@ def init(hook, force, example, generate, agent_description, kb_path, run_mode, g
         else:
             # ── Non-generate modes (--example or bare init) ──────────
             runner_path = Prompt.ask(
-                "What is the import path for your agent runner function?",
+                "What is the import path for your agent adapter function?",
                 default="myagent.run:run_agent"
             )
 
             if example:
                 spec_content = f'''agent: rag-agent
-runner: "{runner_path}"
+adapter: "{runner_path}"
 version: 1.0
 
 judge_config:
@@ -1900,7 +1901,7 @@ queries:
 '''
             else:
                 spec_content = f'''agent: my-agent
-runner: "{runner_path}"
+adapter: "{runner_path}"
 version: 1.0
 
 judge_config:
@@ -1941,7 +1942,7 @@ queries:
     from pathlib import Path
     template_dir = Path(__file__).parent / "templates"
 
-    github_action_dest = Path(".github/workflows/agentci.yml")
+    github_action_dest = Path(".github/workflows/ciagent.yml")
     pre_push_dest = Path(".git/hooks/pre-push")
     created_workflow = False
 
@@ -2014,8 +2015,10 @@ def _slugify_query(query: str, fallback: str = "query") -> str:
 @cli.command()
 @click.option('--queries', type=click.Path(exists=True), help='Text file with one query per line (optional, falls back to interactive)')
 @click.option('--agent', default='my-agent', help='Agent name for the spec')
-@click.option('--runner', required=True, help='Import path for runner function, e.g. myagent.run:run')
-@click.option('--output', default='agentci_spec.yaml', help='Output spec file')
+@click.option('--adapter', '--runner', 'runner', required=True,
+              help='Import path for the adapter function, e.g. myagent.run:run_for_ciagent. '
+                   '(--runner is a deprecated alias.)')
+@click.option('--output', default='ciagent_spec.yaml', help='Output spec file')
 @click.option('--baseline-dir', default='./baselines', help='Directory for baselines')
 @click.option('--yes', '-y', is_flag=True,
               help='Accept every captured trace as golden without prompting '
@@ -2023,7 +2026,7 @@ def _slugify_query(query: str, fallback: str = "query") -> str:
 def bootstrap(queries, agent, runner, output, baseline_dir, yes):
     """Zero-to-Golden bootstrapper: run queries, record golden baselines, write a spec.
 
-    The runner may return an ciagent.models.Trace or a plain string — string
+    The adapter may return an ciagent.models.Trace or a plain string — string
     returns get automatic LLM/tool capture, same as `ciagent test`.
     """
     import yaml
@@ -2041,7 +2044,7 @@ def bootstrap(queries, agent, runner, output, baseline_dir, yes):
     try:
         runner_fn = resolve_runner(runner)
     except Exception as e:
-        console.print(f"[bold red]Failed to load runner:[/] {e}")
+        console.print(f"[bold red]Failed to load adapter:[/] {e}")
         sys.exit(1)
 
     query_list = []
@@ -2063,7 +2066,7 @@ def bootstrap(queries, agent, runner, output, baseline_dir, yes):
 
     spec_dict = {
         "agent": agent,
-        "runner": runner,
+        "adapter": runner,
         "version": 1.0,
         "judge_config": {
             "model": _get_judge_model_for_spec(),
@@ -2083,7 +2086,7 @@ def bootstrap(queries, agent, runner, output, baseline_dir, yes):
             # coercion, so string-returning runners work here too.
             trace = _run_with_retry(runner_fn, q, retry_count=0, backoff=1.0, agent_name=agent)
             if trace is None:
-                console.print("  [yellow]Runner returned nothing — skipping this query.[/]")
+                console.print("  [yellow]Adapter returned nothing — skipping this query.[/]")
                 continue
 
             # Print Tier 1 summary
@@ -2147,7 +2150,7 @@ def bootstrap(queries, agent, runner, output, baseline_dir, yes):
 
 from collections import defaultdict
 @cli.command()
-@click.option('--suite', '-s', default='agentci.yaml', help='Path to test suite YAML')
+@click.option('--suite', '-s', default='ciagent.yaml', help='Path to test suite YAML')
 @click.option('--runs', '-n', default=1, help='Number of runs for statistical mode')
 @click.option('--tag', '-t', multiple=True, help='Only run tests with these tags')
 @click.option('--diff/--no-diff', default=True, help='Compare against golden traces')
@@ -2290,8 +2293,8 @@ def run(suite, runs, tag, diff, html, fail_on_cost, ci, output_json):
 @cli.command()
 @click.argument('target', required=False)
 @click.option('--config', '-c', 'config_path', default=None,
-              help='Path to agentci_spec.yaml (v2) or agentci.yaml (v1). '
-                   'Default: agentci_spec.yaml if present, else agentci.yaml.')
+              help='Path to ciagent_spec.yaml (v2) or ciagent.yaml (v1). '
+                   'Default: ciagent_spec.yaml if present, else ciagent.yaml.')
 @click.option('--suite', '-s', default=None,
               help='DEPRECATED alias for --config (kept for v1 workflows)')
 @click.option('--output', '-o', help='(v1 only) Output path for golden trace')
@@ -2309,11 +2312,11 @@ def record(target, config_path, suite, output, version_tag, baseline_dir,
            force_save, workers, output_json):
     """Run the agent live and save golden baselines.
 
-    With a v2 spec (agentci_spec.yaml), records every query through the
+    With a v2 spec (ciagent_spec.yaml), records every query through the
     spec's runner and saves versioned baselines that 'ciagent test' compares
     against. Pass TARGET (query text or unique substring) to record one query.
 
-    With a legacy v1 suite (agentci.yaml), TARGET is the test name and a
+    With a legacy v1 suite (ciagent.yaml), TARGET is the test name and a
     single golden trace JSON is written (deprecated path).
     """
     from .loader import detect_format
@@ -2321,7 +2324,12 @@ def record(target, config_path, suite, output, version_tag, baseline_dir,
 
     path = config_path or suite
     if path is None:
-        path = 'agentci_spec.yaml' if os.path.exists('agentci_spec.yaml') else 'agentci.yaml'
+        if os.path.exists('ciagent_spec.yaml'):
+            path = 'ciagent_spec.yaml'
+        elif os.path.exists('agentci_spec.yaml'):  # legacy filename, accepted until 1.0
+            path = 'agentci_spec.yaml'
+        else:
+            path = 'ciagent.yaml'
 
     try:
         fmt = detect_format(path)
@@ -2348,18 +2356,18 @@ def _record_v2(config, target, version_tag, baseline_dir, force_save,
     from .loader import load_spec
     from .baselines import save_baseline
     from .engine.parallel import run_spec_parallel, resolve_runner
-    from .exceptions import AgentCIError
+    from .exceptions import CIAgentError
 
     try:
         spec = load_spec(config)
-    except AgentCIError as e:
+    except CIAgentError as e:
         if output_json:
             click.echo(json_mod.dumps({"error": str(e)}))
         else:
             _print_error_panel(e)
         sys.exit(2)
 
-    if not spec.runner:
+    if not spec.adapter:
         msg = ("No runner declared in spec. Add one to record locally: "
                "runner: \"myagent.run:run_agent\"")
         if output_json:
@@ -2397,12 +2405,12 @@ def _record_v2(config, target, version_tag, baseline_dir, force_save,
         indices = matches
 
     try:
-        runner_fn = resolve_runner(spec.runner)
+        runner_fn = resolve_runner(spec.adapter)
     except (ImportError, AttributeError, ValueError) as e:
         if output_json:
-            click.echo(json_mod.dumps({"error": f"Runner error: {e}"}))
+            click.echo(json_mod.dumps({"error": f"Adapter error: {e}"}))
         else:
-            console.print(f"[bold red]Runner error:[/] {e}")
+            console.print(f"[bold red]Adapter error:[/] {e}")
         sys.exit(2)
 
     count = len(indices) if indices is not None else len(spec.queries)
@@ -2468,9 +2476,9 @@ def _record_v2(config, target, version_tag, baseline_dir, force_save,
 
 
 def _record_v1(suite, test_name, output, output_json):
-    """Legacy v1 record path: single test from agentci.yaml (deprecated)."""
+    """Legacy v1 record path: single test from ciagent.yaml (deprecated)."""
     if not test_name:
-        msg = "TARGET (test name) is required when recording from a v1 agentci.yaml suite."
+        msg = "TARGET (test name) is required when recording from a v1 ciagent.yaml suite."
         if output_json:
             import json as json_mod
             click.echo(json_mod.dumps({"error": msg}))
@@ -2480,8 +2488,8 @@ def _record_v1(suite, test_name, output, output_json):
 
     if not output_json:
         console.print(
-            "[yellow]DEPRECATED:[/] recording from v1 agentci.yaml suites will be "
-            "removed in 0.9.0. Migrate to agentci_spec.yaml and 'ciagent record'.\n"
+            "[yellow]DEPRECATED:[/] recording from v1 ciagent.yaml suites will be "
+            "removed in 0.9.0. Migrate to ciagent_spec.yaml and 'ciagent record'.\n"
         )
 
     try:
@@ -2573,7 +2581,7 @@ def _record_v1(suite, test_name, output, output_json):
 @click.option('--compare', '-c', required=True, help="Compare version tag (e.g. 'v2-fixed')")
 @click.option('--agent', '-a', required=True, help="Agent identifier (matches baseline file naming)")
 @click.option('--config', 'spec_path', default=None, type=click.Path(exists=True),
-              help='Path to agentci_spec.yaml for correctness evaluation (optional)')
+              help='Path to ciagent_spec.yaml for correctness evaluation (optional)')
 @click.option('--baseline-dir', default='./baselines', show_default=True,
               help='Directory containing versioned baseline JSON files')
 @click.option('--format', 'fmt', type=click.Choice(['console', 'github', 'json']),
@@ -2695,7 +2703,7 @@ def diff_cmd(baseline, compare, agent, spec_path, baseline_dir, fmt, query_filte
 @cli.command()
 @click.option('--input', '-i', 'input_path', type=click.Path(exists=True), required=True,
               help='Path to a JSON results file (from --format json)')
-@click.option('--output', '-o', 'output_path', type=click.Path(), default='agentci-report.html',
+@click.option('--output', '-o', 'output_path', type=click.Path(), default='ciagent-report.html',
               show_default=True, help='Output HTML file path')
 def report(input_path, output_path):
     """Generate an HTML report from a JSON results file.
@@ -2744,7 +2752,7 @@ def report(input_path, output_path):
 
 
 @cli.command(name="calibrate")
-@click.option('--spec', '-s', 'config', default='agentci_spec.yaml',
+@click.option('--spec', '-s', 'config', default='ciagent_spec.yaml',
               type=click.Path(exists=True),
               help='Path to spec file', show_default=True)
 @click.option('--samples', '-n', default=2, type=int,
@@ -2776,12 +2784,12 @@ def calibrate_cmd(config, samples, dry_run, yes):
     spec_path = Path(config)
     spec = load_spec(str(spec_path))
 
-    if not spec.runner:
+    if not spec.adapter:
         console.print("[red]Error:[/] No runner configured in spec. Add a 'runner' field.")
         sys.exit(1)
 
     try:
-        runner_fn = resolve_runner(spec.runner)
+        runner_fn = resolve_runner(spec.adapter)
     except Exception as e:
         console.print(f"[red]Error resolving runner:[/] {e}")
         sys.exit(1)
@@ -2896,7 +2904,7 @@ def calibrate_cmd(config, samples, dry_run, yes):
 @cli.command()
 @click.argument('spec_path', type=click.Path(exists=True))
 def validate(spec_path):
-    """Validate an agentci_spec.yaml file against the schema.
+    """Validate an ciagent_spec.yaml file against the schema.
 
     Exits 0 on success, 1 on validation failure.
     """
@@ -2923,8 +2931,8 @@ def validate(spec_path):
 
 
 @cli.command(name="doctor")
-@click.option('--config', '-c', default='agentci_spec.yaml',
-              help='Path to agentci_spec.yaml', show_default=True)
+@click.option('--config', '-c', default='ciagent_spec.yaml',
+              help='Path to ciagent_spec.yaml', show_default=True)
 def doctor_cmd(config):
     """Check your CIAgent setup for common issues.
 
@@ -2948,13 +2956,13 @@ def doctor_cmd(config):
             checks.append(("fail", f"{config} invalid: {e}", "Run: ciagent validate"))
 
     # 2. Runner imports successfully
-    if spec and spec.runner:
+    if spec and spec.adapter:
         try:
             from .engine.parallel import resolve_runner
-            resolve_runner(spec.runner)
-            checks.append(("pass", f"Runner '{spec.runner}' imports successfully", ""))
+            resolve_runner(spec.adapter)
+            checks.append(("pass", f"Adapter '{spec.adapter}' imports successfully", ""))
         except Exception as e:
-            checks.append(("fail", f"Runner '{spec.runner}' failed: {e}",
+            checks.append(("fail", f"Adapter '{spec.adapter}' failed: {e}",
                            "Check the module:function path in your spec"))
     elif spec:
         checks.append(("warn", "No runner declared in spec",
@@ -3006,8 +3014,8 @@ def doctor_cmd(config):
             checks.append(("fail", f"{pkg} is not installed", f"pip install {pkg}"))
 
     # 7. GitHub Actions workflow
-    if Path(".github/workflows/agentci.yml").exists():
-        checks.append(("pass", ".github/workflows/agentci.yml exists", ""))
+    if Path(".github/workflows/ciagent.yml").exists():
+        checks.append(("pass", ".github/workflows/ciagent.yml exists", ""))
     else:
         checks.append(("warn", "No GitHub Actions workflow found",
                         "Run: ciagent init"))
@@ -3041,8 +3049,8 @@ def doctor_cmd(config):
 
 
 @cli.command(name="generate-checks")
-@click.option('--config', '-c', default='agentci_spec.yaml',
-              help='Path to agentci_spec.yaml', show_default=True)
+@click.option('--config', '-c', default='ciagent_spec.yaml',
+              help='Path to ciagent_spec.yaml', show_default=True)
 @click.option('--kb', 'kb_path', default=None, type=click.Path(exists=True),
               help='Knowledge base directory (default: auto-detect)')
 @click.option('--baseline-dir', default=None,
@@ -3197,8 +3205,8 @@ def generate_checks_cmd(config, kb_path, baseline_dir, dry_run, yes):
 
 
 @cli.command(name="judge-audit")
-@click.option('--config', '-c', default='agentci_spec.yaml',
-              help='Path to agentci_spec.yaml', show_default=True)
+@click.option('--config', '-c', default='ciagent_spec.yaml',
+              help='Path to ciagent_spec.yaml', show_default=True)
 @click.option('--baseline-dir', default=None,
               help='Directory of recorded golden baselines (default: spec baseline_dir)')
 @click.option('--repeats', '-r', default=3, show_default=True, type=int,
@@ -3394,8 +3402,8 @@ def judge_audit_cmd(config, baseline_dir, repeats, labels_path, sample, live,
 
 @cli.command(name="import")
 @click.argument('trace_file', type=click.Path(exists=True))
-@click.option('--config', '-c', default='agentci_spec.yaml',
-              help='Path to agentci_spec.yaml', show_default=True)
+@click.option('--config', '-c', default='ciagent_spec.yaml',
+              help='Path to ciagent_spec.yaml', show_default=True)
 @click.option('--version', 'version_tag', default=None,
               help='Baseline version tag (default: imported-<n>)')
 @click.option('--dry-run', is_flag=True,
@@ -3602,14 +3610,14 @@ def _finish_stability_session(fmt, config, output, run_results, stability,
 
 
 @cli.command(name="test")
-@click.option('--config', '-c', default='agentci_spec.yaml',
-              help='Path to agentci_spec.yaml', show_default=True)
+@click.option('--config', '-c', default='ciagent_spec.yaml',
+              help='Path to ciagent_spec.yaml', show_default=True)
 @click.option('--tags', '-t', multiple=True, help='Only evaluate queries with these tags')
 @click.option('--format', 'fmt',
               type=click.Choice(['console', 'github', 'json', 'prometheus', 'html']),
               default='console', show_default=True, help='Output format')
 @click.option('--output', '-o', default=None, type=click.Path(),
-              help='Output file path (used with --format html, default: agentci-report.html)')
+              help='Output file path (used with --format html, default: ciagent-report.html)')
 @click.option('--baseline-dir', default=None,
               help='Override baseline directory from spec')
 @click.option('--workers', '-w', default=4, show_default=True, type=int,
@@ -3643,11 +3651,11 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
              runs, fail_on_flaky, flaky_sources, stage_flag, staged_dir):
     """Run CIAgent v2 evaluation against a spec file.
 
-    Loads agentci_spec.yaml, runs the agent for each query (capturing traces),
+    Loads ciagent_spec.yaml, runs the agent for each query (capturing traces),
     evaluates all three layers (Correctness / Path / Cost), and reports results.
 
     Use --mock to validate your spec with synthetic traces (zero API cost).
-    With no agentci_spec.yaml present, --mock runs a bundled demo spec —
+    With no ciagent_spec.yaml present, --mock runs a bundled demo spec —
     try `ciagent test --mock --runs 3` in an empty directory (zero API keys).
 
     Use --runs N to run the whole suite N times: a stable aggregate score can
@@ -3691,7 +3699,13 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
     # spec that is missing must stay an error, never silently become the demo.
     demo_mode = False
     config_source = click.get_current_context().get_parameter_source("config")
-    if config_source == click.core.ParameterSource.DEFAULT and not Path(config).exists():
+    if (config_source == click.core.ParameterSource.DEFAULT
+            and not Path(config).exists()
+            and Path("agentci_spec.yaml").exists()):
+        # Legacy spec filename, accepted until 1.0; load_spec prints the
+        # deprecation warning when it resolves the fallback.
+        pass
+    elif config_source == click.core.ParameterSource.DEFAULT and not Path(config).exists():
         if mock:
             from importlib.resources import files
 
@@ -3699,7 +3713,7 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
             demo_mode = True
         else:
             console.print(
-                "[bold red]No agentci_spec.yaml found in this directory.[/]\n\n"
+                "[bold red]No ciagent_spec.yaml found in this directory.[/]\n\n"
                 "  [cyan]ciagent init[/]                     scaffold a spec for your own agent\n"
                 "  [cyan]ciagent test --mock --runs 3[/]     try the bundled demo (synthetic traces, zero API keys)"
             )
@@ -3729,7 +3743,7 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
             console.print(f"  [dim]• {tq.query[:80]}[/]")
         spec.queries = [q for q in spec.queries if q not in todo_queries]
         if not spec.queries:
-            console.print("[bold red]Error:[/] All queries are TODO placeholders. Edit agentci_spec.yaml first.")
+            console.print("[bold red]Error:[/] All queries are TODO placeholders. Edit ciagent_spec.yaml first.")
             sys.exit(1)
         console.print()
 
@@ -3750,17 +3764,17 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
 
         if demo_mode:
             console.print(
-                "[yellow]Demo mode:[/] no agentci_spec.yaml found — using the bundled "
+                "[yellow]Demo mode:[/] no ciagent_spec.yaml found — using the bundled "
                 "demo spec ([bold]synthetic data[/], simulated agent).\n"
                 "[dim]Test your own agent instead: ciagent init[/]\n"
             )
 
-        # AGENTCI_MOCK_FLAKY=1 simulates agent-variance across runs so the
+        # CIAGENT_MOCK_FLAKY=1 simulates agent-variance across runs so the
         # stability report (and its tests) can be exercised without API keys.
         # Demo mode defaults the simulated flakiness ON for multi-run sessions —
         # the whole point of the demo is showing a stable score hiding verdict
         # flips — but an explicit env value always wins.
-        flaky_env = os.environ.get("AGENTCI_MOCK_FLAKY")
+        flaky_env = os.environ.get("CIAGENT_MOCK_FLAKY")
         if flaky_env is None:
             mock_flaky = demo_mode and runs > 1
         else:
@@ -3802,7 +3816,7 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
         sys.exit(exit_code)
 
     # ── Check for runner ──────────────────────────────────────────────────────
-    if not spec.runner:
+    if not spec.adapter:
         console.print(
             f"[bold blue]CIAgent v{__version__}[/] spec has [cyan]{len(spec.queries)}[/] "
             f"queries for agent '[cyan]{spec.agent}[/]'\n"
@@ -3822,9 +3836,9 @@ def test_cmd(config, tags, fmt, output, baseline_dir, workers, sample_ensemble, 
     from .engine.parallel import run_spec_parallel, resolve_runner
 
     try:
-        runner_fn = resolve_runner(spec.runner)
+        runner_fn = resolve_runner(spec.adapter)
     except (ImportError, AttributeError, ValueError) as e:
-        console.print(f"[bold red]Runner error:[/] {e}")
+        console.print(f"[bold red]Adapter error:[/] {e}")
         sys.exit(2)
 
     # ── Inject sample-ensemble into judge_config ──────────────────────────────
@@ -4257,8 +4271,8 @@ def _print_conversation_diff(diff):
 
 
 @cli.command(name="simulate")
-@click.option('--config', '-c', default='agentci_spec.yaml',
-              help='Path to agentci_spec.yaml', show_default=True)
+@click.option('--config', '-c', default='ciagent_spec.yaml',
+              help='Path to ciagent_spec.yaml', show_default=True)
 @click.option('--mock', is_flag=True,
               help='Synthetic conversations, zero API calls: each turn satisfies '
                    'the scenario checks. Validates scenario structure.')
@@ -4312,7 +4326,7 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
 
     \b
     Spec additions:
-        conversation_runner: "myagent.run:respond"   # (messages) -> str | Trace
+        conversation_adapter: "myagent.run:respond"   # (messages) -> str | Trace
         persona_config: {model: claude-haiku-4-5, temperature: 0.7}  # optional
         scenarios:
           - turns: ["hi", "i want a refund for order #123"]   # scripted
@@ -4433,10 +4447,10 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
             lambda s: mock_persona_turn_source(s) if not s.turns else None
         )
     else:
-        if not spec.conversation_runner:
+        if not spec.conversation_adapter:
             console.print(
-                "[bold red]No conversation_runner in spec.[/] Add one to run live:\n\n"
-                "  [cyan]conversation_runner: \"myagent.run:respond\"[/]\n\n"
+                "[bold red]No conversation_adapter in spec.[/] Add one to run live:\n\n"
+                "  [cyan]conversation_adapter: \"myagent.run:respond\"[/]\n\n"
                 "The function must accept [bold](messages: list[dict]) → str | Trace[/].\n"
                 "Or use [cyan]ciagent simulate --mock[/] to validate scenarios without API calls."
             )
@@ -4444,9 +4458,9 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
         from .engine.parallel import resolve_runner
 
         try:
-            live_runner = resolve_runner(spec.conversation_runner)
+            live_runner = resolve_runner(spec.conversation_adapter)
         except (ImportError, AttributeError, ValueError) as e:
-            console.print(f"[bold red]Runner error:[/] {e}")
+            console.print(f"[bold red]Adapter error:[/] {e}")
             sys.exit(2)
         # Pre-run cost estimate + confirm gate (binding: the tool that sells
         # cost budgets does not ship a simulator without them)
@@ -4796,14 +4810,14 @@ def simulate_cmd(config, mock, record, record_dir, replay_path, runs, workers,
 
 
 @cli.command(name="eval")
-@click.option('--config', '-c', default='agentci_spec.yaml',
-              help='Path to agentci_spec.yaml', show_default=True)
+@click.option('--config', '-c', default='ciagent_spec.yaml',
+              help='Path to ciagent_spec.yaml', show_default=True)
 @click.option('--tags', '-t', multiple=True, help='Only evaluate queries with these tags')
 @click.option('--format', 'fmt',
               type=click.Choice(['console', 'github', 'json', 'prometheus', 'html']),
               default='console', show_default=True, help='Output format')
 @click.option('--output', '-o', default=None, type=click.Path(),
-              help='Output file path (used with --format html, default: agentci-report.html)')
+              help='Output file path (used with --format html, default: ciagent-report.html)')
 @click.option('--workers', '-w', default=4, show_default=True, type=int,
               help='Max parallel workers for query execution')
 @click.option('--sample-ensemble', default=None, type=float,
@@ -4819,11 +4833,11 @@ def eval_cmd(config, tags, fmt, output, workers, sample_ensemble):
     from .engine.reporter import report_results
     from .engine.parallel import run_spec_parallel, resolve_runner
     from .engine.runner import evaluate_spec
-    from .exceptions import ConfigError, AgentCIError
+    from .exceptions import ConfigError, CIAgentError
 
     try:
         spec = load_spec(config)
-    except AgentCIError as e:
+    except CIAgentError as e:
         _print_error_panel(e)
         sys.exit(2)
 
@@ -4833,7 +4847,7 @@ def eval_cmd(config, tags, fmt, output, workers, sample_ensemble):
             console.print(f"[yellow]No queries match tags: {tags}[/]")
             sys.exit(0)
 
-    if not spec.runner:
+    if not spec.adapter:
         console.print(
             "[yellow]ℹ[/] No [bold]runner[/] declared in spec. Add one to run locally:\n\n"
             "  [cyan]runner: \"myagent.run:run_agent\"[/]\n"
@@ -4841,9 +4855,9 @@ def eval_cmd(config, tags, fmt, output, workers, sample_ensemble):
         sys.exit(0)
 
     try:
-        runner_fn = resolve_runner(spec.runner)
+        runner_fn = resolve_runner(spec.adapter)
     except (ImportError, AttributeError, ValueError) as e:
-        console.print(f"[bold red]Runner error:[/] {e}")
+        console.print(f"[bold red]Adapter error:[/] {e}")
         sys.exit(2)
 
     if sample_ensemble is not None:
@@ -4886,7 +4900,7 @@ def eval_cmd(config, tags, fmt, output, workers, sample_ensemble):
 @click.option('--agent', required=True, help='Agent identifier (matches spec agent field)')
 @click.option('--version', required=True, help='Version tag, e.g. v1-broken or v2-fixed')
 @click.option('--query', 'query_text', default='', help='Query text this baseline corresponds to')
-@click.option('--config', '-c', default='agentci_spec.yaml', show_default=True)
+@click.option('--config', '-c', default='ciagent_spec.yaml', show_default=True)
 @click.option('--baseline-dir', default=None, help='Override baseline directory')
 @click.option('--force-save', is_flag=True,
               help='Bypass correctness precheck and save anyway')
@@ -4945,7 +4959,7 @@ def save_cmd(agent, version, query_text, config, baseline_dir, force_save, trace
 
 @cli.command(name="baselines")
 @click.option('--agent', required=True, help='Agent identifier')
-@click.option('--config', '-c', default='agentci_spec.yaml', show_default=True)
+@click.option('--config', '-c', default='ciagent_spec.yaml', show_default=True)
 @click.option('--baseline-dir', default=None)
 def baselines_cmd(agent, config, baseline_dir):
     """List available baseline versions for an agent."""
@@ -5024,7 +5038,7 @@ def stage():
 
 
 @stage.command(name="list")
-@click.option('--config', '-c', default='agentci_spec.yaml', show_default=True,
+@click.option('--config', '-c', default='ciagent_spec.yaml', show_default=True,
               help='Spec used to resolve agent + staging config')
 @click.option('--staged-dir', default=None, type=click.Path(),
               help='Staging root (default: .ciagent/staged)')
@@ -5090,7 +5104,7 @@ def stage_list(config, staged_dir, agent, klass, fmt):
 
 @stage.command(name="show")
 @click.argument('stage_id')
-@click.option('--config', '-c', default='agentci_spec.yaml', show_default=True)
+@click.option('--config', '-c', default='ciagent_spec.yaml', show_default=True)
 @click.option('--staged-dir', default=None, type=click.Path())
 @click.option('--export', 'export_path', default=None, type=click.Path(),
               help='Write a REDACTED copy of the staged envelope here for '
@@ -5159,7 +5173,7 @@ def stage_show(stage_id, config, staged_dir, export_path, fmt):
 
 @stage.command(name="verify")
 @click.argument('stage_id')
-@click.option('--config', '-c', default='agentci_spec.yaml', show_default=True)
+@click.option('--config', '-c', default='ciagent_spec.yaml', show_default=True)
 @click.option('--staged-dir', default=None, type=click.Path())
 @click.option('--runs', default=3, show_default=True, type=int,
               help='Re-run this scenario N times, replaying the staged user turns '
@@ -5249,17 +5263,17 @@ def stage_verify(stage_id, config, staged_dir, runs, reroll, mock, world_path,
             from .engine.mock_runner import mock_persona_turn_source
             turn_source = mock_persona_turn_source(scenario)
     else:
-        if not spec.conversation_runner:
+        if not spec.conversation_adapter:
             console.print(
-                "[bold red]No conversation_runner in spec.[/] Use --mock for "
-                "zero-key verification, or add a conversation_runner."
+                "[bold red]No conversation_adapter in spec.[/] Use --mock for "
+                "zero-key verification, or add a conversation_adapter."
             )
             sys.exit(2)
         from .engine.parallel import resolve_runner
         try:
-            conv_runner = resolve_runner(spec.conversation_runner)
+            conv_runner = resolve_runner(spec.conversation_adapter)
         except (ImportError, AttributeError, ValueError) as e:
-            console.print(f"[bold red]Runner error:[/] {e}")
+            console.print(f"[bold red]Adapter error:[/] {e}")
             sys.exit(2)
         if not yes:
             from rich.prompt import Confirm
@@ -5358,7 +5372,7 @@ def stage_verify(stage_id, config, staged_dir, runs, reroll, mock, world_path,
 
 @stage.command(name="drop")
 @click.argument('stage_id', required=False)
-@click.option('--config', '-c', default='agentci_spec.yaml', show_default=True)
+@click.option('--config', '-c', default='ciagent_spec.yaml', show_default=True)
 @click.option('--staged-dir', default=None, type=click.Path())
 @click.option('--agent', default=None, help='Scope --held/--all to one agent')
 @click.option('--held', is_flag=True, help='Drop everything classified held/held-infra')
@@ -5406,7 +5420,7 @@ def stage_drop(stage_id, config, staged_dir, agent, held, drop_all, yes):
 
 
 @stage.command(name="gc")
-@click.option('--config', '-c', default='agentci_spec.yaml', show_default=True)
+@click.option('--config', '-c', default='ciagent_spec.yaml', show_default=True)
 @click.option('--staged-dir', default=None, type=click.Path())
 def stage_gc(config, staged_dir):
     """Run retention GC (age + global caps) across the staging area.
@@ -5424,7 +5438,7 @@ def stage_gc(config, staged_dir):
 
 @cli.command(name="promote")
 @click.argument('stage_id', required=False)
-@click.option('--config', '-c', default='agentci_spec.yaml', show_default=True)
+@click.option('--config', '-c', default='ciagent_spec.yaml', show_default=True)
 @click.option('--staged-dir', default=None, type=click.Path())
 @click.option('--baseline-dir', default=None,
               help='Override where the golden is written (default: spec baseline_dir)')
@@ -5601,7 +5615,7 @@ def world_group():
 @click.argument('source')
 @click.option('--output', '-o', default=None, type=click.Path(),
               help='World file path (default: worlds/<name>.world.json)')
-@click.option('--config', '-c', default='agentci_spec.yaml', show_default=True)
+@click.option('--config', '-c', default='ciagent_spec.yaml', show_default=True)
 @click.option('--staged-dir', default=None, type=click.Path())
 @click.option('--tools', 'tools_csv', default=None,
               help='Only freeze these tools (comma-separated)')

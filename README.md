@@ -91,7 +91,7 @@ facts; pass@k/pass^k estimates live in the JSON output, labeled as estimates.
 
 Flaky-but-passing exits 0 so adoption won't break your CI; add `--fail-on-flaky` when
 you're ready to gate on it. Try it with zero API keys:
-`AGENTCI_MOCK_FLAKY=1 ciagent test --mock --runs 3`. Details: [docs/stability.md](docs/stability.md).
+`CIAGENT_MOCK_FLAKY=1 ciagent test --mock --runs 3`. Details: [docs/stability.md](docs/stability.md).
 
 ## Audit the judge itself
 
@@ -145,10 +145,10 @@ pip install ciagent
 Write your golden queries — what should your agent handle, and what should it refuse?
 
 ```yaml
-# agentci_spec.yaml
+# ciagent_spec.yaml
 agent: my-agent
-# runner: any function that takes a query string and returns a response
-runner: my_app.agent:run_for_agentci
+# adapter: the function that invokes your agent (CIAgent cannot know its shape)
+adapter: my_app.agent:run_for_ciagent
 queries:
   - query: "How do I install CIAgent?"
     correctness:
@@ -216,7 +216,7 @@ Don't have golden queries yet? `ciagent init --generate` scans your code and gen
 
 ## Let your coding agent set it up
 
-CIAgent ships as a Claude Code plugin. Two skills: **onboard** (writes the runner,
+CIAgent ships as a Claude Code plugin. Two skills: **onboard** (writes the adapter,
 records golden baselines, generates the spec, verifies it) and **check** (runs the
 right test after every change to your agent and routes failures by flip source).
 
@@ -227,14 +227,14 @@ right test after every change to your agent and routes failures by flip source).
 
 Then ask your coding agent to "set up CIAgent for this repo." It records goldens with
 `ciagent bootstrap --yes` and verifies with `ciagent test --runs 3` — no human CLI use
-needed. The runner it writes is one function: `(query: str) -> str`; trace capture is
+needed. The adapter it writes is one function: `(query: str) -> str`; trace capture is
 automatic.
 
 ## Demo
 
 Here's a RAG agent demo where someone "optimizes for latency" by reducing retriever docs from 8 to 1. CIAgent catches the correctness regression:
 
-![CIAgent Demo](demo/agentci-rag-demo.gif)
+![CIAgent Demo](demo/ciagent-rag-demo.gif)
 
 ## CLI
 

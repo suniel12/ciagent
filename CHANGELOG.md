@@ -5,7 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.16.0] - 2026-07-24
 
 ### Fixed: silent golden-file data loss in `init --generate`
 - `_load_golden_pairs` returned `[]` for every failure mode (missing file,
@@ -34,6 +34,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - A `.json` file that actually holds JSON Lines is detected and parsed rather
   than rejected as invalid JSON, with a note saying so. A genuine JSON syntax
   error still reports `invalid JSON`
+
+### Changed — flag-day: the AgentCI residue is purged (BREAKING, with fallbacks)
+- Default spec filename is now `ciagent_spec.yaml`. The legacy
+  `agentci_spec.yaml` is still read (loader and pytest collection) with a
+  one-line deprecation warning, removed at 1.0
+- Spec key `runner:` is now `adapter:`; `conversation_runner:` is now
+  `conversation_adapter:`. Old keys are accepted with a one-line deprecation
+  warning (once per invocation, stderr), removed at 1.0. Rationale: the
+  adapter is glue YOU write because CIAgent cannot know your agent's shape;
+  "runner" collided with pytest vocabulary inside a pytest-native tool
+- CLI flags: `--runner` on `init` and `bootstrap` is now `--adapter`
+  (`--runner` kept as a deprecated alias). Generated file is
+  `ciagent_adapter.py`; documented convention is `run_for_ciagent`
+- Env vars renamed hard (no fallback): `AGENTCI_*` -> `CIAGENT_*`
+- pytest plugin: marker is `pytest.mark.ciagent`, fixture is `ciagent_trace`,
+  test-id prefix is `ciagent:`
+- Python classes: `AgentCI*` -> `CIAgent*` (e.g. `CIAgentSpec`)
+- All docs, templates, workflows, examples, and SPDX headers now say
+  CIAgent/ciagent; `agentci` was also a competitor's package name, so
+  generated artifacts no longer hand users someone else's brand
+- Guard test added: tracked-file scan fails CI if the old brand creeps back
+  outside a small documented allowlist (history, legacy-fallback fixtures)
+- Packaging: dead `[tool.setuptools.package-data]` block removed (hatchling
+  is the build backend); schema JSON explicitly included in the wheel
 
 ## [0.15.0] - 2026-07-23
 

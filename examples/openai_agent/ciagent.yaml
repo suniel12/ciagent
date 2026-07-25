@@ -1,4 +1,4 @@
-# agentci.yaml — OpenAI Weather Agent Test Suite
+# ciagent.yaml — OpenAI Weather Agent Test Suite
 name: "openai_weather_agent_tests"
 agent: "examples.openai_agent.agent:run_agent"
 framework: "generic"

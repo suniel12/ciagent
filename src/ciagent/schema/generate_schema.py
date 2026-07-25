@@ -1,7 +1,7 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
-Generate agentci_spec.schema.json from the Pydantic AgentCISpec model.
+Generate ciagent_spec.schema.json from the Pydantic CIAgentSpec model.
 
 Usage:
     python -m ciagent.schema.generate_schema
@@ -10,12 +10,12 @@ Usage:
 import json
 from pathlib import Path
 
-from ciagent.schema.spec_models import AgentCISpec
+from ciagent.schema.spec_models import CIAgentSpec
 
 
 def generate() -> None:
-    schema = AgentCISpec.model_json_schema()
-    out = Path(__file__).parent / "agentci_spec.schema.json"
+    schema = CIAgentSpec.model_json_schema()
+    out = Path(__file__).parent / "ciagent_spec.schema.json"
     out.write_text(json.dumps(schema, indent=2))
     print(f"Schema written to {out}")
 

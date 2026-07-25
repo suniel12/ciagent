@@ -1,7 +1,7 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
-AgentCI v2 Evaluation Engine.
+CIAgent v2 Evaluation Engine.
 
 Three-layer evaluation: Correctness (hard fail) → Path (soft warn) → Cost (soft warn).
 """

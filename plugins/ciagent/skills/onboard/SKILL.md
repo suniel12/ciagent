@@ -1,6 +1,6 @@
 ---
 name: onboard
-description: Set up CIAgent regression testing for the AI agent in this repo — write a runner, record golden baselines, generate a test spec, and verify it. Use when the user asks to add tests, evals, or regression testing for their AI agent, or to set up CIAgent.
+description: Set up CIAgent regression testing for the AI agent in this repo — write an adapter, record golden baselines, generate a test spec, and verify it. Use when the user asks to add tests, evals, or regression testing for their AI agent, or to set up CIAgent.
 allowed-tools: Bash(ciagent *), Bash(pip install *), Bash(python -c *), Read, Grep, Glob, Write, Edit
 ---
 
@@ -22,13 +22,13 @@ Work through the steps in order. Do not skip the cost gate in step 4.
 - Sanity check: `ciagent --version` then `ciagent doctor` (it reports what is
   missing; a missing spec is expected at this point).
 
-## 2. Write the runner
+## 2. Write the adapter
 
-Create `agentci_runner.py` at the repo root (or inside the package if the repo
+Create `ciagent_adapter.py` at the repo root (or inside the package if the repo
 has one clear package):
 
 ```python
-def run_for_agentci(query: str) -> str:
+def run_for_ciagent(query: str) -> str:
     """CIAgent entry point: one query in, final answer text out."""
     # import the user's agent and invoke it ONCE, no chat history
     ...
@@ -40,13 +40,13 @@ Rules:
   capture, so LLM calls and tool calls are recorded automatically — do not
   build Trace objects unless the repo already produces them.
 - Fresh context per call: no shared history between queries.
-- Reuse the repo's own config/env loading so the runner works from the repo root.
+- Reuse the repo's own config/env loading so the adapter works from the repo root.
 - Verify it imports and answers before going further:
-  `python -c "from agentci_runner import run_for_agentci; print(run_for_agentci('hello'))"`.
+  `python -c "from ciagent_adapter import run_for_ciagent; print(run_for_ciagent('hello'))"`.
 
 ## 3. Choose queries
 
-Write `agentci_queries.txt`, one query per line — 8 to 15 queries:
+Write `ciagent_queries.txt`, one query per line — 8 to 15 queries:
 
 - Cover the agent's main jobs (mine the README, docs, knowledge base, prompts,
   and existing tests for what it is supposed to handle).
@@ -59,18 +59,18 @@ Write `agentci_queries.txt`, one query per line — 8 to 15 queries:
 Recording baselines runs the real agent once per query, on the user's API keys.
 State the query count and a cost ballpark, and **ask the user to confirm**
 before step 5. If there are no API keys or the user declines: write
-`agentci_spec.yaml` by hand instead (same queries, `runner:` set), validate with
+`ciagent_spec.yaml` by hand instead (same queries, `adapter:` set), validate with
 `ciagent test --mock`, and tell the user which step to resume later.
 
 ## 5. Record golden baselines
 
 ```bash
-ciagent bootstrap --runner agentci_runner:run_for_agentci \
-  --queries agentci_queries.txt --agent <agent-name> --yes
+ciagent bootstrap --adapter ciagent_adapter:run_for_ciagent \
+  --queries ciagent_queries.txt --agent <agent-name> --yes
 ```
 
 This runs every query, saves each trace as a golden baseline under
-`./baselines/<agent-name>/`, and writes `agentci_spec.yaml` with path and cost
+`./baselines/<agent-name>/`, and writes `ciagent_spec.yaml` with path and cost
 budgets derived from the recorded traces. Read the printed answers as they
 stream by — if an answer is visibly wrong, that query should not be golden:
 fix the agent or the query, delete that baseline file, and rerun.
@@ -127,7 +127,7 @@ correct check to make the run green — report the failure to the user instead.
 
 - `ciagent init` scaffolds a GitHub Actions workflow (add `--hook` for a
   pre-push hook if the user wants it).
-- Commit: runner, `agentci_queries.txt`, `agentci_spec.yaml`, `baselines/`,
+- Commit: adapter, `ciagent_queries.txt`, `ciagent_spec.yaml`, `baselines/`,
   and the workflow.
 - If the user's coding agent should run this loop itself, mention the MCP
   server: `pip install "ciagent[mcp]"` then `ciagent mcp` (stdio; live runs

@@ -1,7 +1,7 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
-Shared metric computation functions for the AgentCI path evaluation engine.
+Shared metric computation functions for the CIAgent path evaluation engine.
 
 All functions are pure (no side-effects, no I/O) and operate on plain Python
 lists / sets so they are trivially testable.

@@ -1,5 +1,5 @@
 """
-Tests for the agentci doctor command.
+Tests for the ciagent doctor command.
 """
 import os
 from click.testing import CliRunner
@@ -7,7 +7,7 @@ from ciagent.cli import cli
 
 
 class TestDoctorCommand:
-    """Tests for agentci doctor."""
+    """Tests for ciagent doctor."""
 
     def test_doctor_no_spec(self, tmp_path):
         runner = CliRunner()
@@ -19,7 +19,7 @@ class TestDoctorCommand:
     def test_doctor_with_valid_spec(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            with open("agentci_spec.yaml", "w") as f:
+            with open("ciagent_spec.yaml", "w") as f:
                 f.write(
                     "version: 1.0\nagent: test\nqueries:\n  - query: hello\n"
                 )
@@ -30,7 +30,7 @@ class TestDoctorCommand:
     def test_doctor_with_invalid_spec(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            with open("agentci_spec.yaml", "w") as f:
+            with open("ciagent_spec.yaml", "w") as f:
                 f.write("not: valid: yaml: [")
             result = runner.invoke(cli, ["doctor"])
             assert result.exit_code == 1
@@ -38,7 +38,7 @@ class TestDoctorCommand:
     def test_doctor_checks_python_version(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            with open("agentci_spec.yaml", "w") as f:
+            with open("ciagent_spec.yaml", "w") as f:
                 f.write(
                     "version: 1.0\nagent: test\nqueries:\n  - query: hello\n"
                 )
@@ -48,7 +48,7 @@ class TestDoctorCommand:
     def test_doctor_checks_dependencies(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            with open("agentci_spec.yaml", "w") as f:
+            with open("ciagent_spec.yaml", "w") as f:
                 f.write(
                     "version: 1.0\nagent: test\nqueries:\n  - query: hello\n"
                 )
@@ -60,7 +60,7 @@ class TestDoctorCommand:
     def test_doctor_shows_summary(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            with open("agentci_spec.yaml", "w") as f:
+            with open("ciagent_spec.yaml", "w") as f:
                 f.write(
                     "version: 1.0\nagent: test\nqueries:\n  - query: hello\n"
                 )

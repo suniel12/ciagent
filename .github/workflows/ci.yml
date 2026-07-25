@@ -13,13 +13,17 @@ jobs:
     - uses: actions/checkout@v4
       with:
         fetch-depth: 0
-    - name: Fail on AI co-author trailers in commit messages
+    - name: Fail on AI attribution in commit messages
+      # Attribution patterns only (trailers and "Generated with/by" footers).
+      # Bare model-name mentions like "support claude-sonnet-4-6" stay legal:
+      # the rule targets attribution, not technical references.
       run: |
-        bad=$(git log --all -i -E --grep='co-authored-by:.*(claude|anthropic)' --format='%h %s')
+        pattern='co-authored-by:.*(claude|anthropic)|generated (with|by).*(claude|anthropic)'
+        bad=$(git log --all -i -E --grep="$pattern" --format='%h %s')
         if [ -n "$bad" ]; then
-          echo "AI co-author trailer found in commit message(s):"
+          echo "AI attribution found in commit message(s):"
           echo "$bad"
-          echo "Amend or rebase to drop the Co-Authored-By trailer."
+          echo "Amend or rebase to drop the trailer/footer."
           exit 1
         fi
 
@@ -52,4 +56,4 @@ jobs:
         # Run the demo agent tests
         # We need to set PYTHONPATH so the agent code can be imported
         export PYTHONPATH=$PYTHONPATH:$(pwd)
-        ciagent run --suite examples/demo_agent/agentci.yaml --ci
+        ciagent run --suite examples/demo_agent/ciagent.yaml --ci

@@ -1,9 +1,9 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
-Mock runner for AgentCI — generates synthetic traces from spec expectations.
+Mock runner for CIAgent — generates synthetic traces from spec expectations.
 
-Allows users to validate their agentci_spec.yaml structure without making
+Allows users to validate their ciagent_spec.yaml structure without making
 real API calls. Useful for:
 - Spec validation: "Are my queries well-formed?"
 - CI without API keys: run `ciagent test --mock` in pipelines
@@ -147,7 +147,7 @@ def run_mock_spec(
 
     Parameters
     ----------
-    spec : AgentCISpec
+    spec : CIAgentSpec
         The loaded spec with queries.
     run_index : int
         Which run this is (0-based) in a multi-run stability session.

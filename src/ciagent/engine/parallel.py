@@ -1,7 +1,7 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
-AgentCI v2 Parallel Execution Engine.
+CIAgent v2 Parallel Execution Engine.
 
 Runs spec queries concurrently using ThreadPoolExecutor (sync-friendly for
 most agent code) with exponential backoff retry on transient infra errors.
@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING, Callable, Optional
 if TYPE_CHECKING:
     from ciagent.engine.results import QueryResult
     from ciagent.models import Trace
-    from ciagent.schema.spec_models import AgentCISpec
+    from ciagent.schema.spec_models import CIAgentSpec
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,7 @@ except ImportError:
 
 
 def run_spec_parallel(
-    spec: "AgentCISpec",
+    spec: "CIAgentSpec",
     runner_fn: Callable[[str], "Trace"],
     max_workers: int = 4,
     retry_count: int = 2,
@@ -59,7 +59,7 @@ def run_spec_parallel(
     """Execute spec queries in parallel with retry and exponential backoff.
 
     Args:
-        spec:           Loaded AgentCISpec.
+        spec:           Loaded CIAgentSpec.
         runner_fn:      Callable (query: str) → Trace. Must be thread-safe.
         max_workers:    Max concurrent threads. Default 4 (conservative rate-limit budget).
         retry_count:    Max retries per query on transient infra errors.
@@ -99,10 +99,10 @@ def run_spec_parallel(
                     if on_trace is not None:
                         on_trace(query_text, trace)
                 else:
-                    logger.error("[AgentCI] Runner returned None for query: %s", query_text[:60])
+                    logger.error("[CIAgent] Runner returned None for query: %s", query_text[:60])
             except Exception as exc:
                 logger.error(
-                    "[AgentCI] Query failed after retries: %s — %s",
+                    "[CIAgent] Query failed after retries: %s — %s",
                     query_text[:60],
                     exc,
                 )
@@ -111,7 +111,7 @@ def run_spec_parallel(
 
 
 def run_spec(
-    spec: "AgentCISpec",
+    spec: "CIAgentSpec",
     runner_fn: Callable[[str], "Trace"],
     max_workers: int = 4,
     query_indices: Optional[list[int]] = None,
@@ -126,7 +126,7 @@ def run_spec(
         assert not results[0].hard_fail
 
     Args:
-        spec:             Loaded AgentCISpec.
+        spec:             Loaded CIAgentSpec.
         runner_fn:        Callable (query: str) → Trace.
         max_workers:      Parallel workers for query execution.
         query_indices:    Run only these query indices (0-based). None = all.
@@ -258,7 +258,7 @@ def _run_with_retry(
                     trace = _wrap_str_as_trace(result, query)
 
                 logger.info(
-                    "[AgentCI] Runner returned str for '%s' — captured %d LLM calls, %d tool calls.",
+                    "[CIAgent] Runner returned str for '%s' — captured %d LLM calls, %d tool calls.",
                     query[:40],
                     trace.total_llm_calls,
                     trace.total_tool_calls,
@@ -267,7 +267,7 @@ def _run_with_retry(
 
             # Unknown return type — wrap as string
             logger.warning(
-                "[AgentCI] Runner returned %s instead of Trace for '%s' — wrapping.",
+                "[CIAgent] Runner returned %s instead of Trace for '%s' — wrapping.",
                 type(result).__name__,
                 query[:40],
             )
@@ -278,7 +278,7 @@ def _run_with_retry(
             if attempt < retry_count:
                 wait = backoff * (2 ** attempt)
                 logger.warning(
-                    "[AgentCI][INFRA] Query '%s' failed (attempt %d/%d), retrying in %.1fs: %s",
+                    "[CIAgent][INFRA] Query '%s' failed (attempt %d/%d), retrying in %.1fs: %s",
                     query[:40],
                     attempt + 1,
                     retry_count + 1,
@@ -288,7 +288,7 @@ def _run_with_retry(
                 time.sleep(wait)
             else:
                 logger.error(
-                    "[AgentCI][INFRA] Query '%s' failed after %d retries: %s",
+                    "[CIAgent][INFRA] Query '%s' failed after %d retries: %s",
                     query[:40],
                     retry_count + 1,
                     exc,

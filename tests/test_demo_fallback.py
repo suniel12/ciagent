@@ -1,15 +1,15 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
-Tests for the zero-key demo fallback: `agentci test --mock` with no
-agentci_spec.yaml in the working directory runs the bundled demo spec.
+Tests for the zero-key demo fallback: `ciagent test --mock` with no
+ciagent_spec.yaml in the working directory runs the bundled demo spec.
 
 Guarantees under test:
 - The fallback triggers ONLY for the default config path + --mock; an
   explicitly passed --config that is missing stays an error.
 - Demo multi-run sessions default the flaky simulation ON with the "spread"
   style, so the aggregate score stays constant while verdicts flip (the
-  money screenshot); an explicit AGENTCI_MOCK_FLAKY always wins.
+  money screenshot); an explicit CIAGENT_MOCK_FLAKY always wins.
 - A local spec always takes precedence over the bundled demo.
 """
 
@@ -121,7 +121,7 @@ class TestDemoFallback:
         result = _invoke_isolated(
             runner,
             ["test", "--mock", "--runs", "3"],
-            env={"AGENTCI_MOCK_FLAKY": "0"},
+            env={"CIAGENT_MOCK_FLAKY": "0"},
         )
         assert result.exit_code == 0, result.output
         assert "STABLE" in result.output
@@ -144,14 +144,14 @@ class TestDemoFallback:
         # Even the default filename, when typed by the user, must not
         # silently become the demo.
         result = _invoke_isolated(
-            runner, ["test", "--mock", "--config", "agentci_spec.yaml"]
+            runner, ["test", "--mock", "--config", "ciagent_spec.yaml"]
         )
         assert result.exit_code == 2, result.output
         assert "Demo mode" not in result.output
 
     def test_local_spec_takes_precedence(self, runner):
         with runner.isolated_filesystem():
-            with open("agentci_spec.yaml", "w") as f:
+            with open("ciagent_spec.yaml", "w") as f:
                 f.write(MINIMAL_SPEC)
             result = runner.invoke(cli, ["test", "--mock"])
         assert result.exit_code == 0, result.output
@@ -161,7 +161,7 @@ class TestDemoFallback:
     def test_local_spec_multi_run_flaky_stays_opt_in(self, runner):
         # Outside demo mode, flakiness must remain env-var opt-in.
         with runner.isolated_filesystem():
-            with open("agentci_spec.yaml", "w") as f:
+            with open("ciagent_spec.yaml", "w") as f:
                 f.write(MINIMAL_SPEC)
             result = runner.invoke(cli, ["test", "--mock", "--runs", "2"])
         assert result.exit_code == 0, result.output

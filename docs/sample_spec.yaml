@@ -1,9 +1,9 @@
-# yaml-language-server: $schema=../src/agentci/schema/agentci_spec.schema.json
+# yaml-language-server: $schema=../src/ciagent/schema/ciagent_spec.schema.json
 #
 # CIAgent v2 — Sample Spec File
 #
 # This is a fully annotated reference spec. Copy it to your project and
-# customize. Run `ciagent validate agentci_spec.yaml` to check it.
+# customize. Run `ciagent validate ciagent_spec.yaml` to check it.
 
 # Schema version for forward compatibility
 version: 1

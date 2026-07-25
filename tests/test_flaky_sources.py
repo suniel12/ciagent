@@ -104,7 +104,7 @@ def run(query):
 def _run(args, monkeypatch=None):
     r = CliRunner()
     with r.isolated_filesystem():
-        Path("agentci_spec.yaml").write_text(QA_SPEC)
+        Path("ciagent_spec.yaml").write_text(QA_SPEC)
         Path("toy_qa.py").write_text(TOY)
         _sys.path.insert(0, ".")
         try:
@@ -121,7 +121,7 @@ class TestFlakySourcesCLI:
         assert "unknown flip source" in res.output
 
     def test_json_carries_flip_sources_and_gated_by(self, monkeypatch):
-        monkeypatch.setenv("AGENTCI_MOCK_FLAKY", "1")
+        monkeypatch.setenv("CIAGENT_MOCK_FLAKY", "1")
         res = _run(["test", "--mock", "--runs", "3", "--format", "json",
                     "--flaky-sources", "agent-variance"])
         payload = json.loads(res.stdout)
@@ -134,7 +134,7 @@ class TestFlakySourcesCLI:
         # source must not exit 1 on the flip, while gating on the ACTUAL
         # source must. Derive the actual source from the JSON, then assert
         # both directions — proving the selectivity, harness-agnostic.
-        monkeypatch.setenv("AGENTCI_MOCK_FLAKY", "1")
+        monkeypatch.setenv("CIAGENT_MOCK_FLAKY", "1")
         probe = _run(["test", "--mock", "--runs", "3", "--format", "json"])
         stab = json.loads(probe.stdout)["stability"]
         if not stab["flip_sources"]:
@@ -153,7 +153,7 @@ class TestFlakySourcesCLI:
         assert res_actual.exit_code == 1, res_actual.output
 
     def test_bare_fail_on_flaky_still_gates_any(self, monkeypatch):
-        monkeypatch.setenv("AGENTCI_MOCK_FLAKY", "1")
+        monkeypatch.setenv("CIAGENT_MOCK_FLAKY", "1")
         probe = _run(["test", "--mock", "--runs", "3", "--format", "json"])
         stab = json.loads(probe.stdout)["stability"]
         if not stab["flipped"] or stab["consistent_failures"]:

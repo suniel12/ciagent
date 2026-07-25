@@ -29,12 +29,12 @@ SIMPLE_ENTRIES = ["money-out-no-verification", "transcript-poisoning"]
 
 
 def _run_in_copy(entry: str, argv: list[str], tmp_path: Path) -> subprocess.CompletedProcess:
-    # Guard against the gitignore trap: agentci_spec.yaml is globally ignored
+    # Guard against the gitignore trap: ciagent_spec.yaml is globally ignored
     # (it's a user-config filename), so an atlas spec that isn't force-added is
     # absent in a fresh checkout and the entry silently can't run. Fail loudly.
-    assert (ATLAS / entry / "agentci_spec.yaml").is_file(), (
-        f"{entry}: agentci_spec.yaml missing — is it tracked? "
-        "(.gitignore un-ignores src/ciagent/examples/**/agentci_spec.yaml)"
+    assert (ATLAS / entry / "ciagent_spec.yaml").is_file(), (
+        f"{entry}: ciagent_spec.yaml missing — is it tracked? "
+        "(.gitignore un-ignores src/ciagent/examples/**/ciagent_spec.yaml)"
     )
     work = tmp_path / entry
     shutil.copytree(ATLAS / entry, work)
@@ -107,7 +107,7 @@ class TestAtlasIndex:
         for entry in ATLAS.iterdir():
             if not entry.is_dir() or entry.name.startswith("__"):
                 continue
-            spec = load_spec(str(entry / "agentci_spec.yaml"))
+            spec = load_spec(str(entry / "ciagent_spec.yaml"))
             assert spec.agent
 
     def test_every_entry_has_readme(self):
@@ -121,7 +121,7 @@ def test_forbidden_tools_violation_gates_the_build(tmp_path):
     # Regression for the safety gap the atlas dogfooding surfaced: a
     # forbidden_tools violation prints PATH: FAIL and MUST exit 1 (it used to
     # exit 0 because QueryResult.hard_fail read correctness alone).
-    (tmp_path / "agentci_spec.yaml").write_text(
+    (tmp_path / "ciagent_spec.yaml").write_text(
         'agent: fb\nrunner: "fb_regress:run"\n'
         'queries:\n  - query: q\n    path:\n      forbidden_tools: [danger]\n'
     )

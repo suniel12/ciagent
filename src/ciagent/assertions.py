@@ -1,4 +1,4 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
 Built-in assertion evaluators.
@@ -62,7 +62,7 @@ def _assert_tool_called(a: Assertion, t: Trace) -> tuple[bool, str]:
         t: The captured execution trace.
 
     Example:
-        >>> # In agentci.yaml: {type: tool_called, tool: vector_search}
+        >>> # In ciagent.yaml: {type: tool_called, tool: vector_search}
         >>> passed, msg = _assert_tool_called(a, trace)
     """
     tools = t.tool_call_sequence
@@ -79,7 +79,7 @@ def _assert_tool_not_called(a: Assertion, t: Trace) -> tuple[bool, str]:
         t: The captured execution trace.
 
     Example:
-        >>> # In agentci.yaml: {type: tool_not_called, tool: dangerous_tool}
+        >>> # In ciagent.yaml: {type: tool_not_called, tool: dangerous_tool}
     """
     tools = t.tool_call_sequence
     if a.tool not in tools:
@@ -95,7 +95,7 @@ def _assert_tool_call_count(a: Assertion, t: Trace) -> tuple[bool, str]:
         t: The captured execution trace.
 
     Example:
-        >>> # In agentci.yaml: {type: tool_call_count, tool: search, value: 2}
+        >>> # In ciagent.yaml: {type: tool_call_count, tool: search, value: 2}
     """
     count = t.tool_call_sequence.count(a.tool)
     expected = int(a.value)
@@ -112,7 +112,7 @@ def _assert_arg_equals(a: Assertion, t: Trace) -> tuple[bool, str]:
         t: The captured execution trace.
 
     Example:
-        >>> # In agentci.yaml: {type: arg_equals, tool: search, field: query, value: "flights"}
+        >>> # In ciagent.yaml: {type: arg_equals, tool: search, field: query, value: "flights"}
     """
     for tc in t.tool_call_details:
         if tc.tool_name == a.tool:
@@ -131,7 +131,7 @@ def _assert_arg_contains(a: Assertion, t: Trace) -> tuple[bool, str]:
         t: The captured execution trace.
 
     Example:
-        >>> # In agentci.yaml: {type: arg_contains, tool: search, field: query, value: "SFO"}
+        >>> # In ciagent.yaml: {type: arg_contains, tool: search, field: query, value: "SFO"}
     """
     for tc in t.tool_call_details:
         if tc.tool_name == a.tool:
@@ -150,7 +150,7 @@ def _assert_cost_under(a: Assertion, t: Trace) -> tuple[bool, str]:
         t: The captured execution trace.
 
     Example:
-        >>> # In agentci.yaml: {type: cost_under, threshold: 0.05}
+        >>> # In ciagent.yaml: {type: cost_under, threshold: 0.05}
     """
     if t.total_cost_usd <= a.threshold:
         return True, f"✓ Cost ${t.total_cost_usd:.4f} ≤ ${a.threshold:.4f}"
@@ -166,7 +166,7 @@ def _assert_steps_under(a: Assertion, t: Trace) -> tuple[bool, str]:
         t: The captured execution trace.
 
     Example:
-        >>> # In agentci.yaml: {type: steps_under, threshold: 5}
+        >>> # In ciagent.yaml: {type: steps_under, threshold: 5}
     """
     if t.total_llm_calls <= int(a.threshold):
         return True, f"✓ LLM calls {t.total_llm_calls} ≤ {int(a.threshold)}"
@@ -183,7 +183,7 @@ def _assert_handoff_target(a: Assertion, t: Trace) -> tuple[bool, str]:
         t: The captured execution trace.
 
     Example:
-        >>> # In agentci.yaml: {type: handoff_target, value: "Billing Agent"}
+        >>> # In ciagent.yaml: {type: handoff_target, value: "Billing Agent"}
     """
     handoffs = t.get_handoffs()
     if not handoffs:
@@ -202,7 +202,7 @@ def _assert_handoff_targets_available(a: Assertion, t: Trace) -> tuple[bool, str
         t: The captured execution trace.
 
     Example:
-        >>> # In agentci.yaml: {type: handoff_targets_available, value: ["Billing", "Technical"]}
+        >>> # In ciagent.yaml: {type: handoff_targets_available, value: ["Billing", "Technical"]}
 
     Catches the case where an agent is silently removed from handoffs.
     """
@@ -229,7 +229,7 @@ def _assert_handoff_count(a: Assertion, t: Trace) -> tuple[bool, str]:
         t: The captured execution trace.
 
     Example:
-        >>> # In agentci.yaml: {type: handoff_count, threshold: 1}
+        >>> # In ciagent.yaml: {type: handoff_count, threshold: 1}
     """
     handoffs = t.get_handoffs()
     expected = int(a.threshold) if a.threshold else int(a.value)
@@ -266,7 +266,7 @@ def _assert_output_contains(a: Assertion, t: Trace) -> tuple[bool, str]:
         t: The captured execution trace.
 
     Example:
-        >>> # In agentci.yaml: {type: output_contains, value: "confirmation"}
+        >>> # In ciagent.yaml: {type: output_contains, value: "confirmation"}
     """
     final_output = _get_final_output(t)
     if str(a.value) in final_output:
@@ -282,7 +282,7 @@ def _assert_output_not_contains(a: Assertion, t: Trace) -> tuple[bool, str]:
         t: The captured execution trace.
 
     Example:
-        >>> # In agentci.yaml: {type: output_not_contains, value: "error"}
+        >>> # In ciagent.yaml: {type: output_not_contains, value: "error"}
     """
     final_output = _get_final_output(t)
     if str(a.value) not in final_output:
@@ -302,7 +302,7 @@ def _assert_llm_judge(a: Assertion, t: Trace) -> tuple[bool, str]:
         t: The captured execution trace.
 
     Example:
-        >>> # In agentci.yaml: {type: llm_judge, value: "answer is relevant to the question"}
+        >>> # In ciagent.yaml: {type: llm_judge, value: "answer is relevant to the question"}
     """
     import anthropic
 

@@ -47,7 +47,7 @@ id, so each tool call imports once, with its arguments and result.)
 
 Because these are all OTel (or OTel-derived) paths, any framework whose runs
 emit GenAI-semconv spans imports through `otel-genai` without a bespoke
-adapter — the runner and importer are framework-agnostic.
+adapter — the adapter and importer are framework-agnostic.
 
 ## The round-trip gate (always on)
 

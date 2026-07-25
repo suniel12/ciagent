@@ -25,7 +25,7 @@ check, so a passing exit code would mean the demonstration itself broke.
 ## What's portable, and what isn't
 
 The **scenario and the check** are the reusable artifact: copy them, point the
-`conversation_runner` at your own agent, and you have a gate for that failure
+`conversation_adapter` at your own agent, and you have a gate for that failure
 class. The bundled vulnerable agent is a teaching prop, not your agent. For
 `tool-output-injection`, the frozen world is agent-specific — you regenerate it
 by freezing a run of YOUR agent (`ciagent world freeze`) and mutating it

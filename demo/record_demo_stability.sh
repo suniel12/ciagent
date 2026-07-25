@@ -9,7 +9,7 @@
 #
 # Record with (155 cols: the flip-attribution lines must not wrap;
 # asciinema 3.x uses --window-size, not --cols/--rows):
-#   cd AgentCI && asciinema rec demo/stability-demo.cast \
+#   cd CIAgent && asciinema rec demo/stability-demo.cast \
 #     --window-size 155x30 --overwrite -c "./demo/record_demo_stability.sh"
 #
 # Convert to GIF (the ✅/❌ flip markers need an emoji font agg can rasterize;
@@ -33,7 +33,7 @@ export COLUMNS=155
 
 # Init conda (same pattern as record_demo_router.sh)
 eval "$(/opt/anaconda3/bin/conda shell.bash hook)"
-conda activate agentci
+conda activate ciagent
 
 # Helper: simulate typing
 type_cmd() {

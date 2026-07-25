@@ -1,4 +1,4 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
 Check Generator — KB-derived deterministic fact checks.
@@ -33,7 +33,7 @@ from typing import Any, Callable
 
 import yaml
 
-from ciagent.schema.spec_models import AgentCISpec, CorrectnessSpec
+from ciagent.schema.spec_models import CIAgentSpec, CorrectnessSpec
 
 LlmFn = Callable[[str], str]
 
@@ -109,7 +109,7 @@ Respond ONLY with valid YAML — a list of objects:
 
 
 def extract_candidates(
-    spec: AgentCISpec,
+    spec: CIAgentSpec,
     kb_text: str,
     llm_fn: LlmFn,
 ) -> GenerationResult:
@@ -200,9 +200,9 @@ def validate_candidates(
 
 
 def merge_candidates(
-    spec: AgentCISpec,
+    spec: CIAgentSpec,
     accepted: list[CandidateCheck],
-) -> tuple[AgentCISpec, list[str]]:
+) -> tuple[CIAgentSpec, list[str]]:
     """Apply accepted candidates to a copy of the spec.
 
     Only fills fields the user left empty — an existing user-written

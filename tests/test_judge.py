@@ -125,9 +125,9 @@ class TestBuildUserPrompt:
 
     def test_includes_query_when_provided(self):
         rubric = make_rubric()
-        prompt = _build_judge_user_prompt("answer", rubric, context=None, query="What is AgentCI?")
+        prompt = _build_judge_user_prompt("answer", rubric, context=None, query="What is CIAgent?")
         assert "USER QUERY:" in prompt
-        assert "What is AgentCI?" in prompt
+        assert "What is CIAgent?" in prompt
 
     def test_no_query_section_when_none(self):
         rubric = make_rubric()

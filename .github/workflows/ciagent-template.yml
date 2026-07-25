@@ -31,11 +31,11 @@ jobs:
           # Secrets should be set in repo settings
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          AGENTCI_LIVE: 1 # Run live tests
+          CIAGENT_LIVE: 1 # Run live tests
         run: |
           # Use --ci flag to exit with 1 on failure
           export PYTHONPATH="$(pwd):$PYTHONPATH"
-          ciagent run --suite examples/demo_agent/agentci.yaml --ci --fail-on-cost 0.50
+          ciagent run --suite examples/demo_agent/ciagent.yaml --ci --fail-on-cost 0.50
 
       - name: Upload test report
         if: always()

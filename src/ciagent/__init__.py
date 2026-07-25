@@ -1,4 +1,4 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
 Agent CI — Continuous Integration for AI Agents.
@@ -9,7 +9,7 @@ v1 exports (backward compatible):
     test, TraceContext, diff, load_baseline
 
 v2 exports (new declarative evaluation engine):
-    AgentCISpec, GoldenQuery, load_spec
+    CIAgentSpec, GoldenQuery, load_spec
     evaluate_query, evaluate_spec
     QueryResult, LayerResult, LayerStatus
     save_baseline (v2), load_versioned_baseline, list_baselines
@@ -28,7 +28,7 @@ from .capture import TraceContext, langgraph_trace
 from .diff_engine import diff, load_baseline
 
 # ── v2 exports ─────────────────────────────────────────────────────────────────
-from .schema.spec_models import AgentCISpec, GoldenQuery
+from .schema.spec_models import CIAgentSpec, GoldenQuery
 from .loader import load_spec
 from .engine.results import QueryResult, LayerResult, LayerStatus
 from .baselines import (
@@ -45,7 +45,7 @@ __all__ = [
     "diff",
     "load_baseline",
     # v2
-    "AgentCISpec",
+    "CIAgentSpec",
     "GoldenQuery",
     "load_spec",
     "QueryResult",
@@ -78,4 +78,4 @@ def __getattr__(name: str):
     if name == "resolve_runner":
         from .engine.parallel import resolve_runner
         return resolve_runner
-    raise AttributeError(f"module 'agentci' has no attribute {name!r}")
+    raise AttributeError(f"module 'ciagent' has no attribute {name!r}")

@@ -1,23 +1,23 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
-OpenAI Agents SDK Adapter for AgentCI.
+OpenAI Agents SDK Adapter for CIAgent.
 
 Implements the SDK's pluggable TracingProcessor interface to natively capture
 agent traces — including handoffs, guardrails, tool calls, and LLM generations —
-into AgentCI's universal Trace model.
+into CIAgent's universal Trace model.
 
 Usage:
-    from ciagent.adapters.openai_agents import AgentCITraceProcessor
+    from ciagent.adapters.openai_agents import CIAgentTraceProcessor
     from agents.tracing import add_trace_processor
 
-    processor = AgentCITraceProcessor()
+    processor = CIAgentTraceProcessor()
     add_trace_processor(processor)
 
     # Run your agent normally...
     result = await Runner.run(triage_agent, "I was charged twice")
 
-    # Retrieve the AgentCI trace
+    # Retrieve the CIAgent trace
     trace = processor.get_last_trace()
 """
 
@@ -35,7 +35,7 @@ from ciagent.models import (
 )
 
 # The SDK's TracingProcessor is an ABC, not a Protocol — duck typing alone
-# leaves set_trace_processors([AgentCITraceProcessor()]) a type error in
+# leaves set_trace_processors([CIAgentTraceProcessor()]) a type error in
 # every consumer. Subclass it when the SDK is installed; the adapter stays
 # importable without openai-agents.
 try:
@@ -46,9 +46,9 @@ except ImportError:  # openai-agents not installed
     _SDKTracingProcessor = object  # type: ignore[assignment,misc]
 
 
-class AgentCITraceProcessor(_SDKTracingProcessor):
+class CIAgentTraceProcessor(_SDKTracingProcessor):
     """
-    Captures OpenAI Agents SDK traces into AgentCI's Trace model.
+    Captures OpenAI Agents SDK traces into CIAgent's Trace model.
 
     Implements the TracingProcessor interface:
         on_trace_start, on_trace_end, on_span_start, on_span_end,
@@ -58,7 +58,7 @@ class AgentCITraceProcessor(_SDKTracingProcessor):
     def __init__(self) -> None:
         self._current_trace: Trace | None = None
         self._last_trace: Trace | None = None
-        self._span_map: dict[str, Span] = {}  # SDK span_id -> AgentCI Span
+        self._span_map: dict[str, Span] = {}  # SDK span_id -> CIAgent Span
         self._span_start_times: dict[str, float] = {}
 
     # ── TracingProcessor protocol ──────────────────────
@@ -79,7 +79,7 @@ class AgentCITraceProcessor(_SDKTracingProcessor):
         self._span_start_times[span_id] = time.monotonic()
 
     def on_span_end(self, span: Any) -> None:
-        """Called when a span ends. Maps SDK span types to AgentCI model."""
+        """Called when a span ends. Maps SDK span types to CIAgent model."""
         if self._current_trace is None:
             return
 
@@ -92,10 +92,10 @@ class AgentCITraceProcessor(_SDKTracingProcessor):
         duration_ms = (time.monotonic() - start_time) * 1000
 
         # Determine span type and extract data
-        agentci_span = self._map_span(span_data, span_id, parent_id, duration_ms)
-        if agentci_span:
-            self._current_trace.spans.append(agentci_span)
-            self._span_map[span_id] = agentci_span
+        ciagent_span = self._map_span(span_data, span_id, parent_id, duration_ms)
+        if ciagent_span:
+            self._current_trace.spans.append(ciagent_span)
+            self._span_map[span_id] = ciagent_span
 
     def on_trace_end(self, trace: Any) -> None:
         """Called when the trace ends. Finalize metrics and extract output."""
@@ -129,7 +129,7 @@ class AgentCITraceProcessor(_SDKTracingProcessor):
     # ── Public API ─────────────────────────────────────
 
     def get_last_trace(self) -> Trace | None:
-        """Retrieve the most recently completed AgentCI trace."""
+        """Retrieve the most recently completed CIAgent trace."""
         return self._last_trace
 
     # ── Internal mapping ───────────────────────────────
@@ -141,7 +141,7 @@ class AgentCITraceProcessor(_SDKTracingProcessor):
         parent_id: str | None,
         duration_ms: float,
     ) -> Span | None:
-        """Map an OpenAI SDK span_data object to an AgentCI Span."""
+        """Map an OpenAI SDK span_data object to an CIAgent Span."""
         if span_data is None:
             return None
 

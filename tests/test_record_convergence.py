@@ -1,11 +1,11 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
 Tests for the converged `ciagent record` command and baseline discovery.
 
 Covers the v2 port (record via spec.runner into versioned baselines that
 `ciagent test` discovers) and the deprecated v1 path (single golden trace
-from agentci.yaml).
+from ciagent.yaml).
 """
 
 import json
@@ -70,7 +70,7 @@ def _write(project, name, content):
 class TestRecordV2:
     def test_records_all_queries_as_versioned_baselines(self, project):
         _write(project, "fake_runner.py", FAKE_RUNNER)
-        _write(project, "agentci_spec.yaml", V2_SPEC)
+        _write(project, "ciagent_spec.yaml", V2_SPEC)
 
         result = CliRunner().invoke(cli, ["record", "--json"])
         assert result.exit_code == 0, result.output
@@ -93,7 +93,7 @@ class TestRecordV2:
 
     def test_records_single_query_by_substring(self, project):
         _write(project, "fake_runner.py", FAKE_RUNNER)
-        _write(project, "agentci_spec.yaml", V2_SPEC)
+        _write(project, "ciagent_spec.yaml", V2_SPEC)
 
         result = CliRunner().invoke(cli, ["record", "refund", "--json"])
         assert result.exit_code == 0, result.output
@@ -104,7 +104,7 @@ class TestRecordV2:
 
     def test_ambiguous_target_exits_2(self, project):
         _write(project, "fake_runner.py", FAKE_RUNNER)
-        _write(project, "agentci_spec.yaml", V2_SPEC)
+        _write(project, "ciagent_spec.yaml", V2_SPEC)
 
         # "policy" and "password" both contain "p"; use a clearly shared token
         result = CliRunner().invoke(cli, ["record", "?", "--json"])
@@ -113,7 +113,7 @@ class TestRecordV2:
 
     def test_unknown_target_exits_2_and_lists_queries(self, project):
         _write(project, "fake_runner.py", FAKE_RUNNER)
-        _write(project, "agentci_spec.yaml", V2_SPEC)
+        _write(project, "ciagent_spec.yaml", V2_SPEC)
 
         result = CliRunner().invoke(cli, ["record", "nonexistent", "--json"])
         assert result.exit_code == 2
@@ -122,7 +122,7 @@ class TestRecordV2:
         assert len(payload["queries"]) == 2
 
     def test_missing_runner_exits_2(self, project):
-        _write(project, "agentci_spec.yaml",
+        _write(project, "ciagent_spec.yaml",
                V2_SPEC.replace('runner: "fake_runner:run_agent"\n', ""))
 
         result = CliRunner().invoke(cli, ["record", "--json"])
@@ -132,7 +132,7 @@ class TestRecordV2:
     def test_recorded_baselines_are_discovered_for_test_cmd(self, project):
         """The record → test bridge: what record writes, discovery finds."""
         _write(project, "fake_runner.py", FAKE_RUNNER)
-        _write(project, "agentci_spec.yaml", V2_SPEC)
+        _write(project, "ciagent_spec.yaml", V2_SPEC)
 
         result = CliRunner().invoke(cli, ["record", "--json"])
         assert result.exit_code == 0, result.output
@@ -149,7 +149,7 @@ class TestRecordV2:
 class TestRecordV1Legacy:
     def test_v1_record_still_works_with_deprecation_notice(self, project):
         _write(project, "fake_v1_agent.py", V1_AGENT)
-        _write(project, "agentci.yaml", V1_SUITE)
+        _write(project, "ciagent.yaml", V1_SUITE)
 
         result = CliRunner().invoke(cli, ["record", "test_hello", "--json"])
         assert result.exit_code == 0, result.output
@@ -159,7 +159,7 @@ class TestRecordV1Legacy:
         assert (project / "golden" / "test_hello.golden.json").exists()
 
     def test_v1_record_without_target_exits_2(self, project):
-        _write(project, "agentci.yaml", V1_SUITE)
+        _write(project, "ciagent.yaml", V1_SUITE)
 
         result = CliRunner().invoke(cli, ["record", "--json"])
         assert result.exit_code == 2
@@ -167,7 +167,7 @@ class TestRecordV1Legacy:
 
     def test_v1_record_human_mode_prints_deprecation(self, project):
         _write(project, "fake_v1_agent.py", V1_AGENT)
-        _write(project, "agentci.yaml", V1_SUITE)
+        _write(project, "ciagent.yaml", V1_SUITE)
 
         result = CliRunner().invoke(cli, ["record", "test_hello"], input="n\n")
         assert "DEPRECATED" in result.output

@@ -1,4 +1,4 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
 Tests for `ciagent import` — OTel GenAI semconv → spec query + golden.
@@ -156,7 +156,7 @@ class TestTraceMapping:
 
 class TestImportCLI:
     def _project(self, tmp_path):
-        spec = tmp_path / "agentci_spec.yaml"
+        spec = tmp_path / "ciagent_spec.yaml"
         spec.write_text(
             "agent: import-test\n"
             f"baseline_dir: {tmp_path / 'golden'}\n"
@@ -185,7 +185,7 @@ class TestImportCLI:
         spec_data = yaml.safe_load(spec_path.read_text())
         imported = [q for q in spec_data["queries"] if q["query"] == QUERY]
         assert imported and imported[0]["tags"] == ["imported"]
-        assert (tmp_path / "agentci_spec.yaml.bak").exists()
+        assert (tmp_path / "ciagent_spec.yaml.bak").exists()
 
         goldens = list((tmp_path / "golden" / "import-test").glob("imported-*.json"))
         assert len(goldens) == 1
@@ -264,7 +264,7 @@ class TestImportCLI:
         bad = tmp_path / "bad.json"
         bad.write_text('{"hello": 1}')
         result = CliRunner().invoke(
-            cli, ["import", str(bad), "-c", str(tmp_path / "agentci_spec.yaml")],
+            cli, ["import", str(bad), "-c", str(tmp_path / "ciagent_spec.yaml")],
         )
         assert result.exit_code == 2
         assert "not an OTel span export" in _flat(result.output)
@@ -281,7 +281,7 @@ class TestImportCLI:
         from ciagent.cli import cli
         from ciagent.loader import load_spec
 
-        spec_path = tmp_path / "agentci_spec.yaml"
+        spec_path = tmp_path / "ciagent_spec.yaml"
         spec_path.write_text(
             "agent: import-test\n"
             f"baseline_dir: {tmp_path / 'golden'}\n"
@@ -310,7 +310,7 @@ class TestImportCLI:
 
         from ciagent.cli import cli
 
-        spec_path = tmp_path / "agentci_spec.yaml"
+        spec_path = tmp_path / "ciagent_spec.yaml"
         spec_path.write_text(
             "agent: import-test\n"
             f"baseline_dir: {tmp_path / 'golden'}\n"
@@ -392,7 +392,7 @@ class TestRealOpenllmetryExport:
         from ciagent.cli import cli
 
         fixture = Path(self.FIXTURE).resolve()
-        spec_path = tmp_path / "agentci_spec.yaml"
+        spec_path = tmp_path / "ciagent_spec.yaml"
         spec_path.write_text(
             "agent: real-import\n"
             f"baseline_dir: {tmp_path / 'golden'}\n"
@@ -443,7 +443,7 @@ class TestRealAnthropicExport:
         from ciagent.cli import cli
 
         fixture = Path(self.FIXTURE).resolve()
-        spec_path = tmp_path / "agentci_spec.yaml"
+        spec_path = tmp_path / "ciagent_spec.yaml"
         spec_path.write_text(
             "agent: anthropic-import\n"
             f"baseline_dir: {tmp_path / 'golden'}\n"
@@ -506,7 +506,7 @@ class TestRealCrewAIExport:
         from ciagent.cli import cli
 
         fixture = Path(self.FIXTURE).resolve()
-        spec_path = tmp_path / "agentci_spec.yaml"
+        spec_path = tmp_path / "ciagent_spec.yaml"
         spec_path.write_text(
             "agent: crewai-import\n"
             f"baseline_dir: {tmp_path / 'golden'}\n"
@@ -563,7 +563,7 @@ class TestRealADKExport:
         from ciagent.cli import cli
 
         fixture = Path(self.FIXTURE).resolve()
-        spec_path = tmp_path / "agentci_spec.yaml"
+        spec_path = tmp_path / "ciagent_spec.yaml"
         spec_path.write_text(
             "agent: adk-import\n"
             f"baseline_dir: {tmp_path / 'golden'}\n"
@@ -639,7 +639,7 @@ class TestRealClaudeAgentSdkExport:
         from ciagent.cli import cli
 
         fixture = Path(self.FIXTURE).resolve()
-        spec_path = tmp_path / "agentci_spec.yaml"
+        spec_path = tmp_path / "ciagent_spec.yaml"
         spec_path.write_text(
             "agent: claude-agent-sdk-import\n"
             f"baseline_dir: {tmp_path / 'golden'}\n"
@@ -732,7 +732,7 @@ class TestRealLangfuseExport:
         _, _, fmt = import_trace_file(self.FIXTURE)
         assert fmt == "otel-langfuse"
 
-        spec_path = tmp_path / "agentci_spec.yaml"
+        spec_path = tmp_path / "ciagent_spec.yaml"
         spec_path.write_text(
             "agent: lf-import\n"
             f"baseline_dir: {tmp_path / 'golden'}\n"

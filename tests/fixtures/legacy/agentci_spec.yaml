@@ -1,0 +1,9 @@
+# Legacy-named spec with legacy keys, kept INTENTIONALLY to exercise the
+# deprecation fallbacks (accepted until 1.0). Allowlisted by the residue guard.
+agent: legacy-agent
+runner: myagent.run:run_for_agentci
+conversation_runner: myagent.run:respond
+queries:
+  - query: "What is the return window?"
+    correctness:
+      expected_in_answer: ["30 days"]

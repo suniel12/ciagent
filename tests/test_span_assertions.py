@@ -57,7 +57,7 @@ def make_selector(kind: SpanKindSelector = SpanKindSelector.TOOL, name: str = "r
 def make_assert(
     type: SpanAssertType = SpanAssertType.CONTAINS,
     field: str = "output_data",
-    value: str | None = "AgentCI",
+    value: str | None = "CIAgent",
     rule: str | None = None,
     threshold: float = 0.8,
 ) -> SpanAssert:
@@ -125,23 +125,23 @@ class TestNoMatchingSpan:
 
 class TestContainsAssertion:
     def test_value_found_in_output_data_passes(self):
-        span = make_tool_span(output_data="AgentCI is great")
+        span = make_tool_span(output_data="CIAgent is great")
         trace = make_trace(span)
-        spec = [make_spec(asserts=[make_assert(type=SpanAssertType.CONTAINS, field="output_data", value="AgentCI")])]
+        spec = [make_spec(asserts=[make_assert(type=SpanAssertType.CONTAINS, field="output_data", value="CIAgent")])]
         result = evaluate_span_assertions(spec, trace)
         assert result.status == LayerStatus.PASS
 
     def test_value_not_found_fails(self):
         span = make_tool_span(output_data="something else")
         trace = make_trace(span)
-        spec = [make_spec(asserts=[make_assert(type=SpanAssertType.CONTAINS, field="output_data", value="AgentCI")])]
+        spec = [make_spec(asserts=[make_assert(type=SpanAssertType.CONTAINS, field="output_data", value="CIAgent")])]
         result = evaluate_span_assertions(spec, trace)
         assert result.status == LayerStatus.FAIL
-        assert any("AgentCI" in m for m in result.messages)
+        assert any("CIAgent" in m for m in result.messages)
 
     def test_contains_in_attributes_field(self):
         span = make_tool_span(
-            attributes={"tool.args": {"query": "How to install AgentCI"}}
+            attributes={"tool.args": {"query": "How to install CIAgent"}}
         )
         trace = make_trace(span)
         sa = make_assert(
@@ -333,10 +333,10 @@ class TestFieldResolution:
 class TestMultipleSpansMatched:
     def test_all_spans_must_pass(self):
         """When 2 matching spans exist, BOTH must pass the assertion."""
-        span1 = make_tool_span(name="retrieve_docs", output_data="AgentCI content")
+        span1 = make_tool_span(name="retrieve_docs", output_data="CIAgent content")
         span2 = make_tool_span(name="retrieve_docs", output_data="unrelated content")
         trace = make_trace(span1, span2)
-        sa = make_assert(type=SpanAssertType.CONTAINS, field="output_data", value="AgentCI")
+        sa = make_assert(type=SpanAssertType.CONTAINS, field="output_data", value="CIAgent")
         spec = [make_spec(asserts=[sa])]
         result = evaluate_span_assertions(spec, trace)
         # span2 fails → overall FAIL
@@ -344,10 +344,10 @@ class TestMultipleSpansMatched:
 
     def test_all_spans_passing_returns_pass(self):
         """When all matched spans pass, result is PASS."""
-        span1 = make_tool_span(name="retrieve_docs", output_data="AgentCI content 1")
-        span2 = make_tool_span(name="retrieve_docs", output_data="AgentCI content 2")
+        span1 = make_tool_span(name="retrieve_docs", output_data="CIAgent content 1")
+        span2 = make_tool_span(name="retrieve_docs", output_data="CIAgent content 2")
         trace = make_trace(span1, span2)
-        sa = make_assert(type=SpanAssertType.CONTAINS, field="output_data", value="AgentCI")
+        sa = make_assert(type=SpanAssertType.CONTAINS, field="output_data", value="CIAgent")
         spec = [make_spec(asserts=[sa])]
         result = evaluate_span_assertions(spec, trace)
         assert result.status == LayerStatus.PASS
@@ -359,12 +359,12 @@ class TestMultipleSpansMatched:
 class TestMultipleAssertionsOnSpan:
     def test_all_assertions_must_pass(self):
         """Multiple asserts on same selector: ALL must pass."""
-        span = make_tool_span(output_data="AgentCI install error")
+        span = make_tool_span(output_data="CIAgent install error")
         trace = make_trace(span)
         spec = [
             make_spec(
                 asserts=[
-                    make_assert(type=SpanAssertType.CONTAINS, field="output_data", value="AgentCI"),
+                    make_assert(type=SpanAssertType.CONTAINS, field="output_data", value="CIAgent"),
                     make_assert(type=SpanAssertType.NOT_CONTAINS, field="output_data", value="error"),
                 ]
             )
@@ -374,12 +374,12 @@ class TestMultipleAssertionsOnSpan:
         assert result.status == LayerStatus.FAIL
 
     def test_all_assertions_passing(self):
-        span = make_tool_span(output_data="AgentCI install guide")
+        span = make_tool_span(output_data="CIAgent install guide")
         trace = make_trace(span)
         spec = [
             make_spec(
                 asserts=[
-                    make_assert(type=SpanAssertType.CONTAINS, field="output_data", value="AgentCI"),
+                    make_assert(type=SpanAssertType.CONTAINS, field="output_data", value="CIAgent"),
                     make_assert(type=SpanAssertType.NOT_CONTAINS, field="output_data", value="error"),
                     make_assert(type=SpanAssertType.CONTAINS, field="output_data", value="install"),
                 ]
@@ -394,14 +394,14 @@ class TestMultipleAssertionsOnSpan:
 
 class TestDetailsPopulated:
     def test_details_contain_span_assertions_key(self):
-        span = make_tool_span(output_data="AgentCI")
+        span = make_tool_span(output_data="CIAgent")
         trace = make_trace(span)
         spec = [make_spec()]
         result = evaluate_span_assertions(spec, trace)
         assert "span_assertions" in result.details
 
     def test_details_contain_matched_spans_count(self):
-        span = make_tool_span(output_data="AgentCI")
+        span = make_tool_span(output_data="CIAgent")
         trace = make_trace(span)
         spec = [make_spec()]
         result = evaluate_span_assertions(spec, trace)
@@ -431,7 +431,7 @@ class TestRunnerIntegration:
                         SpanAssert(
                             type=SpanAssertType.CONTAINS,
                             field="output_data",
-                            value="AgentCI",
+                            value="CIAgent",
                         )
                     ],
                 )
@@ -439,14 +439,14 @@ class TestRunnerIntegration:
         )
         result = evaluate_query(query, trace)
         assert result.hard_fail is True
-        assert any("span" in m.lower() or "AgentCI" in m for m in result.correctness.messages)
+        assert any("span" in m.lower() or "CIAgent" in m for m in result.correctness.messages)
 
     def test_span_assertion_pass_does_not_affect_existing_pass(self):
         """A passing span assertion keeps correctness PASS."""
         from ciagent.engine.runner import evaluate_query
         from ciagent.schema.spec_models import GoldenQuery
 
-        span = make_tool_span(name="retrieve_docs", output_data="AgentCI documentation")
+        span = make_tool_span(name="retrieve_docs", output_data="CIAgent documentation")
         trace = make_trace(span)
 
         query = GoldenQuery(
@@ -458,7 +458,7 @@ class TestRunnerIntegration:
                         SpanAssert(
                             type=SpanAssertType.CONTAINS,
                             field="output_data",
-                            value="AgentCI",
+                            value="CIAgent",
                         )
                     ],
                 )

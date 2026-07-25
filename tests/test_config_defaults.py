@@ -1,5 +1,5 @@
 """
-Tests for suite-level `defaults:` handling in v1 agentci.yaml configs.
+Tests for suite-level `defaults:` handling in v1 ciagent.yaml configs.
 
 Covers three layers:
 1. Parsing: TestSuite accepts a `defaults: {max_cost_usd, max_steps}` block
@@ -30,10 +30,10 @@ PROJECT_ROOT = Path(__file__).parent.parent
 
 # (relative config path, expected default_max_cost_usd, expected default_max_steps)
 EXAMPLE_SUITES = [
-    ("examples/anthropic_agent/agentci.yaml", 0.05, 5),
-    ("examples/langgraph_example/agentci.yaml", 0.05, 10),
-    ("examples/demo_agent/agentci.yaml", 0.10, 5),
-    ("examples/openai_agent/agentci.yaml", 0.05, 5),
+    ("examples/anthropic_agent/ciagent.yaml", 0.05, 5),
+    ("examples/langgraph_example/ciagent.yaml", 0.05, 10),
+    ("examples/demo_agent/ciagent.yaml", 0.10, 5),
+    ("examples/openai_agent/ciagent.yaml", 0.05, 5),
 ]
 
 
@@ -65,7 +65,7 @@ def test_example_suite_defaults_reach_every_test(rel_path, max_cost, max_steps):
 def test_per_test_budget_overrides_suite_default():
     """The anthropic cost_check test keeps its tighter explicit budget."""
     suite = load_suite(
-        str(PROJECT_ROOT / "examples" / "anthropic_agent" / "agentci.yaml")
+        str(PROJECT_ROOT / "examples" / "anthropic_agent" / "ciagent.yaml")
     )
 
     by_name = {t.name: t for t in suite.tests}
@@ -118,7 +118,7 @@ def test_defaults_block_does_not_mutate_caller_dict():
 
 
 def test_unrecognized_top_level_key_warns(tmp_path):
-    config = tmp_path / "agentci.yaml"
+    config = tmp_path / "ciagent.yaml"
     config.write_text(
         "name: typo_suite\n"
         "agent: 'mod:fn'\n"

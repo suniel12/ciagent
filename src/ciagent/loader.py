@@ -1,17 +1,17 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
-AgentCI YAML loader — the single entry point for both spec formats.
+CIAgent YAML loader — the single entry point for both spec formats.
 
 Formats:
-    v2 (current)  agentci_spec.yaml, `queries:` key  → load_spec() → AgentCISpec
-    v1 (legacy)   agentci.yaml, `tests:` key         → load_suite() → TestSuite
+    v2 (current)  ciagent_spec.yaml, `queries:` key  → load_spec() → CIAgentSpec
+    v1 (legacy)   ciagent.yaml, `tests:` key         → load_suite() → TestSuite
 
 Public API:
-    load_spec(path)            → AgentCISpec
+    load_spec(path)            → CIAgentSpec
     load_suite(path)           → TestSuite (v1, legacy)
     detect_format(path)        → "v1" | "v2"
-    filter_by_tags(spec, tags) → AgentCISpec
+    filter_by_tags(spec, tags) → CIAgentSpec
 """
 
 from __future__ import annotations
@@ -27,12 +27,55 @@ from pydantic import ValidationError
 
 from ciagent.exceptions import ConfigError
 from ciagent.models import TestSuite
-from ciagent.schema.spec_models import AgentCISpec, GoldenQuery
+from ciagent.schema.spec_models import CIAgentSpec, GoldenQuery
 
 # Top-level keys that only appear in the v2 spec format. Used to reject v2
 # files handed to the v1 loader (Pydantic would silently drop them and the
 # suite would load with zero tests) and to classify files in detect_format.
-_V2_SPEC_KEYS = frozenset({"queries", "baseline_dir", "conversation_runner"})
+# The *_runner entries are deprecated aliases accepted until 1.0.
+_V2_SPEC_KEYS = frozenset({
+    "queries", "baseline_dir",
+    "adapter", "conversation_adapter",
+    "runner", "conversation_runner",
+})
+
+# Legacy default spec filename, accepted with a deprecation warning until 1.0.
+DEFAULT_SPEC_FILENAME = "ciagent_spec.yaml"
+LEGACY_SPEC_FILENAME = "agentci_spec.yaml"
+
+# Deprecation warnings fire once per CLI invocation (process), on stderr,
+# regardless of --runs N or worker count. Keyed by warning topic.
+_deprecation_warned: set[str] = set()
+
+
+def _warn_deprecated_once(topic: str, message: str) -> None:
+    if topic in _deprecation_warned:
+        return
+    _deprecation_warned.add(topic)
+    import sys
+    print(f"DEPRECATED: {message}", file=sys.stderr)
+
+
+def resolve_default_spec_path(directory: Union[str, Path] = ".") -> Path:
+    """Resolve the default spec path, honoring the legacy filename until 1.0.
+
+    Prefers ciagent_spec.yaml; falls back to agentci_spec.yaml with a one-line
+    deprecation warning. When neither exists, returns the new default so the
+    caller's not-found error names the current convention.
+    """
+    d = Path(directory)
+    new = d / DEFAULT_SPEC_FILENAME
+    old = d / LEGACY_SPEC_FILENAME
+    if new.exists():
+        return new
+    if old.exists():
+        _warn_deprecated_once(
+            "spec-filename",
+            f"{LEGACY_SPEC_FILENAME} is deprecated; rename it to "
+            f"{DEFAULT_SPEC_FILENAME} (accepted until 1.0).",
+        )
+        return old
+    return new
 
 
 def _read_yaml_mapping(path: Path, expected_keys: str) -> dict[str, Any]:
@@ -85,24 +128,33 @@ def detect_format(path: Union[str, Path]) -> str:
     raise ConfigError(
         f"Cannot determine format of {p}: found neither a 'queries:' key "
         f"(v2 spec) nor a 'tests:' key (v1 suite).",
-        fix="Add your test cases under 'queries:' (agentci_spec.yaml, "
-            "recommended) or 'tests:' (legacy agentci.yaml).",
+        fix="Add your test cases under 'queries:' (ciagent_spec.yaml, "
+            "recommended) or 'tests:' (legacy ciagent.yaml).",
     )
 
 
-def load_spec(spec_path: Union[str, Path]) -> AgentCISpec:
-    """Load and validate an agentci_spec.yaml file.
+def load_spec(spec_path: Union[str, Path]) -> CIAgentSpec:
+    """Load and validate an ciagent_spec.yaml file.
 
     Args:
         spec_path: Path to the YAML spec file.
 
     Returns:
-        Validated AgentCISpec with defaults merged into each query.
+        Validated CIAgentSpec with defaults merged into each query.
 
     Raises:
         ConfigError: If the file cannot be read or fails Pydantic validation.
     """
     path = Path(spec_path)
+    if not path.exists() and path.name == DEFAULT_SPEC_FILENAME:
+        legacy = path.with_name(LEGACY_SPEC_FILENAME)
+        if legacy.exists():
+            _warn_deprecated_once(
+                "spec-filename",
+                f"{LEGACY_SPEC_FILENAME} is deprecated; rename it to "
+                f"{DEFAULT_SPEC_FILENAME} (accepted until 1.0).",
+            )
+            path = legacy
     if not path.exists():
         raise ConfigError(
             f"Spec file not found: {path}",
@@ -111,8 +163,17 @@ def load_spec(spec_path: Union[str, Path]) -> AgentCISpec:
 
     raw = _read_yaml_mapping(path, "'agent:' and 'queries:'")
 
+    for legacy_key, new_key in (("runner", "adapter"),
+                                ("conversation_runner", "conversation_adapter")):
+        if legacy_key in raw:
+            _warn_deprecated_once(
+                f"spec-key-{legacy_key}",
+                f"spec key '{legacy_key}:' is deprecated; rename it to "
+                f"'{new_key}:' (accepted until 1.0).",
+            )
+
     try:
-        spec = AgentCISpec(**raw)
+        spec = CIAgentSpec(**raw)
     except ValidationError as e:
         raise ConfigError(
             f"Spec validation failed for {path}:\n{e}",
@@ -125,15 +186,15 @@ def load_spec(spec_path: Union[str, Path]) -> AgentCISpec:
     return spec
 
 
-def load_suite(path: Union[str, Path] = "agentci.yaml") -> TestSuite:
-    """Load and validate a v1 agentci.yaml suite (legacy `tests:` format).
+def load_suite(path: Union[str, Path] = "ciagent.yaml") -> TestSuite:
+    """Load and validate a v1 ciagent.yaml suite (legacy `tests:` format).
 
-    The v1 format is superseded by agentci_spec.yaml (use load_spec). This
+    The v1 format is superseded by ciagent_spec.yaml (use load_spec). This
     loader stays strict: a v2 spec or a file with no recognizable test key
     raises instead of silently loading as zero tests.
 
     Args:
-        path: Path to the YAML suite file (default: agentci.yaml).
+        path: Path to the YAML suite file (default: ciagent.yaml).
 
     Returns:
         A validated TestSuite with golden_trace paths resolved relative to
@@ -147,7 +208,7 @@ def load_suite(path: Union[str, Path] = "agentci.yaml") -> TestSuite:
     if not p.exists():
         raise ConfigError(
             f"Configuration file not found: {p}",
-            fix="Run 'ciagent init' to generate a default agentci.yaml, "
+            fix="Run 'ciagent init' to generate a default ciagent.yaml, "
                 "or create one manually. See AGENTS.md for the expected format.",
         )
 
@@ -157,7 +218,7 @@ def load_suite(path: Union[str, Path] = "agentci.yaml") -> TestSuite:
     if v2_keys:
         raise ConfigError(
             f"{p} looks like a v2 spec (found {sorted(v2_keys)}), "
-            f"not a v1 agentci.yaml suite. Loading it as a v1 suite would "
+            f"not a v1 ciagent.yaml suite. Loading it as a v1 suite would "
             f"silently produce zero tests.",
             fix="Run it with 'ciagent test' (which uses the v2 loader), or "
                 "load it with ciagent.loader.load_spec(). If you meant to "
@@ -193,15 +254,15 @@ def load_suite(path: Union[str, Path] = "agentci.yaml") -> TestSuite:
     return suite
 
 
-def filter_by_tags(spec: AgentCISpec, tags: list[str]) -> AgentCISpec:
+def filter_by_tags(spec: CIAgentSpec, tags: list[str]) -> CIAgentSpec:
     """Return a copy of the spec containing only queries that match any given tag.
 
     Args:
-        spec: The loaded AgentCISpec.
+        spec: The loaded CIAgentSpec.
         tags: List of tag strings to filter by. Empty list returns all queries.
 
     Returns:
-        New AgentCISpec with filtered queries list.
+        New CIAgentSpec with filtered queries list.
     """
     if not tags:
         return spec

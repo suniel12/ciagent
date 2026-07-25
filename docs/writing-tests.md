@@ -1,6 +1,6 @@
 # Writing Tests with CIAgent
 
-CIAgent tests are defined in `agentci_spec.yaml`. Each spec file contains
+CIAgent tests are defined in `ciagent_spec.yaml`. Each spec file contains
 a list of `queries` — golden test cases the agent must pass.
 
 ## Quick Start
@@ -16,7 +16,7 @@ queries:
 
 Run with:
 ```bash
-ciagent validate agentci_spec.yaml
+ciagent validate ciagent_spec.yaml
 ```
 
 ---

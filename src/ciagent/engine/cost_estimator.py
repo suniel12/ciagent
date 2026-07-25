@@ -1,7 +1,7 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
-Cost estimator for AgentCI — estimates API cost before running tests.
+Cost estimator for CIAgent — estimates API cost before running tests.
 
 Provides a pre-execution cost estimate based on query count, model pricing,
 and typical token usage patterns. Shows the estimate to the user before

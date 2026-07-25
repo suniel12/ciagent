@@ -30,7 +30,7 @@ regression test (below).
 ## Spec additions
 
 ```yaml
-conversation_runner: "myagent.run:respond"   # (messages: list[dict]) -> str | Trace
+conversation_adapter: "myagent.run:respond"   # (messages: list[dict]) -> str | Trace
 persona_config: {model: claude-haiku-4-5, temperature: 0.7}   # optional
 
 scenarios:
@@ -52,7 +52,7 @@ scenarios:
       correctness: {any_expected_in_answer: ["refund"]}
 ```
 
-The `conversation_runner` accepts the full message history
+The `conversation_adapter` accepts the full message history
 (`[{"role": ..., "content": ...}, ...]`) and returns the agent's reply — a
 string, or a `Trace` if you want path/retrieval/cost checks to see tool
 calls. Check blocks (`correctness`, `path`, `retrieval`, `cost`) are the

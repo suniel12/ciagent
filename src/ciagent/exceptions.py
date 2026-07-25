@@ -1,25 +1,25 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
-AgentCI custom exceptions with actionable fix suggestions.
+CIAgent custom exceptions with actionable fix suggestions.
 
 All exceptions include a `fix` attribute that tells the user (or coding agent)
-exactly how to resolve the issue. This makes AgentCI errors self-documenting
+exactly how to resolve the issue. This makes CIAgent errors self-documenting
 and agent-friendly.
 """
 
 
-class AgentCIError(Exception):
-    """Base exception for all AgentCI errors.
+class CIAgentError(Exception):
+    """Base exception for all CIAgent errors.
 
     Args:
         message: What went wrong.
         fix: How to fix it (included in the error message).
 
     Example:
-        >>> raise AgentCIError(
+        >>> raise CIAgentError(
         ...     "No spans found in trace",
-        ...     fix="Register AgentCITraceProcessor: add_trace_processor(AgentCITraceProcessor())"
+        ...     fix="Register CIAgentTraceProcessor: add_trace_processor(CIAgentTraceProcessor())"
         ... )
     """
 
@@ -29,7 +29,7 @@ class AgentCIError(Exception):
         super().__init__(full_message)
 
 
-class TraceError(AgentCIError):
+class TraceError(CIAgentError):
     """Errors related to trace capture and processing.
 
     Raised when traces are empty, malformed, or missing expected data.
@@ -37,15 +37,15 @@ class TraceError(AgentCIError):
     pass
 
 
-class ConfigError(AgentCIError):
-    """Errors related to AgentCI configuration.
+class ConfigError(CIAgentError):
+    """Errors related to CIAgent configuration.
 
-    Raised when agentci.yaml is missing, malformed, or has invalid values.
+    Raised when ciagent.yaml is missing, malformed, or has invalid values.
     """
     pass
 
 
-class MockError(AgentCIError):
+class MockError(CIAgentError):
     """Errors related to mock setup and execution.
 
     Raised when mock tools are missing, mock sequences are exhausted,
@@ -54,16 +54,16 @@ class MockError(AgentCIError):
     pass
 
 
-class ImportError_(AgentCIError):
+class ImportError_(CIAgentError):
     """Errors related to agent function imports.
 
-    Raised when the agent function specified in agentci.yaml cannot be imported.
+    Raised when the agent function specified in ciagent.yaml cannot be imported.
     Named with trailing underscore to avoid shadowing the builtin ImportError.
     """
     pass
 
 
-class BaselineError(AgentCIError):
+class BaselineError(CIAgentError):
     """Errors related to golden trace baselines.
 
     Raised when baseline files are missing or cannot be loaded.
@@ -71,7 +71,7 @@ class BaselineError(AgentCIError):
     pass
 
 
-class JudgeError(AgentCIError):
+class JudgeError(CIAgentError):
     """Errors related to LLM-as-a-judge evaluation.
 
     Raised when judge API calls fail, responses cannot be parsed,
@@ -80,8 +80,8 @@ class JudgeError(AgentCIError):
     pass
 
 
-class SchemaError(AgentCIError):
-    """Errors related to agentci_spec.yaml schema validation.
+class SchemaError(CIAgentError):
+    """Errors related to ciagent_spec.yaml schema validation.
 
     Raised when spec files fail Pydantic validation or contain
     unsupported field values.
@@ -89,7 +89,7 @@ class SchemaError(AgentCIError):
     pass
 
 
-class EngineError(AgentCIError):
+class EngineError(CIAgentError):
     """Errors raised by the evaluation engine.
 
     Raised when the correctness, path, or cost evaluation layers

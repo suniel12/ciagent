@@ -2,10 +2,10 @@
 Live integration tests for the LLM judge.
 
 These tests make real API calls to Anthropic and are gated by:
-    AGENTCI_LIVE_TESTS=1
+    CIAGENT_LIVE_TESTS=1
 
 Run with:
-    AGENTCI_LIVE_TESTS=1 python -m pytest tests/integration/test_judge_live.py -v
+    CIAGENT_LIVE_TESTS=1 python -m pytest tests/integration/test_judge_live.py -v
 """
 
 import os
@@ -16,8 +16,8 @@ from ciagent.engine.judge import run_judge
 from ciagent.schema.spec_models import JudgeRubric
 
 pytestmark = pytest.mark.skipif(
-    os.environ.get("AGENTCI_LIVE_TESTS") != "1",
-    reason="Set AGENTCI_LIVE_TESTS=1 to run live judge tests",
+    os.environ.get("CIAGENT_LIVE_TESTS") != "1",
+    reason="Set CIAGENT_LIVE_TESTS=1 to run live judge tests",
 )
 
 
@@ -36,7 +36,7 @@ def clear_rubric() -> JudgeRubric:
 
 def test_judge_returns_pass_for_good_answer(clear_rubric):
     result = run_judge(
-        answer="To install AgentCI, run: pip install agentci",
+        answer="To install CIAgent, run: pip install ciagent",
         rubric=clear_rubric,
         config={"model": "claude-haiku-4-5-20251001", "temperature": 0},
     )
@@ -81,9 +81,9 @@ def test_judge_with_context_grounds_evaluation():
         rule="All claims are grounded in the provided context; no fabricated facts",
         threshold=0.8,
     )
-    context = "AgentCI is installed via pip. The command is: pip install agentci"
+    context = "CIAgent is installed via pip. The command is: pip install ciagent"
     result = run_judge(
-        answer="To install AgentCI, run pip install agentci.",
+        answer="To install CIAgent, run pip install ciagent.",
         rubric=rubric,
         config={"model": "claude-haiku-4-5-20251001", "temperature": 0},
         context=context,

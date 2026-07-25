@@ -352,7 +352,7 @@ class TestWorldCLI:
     def test_freeze_from_golden_and_show(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(self.SPEC)
+            Path("ciagent_spec.yaml").write_text(self.SPEC)
             # golden with raw email: default redactor rewrites it → refusal
             # without --force-redact (A8)
             p = self._write_golden()
@@ -378,7 +378,7 @@ class TestWorldCLI:
         # A8: two different emails must get DIFFERENT placeholders
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(self.SPEC)
+            Path("ciagent_spec.yaml").write_text(self.SPEC)
             from ciagent.conversation import save_envelope
             env = env_with_calls([
                 (0, "lookup", {"email": "a@x.co"}, "found a"),
@@ -394,14 +394,14 @@ class TestWorldCLI:
     def test_freeze_missing_source_exits_1(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(self.SPEC)
+            Path("ciagent_spec.yaml").write_text(self.SPEC)
             res = r.invoke(cli, ["world", "freeze", "no-such-stage-id"])
             assert res.exit_code == 1, res.output
 
     def test_freeze_from_staged_entry(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(self.SPEC)
+            Path("ciagent_spec.yaml").write_text(self.SPEC)
             from ciagent.promotion import StageStore
             from ciagent.redaction import Redactor
             store = StageStore(Path(".ciagent/staged"), redactor=Redactor())
@@ -480,7 +480,7 @@ def _winvoke(args):
 
 class TestWorldReplayLoop:
     def _setup(self):
-        Path("agentci_spec.yaml").write_text(WORLD_SPEC)
+        Path("ciagent_spec.yaml").write_text(WORLD_SPEC)
         Path("toy_world_agent.py").write_text(TOY_AGENT)
         Path("BACKEND_UP").write_text("1")
 

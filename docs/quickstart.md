@@ -10,12 +10,12 @@ pip install ciagent
 
 ## 2. Write a spec
 
-Create `agentci_spec.yaml` next to your agent code. The `runner` is any function
+Create `ciagent_spec.yaml` next to your agent code. The `adapter` is the function
 that takes a query string and returns a response:
 
 ```yaml
 agent: my-agent
-runner: my_app.agent:run_for_agentci
+adapter: my_app.agent:run_for_ciagent
 queries:
   - query: "How do I install CIAgent?"
     correctness:

@@ -165,7 +165,7 @@ class TestEnvelope:
 
 class TestIntegration:
     def _project(self, tmp_path) -> ServerConfig:
-        (tmp_path / "agentci_spec.yaml").write_text(QA_SPEC)
+        (tmp_path / "ciagent_spec.yaml").write_text(QA_SPEC)
         (tmp_path / "toy_qa.py").write_text(TOY_RUNNER)
         return cfg_for(tmp_path)
 

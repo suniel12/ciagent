@@ -1,15 +1,15 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
 Tests for the F5 coding-agent plugin and its CLI enablers.
 
 Three guarantees:
-- `agentci bootstrap --yes` records goldens fully non-interactively from a
+- `ciagent bootstrap --yes` records goldens fully non-interactively from a
   runner that returns a plain string (the coding-agent onboarding path).
 - The `--format json` output carries the answer text (JSON consumers must see
   what the agent said, not just verdicts).
 - The plugin artifacts stay truthful: manifests parse with required fields,
-  and every `agentci` command line the skills instruct is one the CLI accepts
+  and every `ciagent` command line the skills instruct is one the CLI accepts
   (subcommand exists, flags exist on it).
 """
 
@@ -29,7 +29,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 PLUGIN_DIR = REPO_ROOT / "plugins" / "ciagent"
 
 TOY_RUNNER = '''
-def run_for_agentci(query: str) -> str:
+def run_for_ciagent(query: str) -> str:
     if "return" in query.lower():
         return "You can return items within 30 days."
     return "Please contact support@example.com."
@@ -54,7 +54,7 @@ class TestBootstrapYes:
     def test_string_runner_records_goldens_noninteractive(self, toy_repo):
         result = CliRunner().invoke(
             cli,
-            ["bootstrap", "--runner", "toy_runner:run_for_agentci",
+            ["bootstrap", "--runner", "toy_runner:run_for_ciagent",
              "--queries", "queries.txt", "--agent", "toy", "--yes"],
         )
         assert result.exit_code == 0, result.output
@@ -64,7 +64,7 @@ class TestBootstrapYes:
         data = json.loads(baselines[0].read_text())
         assert data["trace"]["metadata"]["final_output"]
         # spec written and loadable
-        spec_file = toy_repo / "agentci_spec.yaml"
+        spec_file = toy_repo / "ciagent_spec.yaml"
         assert spec_file.exists()
         from ciagent.loader import load_spec
 
@@ -74,7 +74,7 @@ class TestBootstrapYes:
     def test_bootstrapped_spec_runs_multi_run_test(self, toy_repo):
         r1 = CliRunner().invoke(
             cli,
-            ["bootstrap", "--runner", "toy_runner:run_for_agentci",
+            ["bootstrap", "--runner", "toy_runner:run_for_ciagent",
              "--queries", "queries.txt", "--agent", "toy", "--yes"],
         )
         assert r1.exit_code == 0, r1.output
@@ -84,7 +84,7 @@ class TestBootstrapYes:
 
     def test_yes_requires_queries(self, toy_repo):
         result = CliRunner().invoke(
-            cli, ["bootstrap", "--runner", "toy_runner:run_for_agentci", "--yes"]
+            cli, ["bootstrap", "--runner", "toy_runner:run_for_ciagent", "--yes"]
         )
         assert result.exit_code == 2
         assert "--queries" in result.output
@@ -93,7 +93,7 @@ class TestBootstrapYes:
         (toy_repo / "one.txt").write_text("what is your return policy?\n")
         result = CliRunner().invoke(
             cli,
-            ["bootstrap", "--runner", "toy_runner:run_for_agentci",
+            ["bootstrap", "--runner", "toy_runner:run_for_ciagent",
              "--queries", "one.txt", "--agent", "toy"],
             input="n\n",
         )
@@ -106,7 +106,7 @@ class TestBootstrapYes:
 
 class TestJsonAnswerField:
     def test_mock_json_includes_answer(self, toy_repo):
-        (toy_repo / "agentci_spec.yaml").write_text(
+        (toy_repo / "ciagent_spec.yaml").write_text(
             """
 agent: json-test
 queries:
@@ -191,8 +191,9 @@ class TestPluginArtifacts:
     def test_skill_commands_are_real(self, skill):
         """Every `ciagent <cmd> --flag` the skill teaches must exist in the CLI."""
         text = (PLUGIN_DIR / "skills" / skill / "SKILL.md").read_text()
-        # the module rename dropped the `agentci` CLI alias — skills must not
-        # teach it (file/spec names like agentci_spec.yaml are fine)
+        # the module rename dropped the legacy `agentci` CLI alias — skills
+        # must not teach it (the guard string below is intentionally the OLD
+        # name; see the residue guard test's allowlist)
         stripped = text.replace("agentci_", "").replace("agentci.", "")
         assert not re.search(r"\bagentci\b", stripped), (
             f"skill '{skill}' still references the removed agentci command"

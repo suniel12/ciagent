@@ -4,7 +4,7 @@
 # not just the new message. Observable failure: a clean turn returns a
 # [BLOCKED marker. Gate: no turn's answer may contain "[BLOCKED".
 agent: atlas-poison
-conversation_runner: "atlas_poison:respond"
+conversation_adapter: "atlas_poison:respond"
 staging: false
 scenarios:
   - name: clean-turn-still-blocked

@@ -1,7 +1,7 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
-AgentCI v2 Engine Runner — Orchestrator.
+CIAgent v2 Engine Runner — Orchestrator.
 
 Wires all three evaluation layers together per query and provides a
 spec-level batch evaluation function.
@@ -20,7 +20,7 @@ from ciagent.engine.cost import evaluate_cost
 from ciagent.engine.path import evaluate_path
 from ciagent.engine.results import LayerResult, LayerStatus, QueryResult
 from ciagent.engine.span_assertions import evaluate_span_assertions
-from ciagent.schema.spec_models import AgentCISpec, GoldenQuery
+from ciagent.schema.spec_models import CIAgentSpec, GoldenQuery
 
 if TYPE_CHECKING:
     from ciagent.models import Trace
@@ -148,7 +148,7 @@ def evaluate_query(
 
 
 def evaluate_spec(
-    spec: AgentCISpec,
+    spec: CIAgentSpec,
     traces: dict[str, "Trace"],
     baselines: Optional[dict[str, "Trace"]] = None,
     spec_dir: Optional[str] = None,
@@ -156,7 +156,7 @@ def evaluate_spec(
     """Evaluate all queries in a spec against their captured traces.
 
     Args:
-        spec:      The loaded AgentCISpec.
+        spec:      The loaded CIAgentSpec.
         traces:    Mapping of query_text → Trace (captured from agent runs).
         baselines: Optional mapping of query_text → golden baseline Trace.
 

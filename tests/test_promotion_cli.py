@@ -68,7 +68,7 @@ class TestStageGroup:
     def test_list_empty_exits_0(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(SPEC)
+            Path("ciagent_spec.yaml").write_text(SPEC)
             res = r.invoke(cli, ["stage", "list"])
             assert res.exit_code == 0, res.output
             assert "No staged" in res.output
@@ -76,7 +76,7 @@ class TestStageGroup:
     def test_list_sorted_and_filtered(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(SPEC)
+            Path("ciagent_spec.yaml").write_text(SPEC)
             _seed(".ciagent/staged", ("held", "h"), ("consistent", "c"), ("unverified", "u"))
             res = r.invoke(cli, ["stage", "list", "--format", "json"])
             assert res.exit_code == 0, res.output
@@ -90,7 +90,7 @@ class TestStageGroup:
     def test_show_and_export(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(SPEC)
+            Path("ciagent_spec.yaml").write_text(SPEC)
             store = _seed(".ciagent/staged", ("consistent", "c"))
             sid = store.list()[0].stage_id
             res = r.invoke(cli, ["stage", "show", sid, "--export", "out.json"])
@@ -101,14 +101,14 @@ class TestStageGroup:
     def test_show_missing_exits_1(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(SPEC)
+            Path("ciagent_spec.yaml").write_text(SPEC)
             res = r.invoke(cli, ["stage", "show", "nope"])
             assert res.exit_code == 1
 
     def test_drop_single(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(SPEC)
+            Path("ciagent_spec.yaml").write_text(SPEC)
             store = _seed(".ciagent/staged", ("consistent", "c"))
             sid = store.list()[0].stage_id
             res = r.invoke(cli, ["stage", "drop", sid])
@@ -118,7 +118,7 @@ class TestStageGroup:
     def test_drop_held(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(SPEC)
+            Path("ciagent_spec.yaml").write_text(SPEC)
             store = _seed(".ciagent/staged", ("held", "h"), ("consistent", "c"))
             res = r.invoke(cli, ["stage", "drop", "--held", "--yes"])
             assert res.exit_code == 0, res.output
@@ -127,14 +127,14 @@ class TestStageGroup:
     def test_drop_bad_combo_exits_2(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(SPEC)
+            Path("ciagent_spec.yaml").write_text(SPEC)
             res = r.invoke(cli, ["stage", "drop", "someid", "--all"])
             assert res.exit_code == 2
 
     def test_gc(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(SPEC)
+            Path("ciagent_spec.yaml").write_text(SPEC)
             _seed(".ciagent/staged", ("consistent", "c"))
             res = r.invoke(cli, ["stage", "gc"])
             assert res.exit_code == 0, res.output
@@ -143,7 +143,7 @@ class TestStageGroup:
     def test_verify_mock_reclassifies(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(SPEC)
+            Path("ciagent_spec.yaml").write_text(SPEC)
             store = _seed(".ciagent/staged", ("unverified", "refund-flow"))
             sid = store.list()[0].stage_id
             # mock runner satisfies checks; the seeded scenario spec has no
@@ -186,7 +186,7 @@ class TestPromoteReplayLoop:
     def test_stage_promote_replay_gate_then_fix(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(PROMOTE_SPEC)
+            Path("ciagent_spec.yaml").write_text(PROMOTE_SPEC)
             Path("toy_agent.py").write_text(FAILING)
 
             # 1. simulate 3× → stages a consistent failing conversation
@@ -255,7 +255,7 @@ class TestPromoteRefusalDetail:
     def test_promote_refuses_unverified_without_force(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(PROMOTE_SPEC)
+            Path("ciagent_spec.yaml").write_text(PROMOTE_SPEC)
             Path("toy_agent.py").write_text(FAILING)
             # single run → unverified
             _invoke(["simulate", "--yes"])
@@ -279,7 +279,7 @@ class TestXfailReplayLoop:
 
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(PROMOTE_SPEC)
+            Path("ciagent_spec.yaml").write_text(PROMOTE_SPEC)
             Path("toy_agent.py").write_text(FAILING)
 
             res = _invoke(["simulate", "--yes", "--runs", "3"])
@@ -330,21 +330,21 @@ class TestXfailReplayLoop:
     def test_flip_bad_combo_exits_2(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(PROMOTE_SPEC)
+            Path("ciagent_spec.yaml").write_text(PROMOTE_SPEC)
             res = r.invoke(cli, ["promote", "--flip", "x", "--xfail"])
             assert res.exit_code == 2, res.output
 
     def test_flip_without_target_exits_2(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(PROMOTE_SPEC)
+            Path("ciagent_spec.yaml").write_text(PROMOTE_SPEC)
             res = r.invoke(cli, ["promote", "--flip"])
             assert res.exit_code == 2, res.output
 
     def test_flip_gate_golden_refused(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(PROMOTE_SPEC)
+            Path("ciagent_spec.yaml").write_text(PROMOTE_SPEC)
             Path("toy_agent.py").write_text(FAILING)
             _invoke(["simulate", "--yes", "--runs", "3"])
             from ciagent.promotion import StageStore
@@ -380,7 +380,7 @@ class TestVerifyReroll:
     def test_reroll_generative_records_mode(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(SPEC)
+            Path("ciagent_spec.yaml").write_text(SPEC)
             store = StageStore(Path(".ciagent/staged"))
             store.stage(make_generative_env(),
                         staging_block=block("unverified", "angry-customer"))
@@ -395,7 +395,7 @@ class TestVerifyReroll:
     def test_reroll_scripted_degenerates_to_replay(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(SPEC)
+            Path("ciagent_spec.yaml").write_text(SPEC)
             store = StageStore(Path(".ciagent/staged"))
             store.stage(make_env("refund-flow"),
                         staging_block=block("unverified", "refund-flow"))
@@ -410,7 +410,7 @@ class TestVerifyReroll:
     def test_default_verify_records_replay_mode(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(SPEC)
+            Path("ciagent_spec.yaml").write_text(SPEC)
             store = StageStore(Path(".ciagent/staged"))
             store.stage(make_env("refund-flow"),
                         staging_block=block("unverified", "refund-flow"))

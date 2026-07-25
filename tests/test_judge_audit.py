@@ -1,4 +1,4 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
 Unit + integration tests for the Judge Audit engine.
@@ -18,7 +18,7 @@ from ciagent.engine.judge_audit import (
     run_judge_audit,
 )
 from ciagent.schema.spec_models import (
-    AgentCISpec,
+    CIAgentSpec,
     CorrectnessSpec,
     GoldenQuery,
     JudgeRubric,
@@ -47,8 +47,8 @@ class FlakyJudge:
         return {"passed": self.calls % 2 == 1, "score": 3, "rationale": "hmm"}
 
 
-def make_spec(*queries: GoldenQuery) -> AgentCISpec:
-    return AgentCISpec(agent="audit-test", queries=list(queries))
+def make_spec(*queries: GoldenQuery) -> CIAgentSpec:
+    return CIAgentSpec(agent="audit-test", queries=list(queries))
 
 
 def checkable_query(text: str, expect: str) -> GoldenQuery:
@@ -305,7 +305,7 @@ class TestCLIJudgeAudit:
     def project(self, tmp_path):
         import json
 
-        spec = tmp_path / "agentci_spec.yaml"
+        spec = tmp_path / "ciagent_spec.yaml"
         spec.write_text(
             """
 agent: audit-cli-test
@@ -340,7 +340,7 @@ queries:
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["judge-audit", "--config", str(project / "agentci_spec.yaml"),
+            ["judge-audit", "--config", str(project / "ciagent_spec.yaml"),
              "--baseline-dir", str(project / "golden"), "--repeats", "2", "--yes"],
         )
         assert "Judge Audit" in result.output
@@ -362,7 +362,7 @@ queries:
         runner = CliRunner()
         result = runner.invoke(
             cli,
-            ["judge-audit", "--config", str(project / "agentci_spec.yaml"),
+            ["judge-audit", "--config", str(project / "ciagent_spec.yaml"),
              "--baseline-dir", str(project / "golden"), "--repeats", "1",
              "--format", "json", "--yes"],
         )
@@ -375,7 +375,7 @@ queries:
 
         from ciagent.cli import cli
 
-        spec = tmp_path / "agentci_spec.yaml"
+        spec = tmp_path / "ciagent_spec.yaml"
         spec.write_text(
             "agent: empty\nqueries:\n  - query: q\n    correctness:\n"
             "      llm_judge:\n        - rule: r\n"
@@ -393,7 +393,7 @@ queries:
 
 class TestLiveAnswers:
     def _spec(self):
-        return AgentCISpec(agent="live-test", queries=[
+        return CIAgentSpec(agent="live-test", queries=[
             GoldenQuery(
                 query="what rate?",
                 correctness=CorrectnessSpec(
@@ -480,7 +480,7 @@ class TestAnswersFile:
 
 class TestCLILiveAndAnswers:
     def _write_spec(self, tmp_path, runner=True):
-        spec = tmp_path / "agentci_spec.yaml"
+        spec = tmp_path / "ciagent_spec.yaml"
         spec.write_text(
             "agent: live-cli-test\n"
             + ("runner: \"toy_live_agent:run\"\n" if runner else "")
@@ -513,7 +513,7 @@ class TestCLILiveAndAnswers:
             lambda **kw: {"passed": True, "score": 5, "rationale": "fine"},
         )
         result = CliRunner().invoke(
-            cli, ["judge-audit", "--config", str(tmp_path / "agentci_spec.yaml"),
+            cli, ["judge-audit", "--config", str(tmp_path / "ciagent_spec.yaml"),
                   "--live", "--repeats", "1", "--yes"],
         )
         assert "live (fresh agent runs)" in result.output
@@ -527,7 +527,7 @@ class TestCLILiveAndAnswers:
 
         self._write_spec(tmp_path, runner=False)
         result = CliRunner().invoke(
-            cli, ["judge-audit", "--config", str(tmp_path / "agentci_spec.yaml"),
+            cli, ["judge-audit", "--config", str(tmp_path / "ciagent_spec.yaml"),
                   "--live", "--repeats", "1", "--yes"],
         )
         assert result.exit_code == 2
@@ -550,7 +550,7 @@ class TestCLILiveAndAnswers:
             lambda **kw: {"passed": True, "score": 5, "rationale": "fine"},
         )
         result = CliRunner().invoke(
-            cli, ["judge-audit", "--config", str(tmp_path / "agentci_spec.yaml"),
+            cli, ["judge-audit", "--config", str(tmp_path / "ciagent_spec.yaml"),
                   "--answers", str(answers), "--repeats", "1", "--yes"],
         )
         assert "results.json" in result.output
@@ -567,7 +567,7 @@ class TestCLILiveAndAnswers:
         answers = tmp_path / "results.json"
         answers.write_text(json.dumps({"results": []}))
         result = CliRunner().invoke(
-            cli, ["judge-audit", "--config", str(tmp_path / "agentci_spec.yaml"),
+            cli, ["judge-audit", "--config", str(tmp_path / "ciagent_spec.yaml"),
                   "--live", "--answers", str(answers), "--yes"],
         )
         assert result.exit_code == 2

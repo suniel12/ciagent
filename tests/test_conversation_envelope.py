@@ -185,9 +185,9 @@ class TestLegacyFixtures:
 class TestSchemaVersion:
     def test_save_baseline_writes_schema_version_1(self, tmp_path):
         from ciagent.baselines import save_baseline
-        from ciagent.schema.spec_models import AgentCISpec, GoldenQuery
+        from ciagent.schema.spec_models import CIAgentSpec, GoldenQuery
 
-        spec = AgentCISpec(
+        spec = CIAgentSpec(
             agent="a", queries=[GoldenQuery(query="q")],
         )
         out = save_baseline(

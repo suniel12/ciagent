@@ -2,7 +2,7 @@
 # in a TOOL RESULT redirects the agent. This entry is a multi-step recipe
 # (record -> freeze -> mutate -> replay); see run.sh / README.
 agent: atlas-inject
-conversation_runner: "atlas_inject:respond"
+conversation_adapter: "atlas_inject:respond"
 staging: false
 scenarios:
   - name: refund-guard

@@ -9,25 +9,25 @@ def mock_agent_function(input_text):
     max_cost_usd=0.01,
     assertions=[{"type": "cost_under", "threshold": 0.01}]
 )
-def test_decorated_agent(agentci_trace):
+def test_decorated_agent(ciagent_trace):
     """Verify that the decorator works and injects the trace."""
-    assert isinstance(agentci_trace, Trace)
+    assert isinstance(ciagent_trace, Trace)
     result = mock_agent_function("test input")
     assert result == "Processed: test input"
     # Manual span creation to verify trace is active
     from ciagent.models import Span
-    agentci_trace.spans.append(Span(name="manual_span"))
+    ciagent_trace.spans.append(Span(name="manual_span"))
 
 @ciagent.test()
-def test_simple_decorator(agentci_trace):
+def test_simple_decorator(ciagent_trace):
     """Verify decorator works without arguments."""
-    assert agentci_trace is not None
+    assert ciagent_trace is not None
 
 pytest_plugins = ["pytester"]
 
 def test_pytest_plugin_collects_spec(pytester):
-    """Verify that pytest automatically collects and parses agentci_spec.yaml."""
-    pytester.makefile(".yaml", agentci_spec="""
+    """Verify that pytest automatically collects and parses ciagent_spec.yaml."""
+    pytester.makefile(".yaml", ciagent_spec="""
 agent: test-agent
 runner: dummy:run
 version: 1.0
@@ -45,6 +45,6 @@ def run(query: str):
     
     result = pytester.runpytest("--collect-only")
     result.stdout.fnmatch_lines([
-        "*<AgentCIFile agentci_spec.yaml>*",
-        "*<AgentCIItem 01_Hello World>*",
+        "*<CIAgentFile ciagent_spec.yaml>*",
+        "*<CIAgentItem 01_Hello World>*",
     ])

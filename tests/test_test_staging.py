@@ -45,7 +45,7 @@ def run(query):
 
 
 def _write(spec_extra: str = "", answer: str | None = None):
-    Path("agentci_spec.yaml").write_text(QA_SPEC + spec_extra)
+    Path("ciagent_spec.yaml").write_text(QA_SPEC + spec_extra)
     body = TOY_RUNNER if answer is None else TOY_RUNNER.replace(
         '"i cannot help"', repr(answer)
     )
@@ -110,9 +110,9 @@ class TestSingleTurnStaging:
             assert not Path(".ciagent/staged").exists()
 
     def test_mock_failures_never_stage(self, monkeypatch):
-        # AGENTCI_MOCK_FLAKY forces verdict flips across mock runs — synthetic
+        # CIAGENT_MOCK_FLAKY forces verdict flips across mock runs — synthetic
         # failures, marked as such by never entering the staging area.
-        monkeypatch.setenv("AGENTCI_MOCK_FLAKY", "1")
+        monkeypatch.setenv("CIAGENT_MOCK_FLAKY", "1")
         r = CliRunner()
         with r.isolated_filesystem():
             _write()

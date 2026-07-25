@@ -1,13 +1,13 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
-AgentCI v2/v3 Spec Models
+CIAgent v2/v3 Spec Models
 
-Pydantic models for agentci_spec.yaml. Every field is optional except
+Pydantic models for ciagent_spec.yaml. Every field is optional except
 `agent` and `queries` on the root spec, and `query` on each golden query.
 
 Hierarchy:
-    AgentCISpec
+    CIAgentSpec
     └── GoldenQuery (1..N)
         ├── CorrectnessSpec  (Layer 1 — hard fail)
         │   └── span_assertions  (sub-layer of Correctness, hard fail)
@@ -20,7 +20,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Any, Optional
 
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import AliasChoices, BaseModel, Field, field_validator, model_validator
 
 
 # ── Enums ──────────────────────────────────────────────────────────────────────
@@ -370,7 +370,7 @@ class RetrievalSpec(BaseModel):
 
 
 class GoldenQuery(BaseModel):
-    """A single test case in the AgentCI spec."""
+    """A single test case in the CIAgent spec."""
     query: str = Field(..., description="The input stimulus sent to the agent")
     description: Optional[str] = Field(
         None,
@@ -510,30 +510,36 @@ class StagingSpec(BaseModel):
     max_age_days: int = Field(30, ge=1, description="Age GC cutoff for staged files")
 
 
-class AgentCISpec(BaseModel):
-    """Root schema for agentci_spec.yaml."""
+class CIAgentSpec(BaseModel):
+    """Root schema for ciagent_spec.yaml."""
     version: int = Field(1, description="Schema version for forward compatibility")
     agent: str = Field(..., description="Agent identifier (e.g. 'rag-agent', 'support-router')")
     baseline_dir: str = Field(
         default="./golden",
         description="Path to the directory where versioned baseline JSON files are stored.",
     )
-    runner: Optional[str] = Field(
+    adapter: Optional[str] = Field(
         None,
+        validation_alias=AliasChoices("adapter", "runner"),
         description=(
-            "Python dotted path to the agent runner callable, e.g. 'myagent.run:run_agent'. "
-            "The function must accept (query: str) and return an ciagent.models.Trace. "
-            "When set, 'ciagent test' can invoke the agent directly without pytest."
+            "Python dotted path to your agent adapter: the function that invokes "
+            "your agent and returns its trace, e.g. 'myagent.run:run_for_ciagent'. "
+            "The function must accept (query: str) and return an ciagent.models.Trace "
+            "(or a plain string; trace capture is automatic). When set, 'ciagent test' "
+            "can invoke the agent directly without pytest. "
+            "Deprecated alias accepted until 1.0: 'runner'."
         ),
     )
-    conversation_runner: Optional[str] = Field(
+    conversation_adapter: Optional[str] = Field(
         None,
+        validation_alias=AliasChoices("conversation_adapter", "conversation_runner"),
         description=(
-            "Python dotted path to the multi-turn runner callable for `ciagent "
+            "Python dotted path to the multi-turn adapter callable for `ciagent "
             "simulate`, e.g. 'myagent.run:respond'. The function must accept "
             "(messages: list[dict]) with {'role', 'content'} entries and return "
             "the assistant's reply as a str (or a ciagent.models.Trace). Fresh "
-            "state per scenario; history is passed explicitly."
+            "state per scenario; history is passed explicitly. "
+            "Deprecated alias accepted until 1.0: 'conversation_runner'."
         ),
     )
     defaults: Optional[dict[str, Any]] = Field(
@@ -577,7 +583,7 @@ class AgentCISpec(BaseModel):
         return v
 
     @model_validator(mode="after")
-    def _spec_has_content(self) -> "AgentCISpec":
+    def _spec_has_content(self) -> "CIAgentSpec":
         # queries was required min_length=1 before scenarios existed; a spec
         # must still declare at least one of the two
         if not self.queries and not self.scenarios:

@@ -1,4 +1,4 @@
-# .github/workflows/agentci.yml
+# .github/workflows/ciagent.yml
 # Copy this to your repo's .github/workflows/ directory
 
 name: CIAgent Tests

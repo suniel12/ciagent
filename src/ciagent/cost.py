@@ -1,11 +1,11 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
 Token cost computation.
 
 Pricing is hardcoded (updated monthly). This is intentional —
 an API call to fetch pricing would be a dependency and a failure point.
-Users can override with custom pricing in agentci.yaml.
+Users can override with custom pricing in ciagent.yaml.
 """
 
 # Prices per 1M tokens as of Feb 2026 (update monthly)

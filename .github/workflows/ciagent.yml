@@ -7,7 +7,7 @@ on:
     branches: [main]
 
 jobs:
-  agentci-deterministic:
+  ciagent-deterministic:
     name: Deterministic Logic Tests
     runs-on: ubuntu-latest
     steps:
@@ -40,7 +40,7 @@ jobs:
           path: ciagent-test-results.txt
           retention-days: 14
 
-  agentci-llm-judge:
+  ciagent-llm-judge:
     name: LLM-as-Judge Evals
     runs-on: ubuntu-latest
     steps:

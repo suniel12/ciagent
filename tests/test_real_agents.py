@@ -2,10 +2,10 @@
 Integration tests for real-world agent examples.
 
 Tests all three agent types (OpenAI, Anthropic, LangGraph) through the
-full AgentCI pipeline: config loading -> runner -> trace capture -> assertions -> diffing.
+full CIAgent pipeline: config loading -> runner -> trace capture -> assertions -> diffing.
 
 These tests run in mock mode by default (no API keys required).
-Set AGENTCI_LIVE=1 with appropriate API keys for live testing.
+Set CIAGENT_LIVE=1 with appropriate API keys for live testing.
 """
 
 import os
@@ -45,7 +45,7 @@ class TestOpenAIAgent:
 
     @pytest.fixture
     def suite(self):
-        config_path = str(PROJECT_ROOT / "examples" / "openai_agent" / "agentci.yaml")
+        config_path = str(PROJECT_ROOT / "examples" / "openai_agent" / "ciagent.yaml")
         return load_config(config_path)
 
     @pytest.fixture
@@ -132,7 +132,7 @@ class TestAnthropicAgent:
 
     @pytest.fixture
     def suite(self):
-        config_path = str(PROJECT_ROOT / "examples" / "anthropic_agent" / "agentci.yaml")
+        config_path = str(PROJECT_ROOT / "examples" / "anthropic_agent" / "ciagent.yaml")
         return load_config(config_path)
 
     @pytest.fixture
@@ -209,7 +209,7 @@ class TestLangGraphAgent:
 
     @pytest.fixture
     def suite(self):
-        config_path = str(PROJECT_ROOT / "examples" / "langgraph_example" / "agentci.yaml")
+        config_path = str(PROJECT_ROOT / "examples" / "langgraph_example" / "ciagent.yaml")
         return load_config(config_path)
 
     @pytest.fixture
@@ -287,14 +287,14 @@ _AGENT_MOCKS = {
 
 
 class TestCrossAgent:
-    """Tests that validate AgentCI works consistently across agent types."""
+    """Tests that validate CIAgent works consistently across agent types."""
 
     def _run_agent_suite(self, example_dir: str):
         """Run an agent suite with proper mock isolation."""
         agent_mod = _AGENT_MOCKS[example_dir]
         agent_mod._activate_mock()
         try:
-            config_path = str(PROJECT_ROOT / "examples" / example_dir / "agentci.yaml")
+            config_path = str(PROJECT_ROOT / "examples" / example_dir / "ciagent.yaml")
             suite = load_config(config_path)
             runner = TestRunner(suite)
             return runner.run_suite()
