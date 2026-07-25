@@ -35,7 +35,7 @@ FAILING_AGENT = "def respond(messages):\n    return 'i cannot help'\n"
 
 
 def _write(spec_extra: str = ""):
-    Path("agentci_spec.yaml").write_text(BASE_SPEC + spec_extra)
+    Path("ciagent_spec.yaml").write_text(BASE_SPEC + spec_extra)
     Path("toy_failing_agent.py").write_text(FAILING_AGENT)
 
 
@@ -148,7 +148,7 @@ class TestCaptureTimeRedaction:
     )
 
     def _write_leaky(self, spec_extra=""):
-        Path("agentci_spec.yaml").write_text(BASE_SPEC + spec_extra)
+        Path("ciagent_spec.yaml").write_text(BASE_SPEC + spec_extra)
         Path("toy_failing_agent.py").write_text(self.LEAKY_AGENT)
 
     def test_staged_file_is_scrubbed_with_counts(self):
@@ -194,7 +194,7 @@ class TestCaptureTimeRedaction:
     def test_custom_pattern_from_spec(self):
         runner = CliRunner()
         with runner.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(
+            Path("ciagent_spec.yaml").write_text(
                 BASE_SPEC + 'staging:\n  redact_patterns: ["cannot help"]\n'
             )
             Path("toy_failing_agent.py").write_text(FAILING_AGENT)
@@ -219,7 +219,7 @@ class TestCaptureTimeRedaction:
             assert "sk-abc123DEF456ghi789jkl" in staged[0].read_text()
 
             # flip the spec back to default redact-on for the read paths
-            Path("agentci_spec.yaml").write_text(BASE_SPEC)
+            Path("ciagent_spec.yaml").write_text(BASE_SPEC)
             sid = staged[0].stem
             res = CliRunner().invoke(cli, ["stage", "show", sid, "--format", "json"])
             assert res.exit_code == 0, res.output

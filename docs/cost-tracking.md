@@ -6,7 +6,7 @@ warnings by default, so they're visible without blocking CI.
 
 ## Setting Budgets
 
-Set budgets per query in `agentci_spec.yaml`:
+Set budgets per query in `ciagent_spec.yaml`:
 
 ```yaml
 queries:

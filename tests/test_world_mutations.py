@@ -285,7 +285,7 @@ class TestInjectionGate:
     def test_injection_flips_a_clean_gate_to_red(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(INJECT_SPEC)
+            Path("ciagent_spec.yaml").write_text(INJECT_SPEC)
             Path("toy_inject_agent.py").write_text(TOY_INJECT_AGENT)
 
             # record a clean golden (agent behaves; tool output is benign)

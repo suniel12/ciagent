@@ -1,11 +1,11 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
-AgentCI v2 Schema — Pydantic models for agentci_spec.yaml.
+CIAgent v2 Schema — Pydantic models for ciagent_spec.yaml.
 """
 
 from .spec_models import (
-    AgentCISpec,
+    CIAgentSpec,
     GoldenQuery,
     CorrectnessSpec,
     PathSpec,
@@ -15,7 +15,7 @@ from .spec_models import (
 )
 
 __all__ = [
-    "AgentCISpec",
+    "CIAgentSpec",
     "GoldenQuery",
     "CorrectnessSpec",
     "PathSpec",

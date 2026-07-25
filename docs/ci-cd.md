@@ -11,7 +11,7 @@ they hit production.
    ciagent init
    ```
 
-   This writes `.github/workflows/agentci.yml`, tailored to your project's
+   This writes `.github/workflows/ciagent.yml`, tailored to your project's
    dependency file and Python version.
 
 2. Set your API keys in GitHub → Settings → Security → Secrets and variables →
@@ -25,10 +25,10 @@ they hit production.
 
 ```yaml
 - name: Validate spec
-  run: ciagent validate agentci_spec.yaml
+  run: ciagent validate ciagent_spec.yaml
 
 - name: Run CIAgent evaluation
-  run: ciagent test --config agentci_spec.yaml --format github --workers 4
+  run: ciagent test --config ciagent_spec.yaml --format github --workers 4
 ```
 
 - `--format github` emits GitHub annotations, so failures appear inline in the

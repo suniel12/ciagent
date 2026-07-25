@@ -8,7 +8,7 @@ Mock mode (default): Uses a deterministic "fake LLM" that picks tools
 based on input keywords, while still routing through the OpenAI client
 path so capture.py can intercept calls.
 
-Live mode: Set AGENTCI_LIVE=1 and OPENAI_API_KEY to use real ChatOpenAI.
+Live mode: Set CIAGENT_LIVE=1 and OPENAI_API_KEY to use real ChatOpenAI.
 """
 
 import os
@@ -17,7 +17,7 @@ import openai
 from typing import Any, TypedDict, Annotated
 from langgraph.graph import StateGraph, END, START
 
-LIVE_MODE = os.environ.get("AGENTCI_LIVE", "0") == "1"
+LIVE_MODE = os.environ.get("CIAGENT_LIVE", "0") == "1"
 
 
 # --- State definition ---

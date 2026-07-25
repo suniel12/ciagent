@@ -35,30 +35,30 @@ def spec(**kwargs) -> CorrectnessSpec:
 
 class TestExpectedInAnswer:
     def test_term_found_passes(self):
-        result = evaluate_correctness("pip install agentci", spec(expected_in_answer=["pip"]))
+        result = evaluate_correctness("pip install ciagent", spec(expected_in_answer=["pip"]))
         assert result.status == LayerStatus.PASS
 
     def test_term_not_found_fails(self):
-        result = evaluate_correctness("brew install agentci", spec(expected_in_answer=["pip"]))
+        result = evaluate_correctness("brew install ciagent", spec(expected_in_answer=["pip"]))
         assert result.status == LayerStatus.FAIL
         assert any("pip" in m for m in result.messages)
 
     def test_failure_includes_agent_answer_preview(self):
-        result = evaluate_correctness("brew install agentci", spec(expected_in_answer=["pip"]))
+        result = evaluate_correctness("brew install ciagent", spec(expected_in_answer=["pip"]))
         assert result.status == LayerStatus.FAIL
         assert any("Agent said:" in m for m in result.messages)
-        assert any("brew install agentci" in m for m in result.messages)
+        assert any("brew install ciagent" in m for m in result.messages)
 
     def test_case_insensitive(self):
-        result = evaluate_correctness("PIP INSTALL AGENTCI", spec(expected_in_answer=["pip install"]))
+        result = evaluate_correctness("PIP INSTALL CIAGENT", spec(expected_in_answer=["pip install"]))
         assert result.status == LayerStatus.PASS
 
     def test_multiple_terms_all_found(self):
-        result = evaluate_correctness("pip install agentci", spec(expected_in_answer=["pip", "agentci"]))
+        result = evaluate_correctness("pip install ciagent", spec(expected_in_answer=["pip", "ciagent"]))
         assert result.status == LayerStatus.PASS
 
     def test_multiple_terms_one_missing_fails(self):
-        result = evaluate_correctness("pip install agentci", spec(expected_in_answer=["pip", "poetry"]))
+        result = evaluate_correctness("pip install ciagent", spec(expected_in_answer=["pip", "poetry"]))
         assert result.status == LayerStatus.FAIL
 
 
@@ -92,7 +92,7 @@ class TestAnyExpectedInAnswer:
 
     def test_case_insensitive(self):
         result = evaluate_correctness(
-            "PIP INSTALL AGENTCI",
+            "PIP INSTALL CIAGENT",
             spec(any_expected_in_answer=["pip install"]),
         )
         assert result.status == LayerStatus.PASS
@@ -118,7 +118,7 @@ class TestAnyExpectedInAnswer:
     def test_combined_with_expected_in_answer(self):
         """Both AND and OR keyword checks can coexist."""
         result = evaluate_correctness(
-            "pip install agentci version 3.10",
+            "pip install ciagent version 3.10",
             spec(
                 expected_in_answer=["3.10"],
                 any_expected_in_answer=["pip", "brew"],
@@ -396,7 +396,7 @@ class TestRefutesPremise:
 
 class TestDescriptivePassMessages:
     def test_expected_in_answer_describes_found_keywords(self):
-        result = evaluate_correctness("pip install agentci", spec(expected_in_answer=["pip install"]))
+        result = evaluate_correctness("pip install ciagent", spec(expected_in_answer=["pip install"]))
         assert result.status == LayerStatus.PASS
         assert any("Found keywords" in m for m in result.messages)
         assert any("pip install" in m for m in result.messages)

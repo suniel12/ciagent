@@ -1,7 +1,7 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
-AgentCI v2 Reporter.
+CIAgent v2 Reporter.
 
 Generates output in multiple formats and returns the appropriate exit code.
 
@@ -40,7 +40,7 @@ MAX_INLINE_ANNOTATIONS: int = 10
 def report_results(
     results: list[QueryResult],
     format: str = "console",
-    spec_file: str = "agentci_spec.yaml",
+    spec_file: str = "ciagent_spec.yaml",
     output_path: str | None = None,
     stability: Optional["StabilityReport"] = None,
 ) -> int:
@@ -50,7 +50,7 @@ def report_results(
         results:    List of QueryResult from the evaluation engine.
         format:     Output format: 'console', 'github', 'json', 'prometheus', 'html'.
         spec_file:  Path to the spec file (used in GitHub annotation file references).
-        output_path: File path for HTML output (default: agentci-report.html).
+        output_path: File path for HTML output (default: ciagent-report.html).
         stability:  Optional multi-run StabilityReport (from `--runs N`). When
                     provided, a stability section is added to the output and
                     failure means "failed in every run", not "failed in the
@@ -79,7 +79,7 @@ def report_results(
     elif format == "prometheus":
         _emit_prometheus(results)
     elif format == "html":
-        _emit_html(results, spec_file, output_path or "agentci-report.html", stability=stability)
+        _emit_html(results, spec_file, output_path or "ciagent-report.html", stability=stability)
     else:
         _emit_console(results)
         if stability is not None:
@@ -613,21 +613,21 @@ def _emit_prometheus(results: list[QueryResult]) -> None:
 
         # Correctness as boolean gauge
         val = 1 if r.correctness.status == LayerStatus.PASS else 0
-        print(f'agentci_correctness_pass{{{ql}}} {val}')
+        print(f'ciagent_correctness_pass{{{ql}}} {val}')
 
         if "tool_recall" in r.path.details:
-            print(f'agentci_tool_recall{{{ql}}} {r.path.details["tool_recall"]}')
+            print(f'ciagent_tool_recall{{{ql}}} {r.path.details["tool_recall"]}')
         if "tool_precision" in r.path.details:
-            print(f'agentci_tool_precision{{{ql}}} {r.path.details["tool_precision"]}')
+            print(f'ciagent_tool_precision{{{ql}}} {r.path.details["tool_precision"]}')
         if "sequence_similarity" in r.path.details:
-            print(f'agentci_sequence_similarity{{{ql}}} {r.path.details["sequence_similarity"]}')
+            print(f'ciagent_sequence_similarity{{{ql}}} {r.path.details["sequence_similarity"]}')
 
         if "actual" in r.cost.details:
             actual = r.cost.details["actual"]
-            print(f'agentci_cost_usd{{{ql}}} {actual["cost_usd"]}')
-            print(f'agentci_latency_ms{{{ql}}} {actual["latency_ms"]}')
-            print(f'agentci_total_tokens{{{ql}}} {actual["total_tokens"]}')
-            print(f'agentci_llm_calls{{{ql}}} {actual["llm_calls"]}')
+            print(f'ciagent_cost_usd{{{ql}}} {actual["cost_usd"]}')
+            print(f'ciagent_latency_ms{{{ql}}} {actual["latency_ms"]}')
+            print(f'ciagent_total_tokens{{{ql}}} {actual["total_tokens"]}')
+            print(f'ciagent_llm_calls{{{ql}}} {actual["llm_calls"]}')
 
 
 # ── HTML Output ───────────────────────────────────────────────────────────────

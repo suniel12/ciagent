@@ -1,4 +1,4 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
 Tests for the ATIF trajectory importer.
@@ -75,7 +75,7 @@ class TestRealAtifExport:
 
         from ciagent.cli import cli
 
-        spec_path = tmp_path / "agentci_spec.yaml"
+        spec_path = tmp_path / "ciagent_spec.yaml"
         spec_path.write_text(
             "agent: atif-import\n"
             f"baseline_dir: {tmp_path / 'golden'}\n"

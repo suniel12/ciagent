@@ -1,4 +1,4 @@
-# agentci.yaml — Test suite definition
+# ciagent.yaml — Test suite definition
 name: "booking_agent_tests"
 agent: "examples.demo_agent.agent:run_agent"     # Python import path to the agent function
 framework: "langgraph"              # "langgraph", "crewai", "generic"

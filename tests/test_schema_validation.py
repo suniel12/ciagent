@@ -1,5 +1,5 @@
 """
-Tests for AgentCI v2 spec schema validation.
+Tests for CIAgent v2 spec schema validation.
 
 Every test either asserts a valid spec passes Pydantic validation or that
 a specific invalid variant raises a ValidationError with a meaningful message.
@@ -9,7 +9,7 @@ import pytest
 from pydantic import ValidationError
 
 from ciagent.schema.spec_models import (
-    AgentCISpec,
+    CIAgentSpec,
     CorrectnessSpec,
     CostSpec,
     GoldenQuery,
@@ -28,7 +28,7 @@ from ciagent.schema.spec_models import (
 
 
 def minimal_query(**kwargs) -> dict:
-    base = {"query": "How do I install AgentCI?"}
+    base = {"query": "How do I install CIAgent?"}
     base.update(kwargs)
     return base
 
@@ -43,7 +43,7 @@ def minimal_spec(**kwargs) -> dict:
 
 
 def test_minimal_spec_is_valid():
-    spec = AgentCISpec(**minimal_spec())
+    spec = CIAgentSpec(**minimal_spec())
     assert spec.agent == "test-agent"
     assert len(spec.queries) == 1
     assert spec.version == 1
@@ -51,7 +51,7 @@ def test_minimal_spec_is_valid():
 
 
 def test_full_spec_with_all_fields():
-    spec = AgentCISpec(
+    spec = CIAgentSpec(
         version=1,
         agent="rag-agent",
         baseline_dir="./baselines/rag",
@@ -61,11 +61,11 @@ def test_full_spec_with_all_fields():
         judge_config={"model": "claude-sonnet-4-6", "temperature": 0},
         queries=[
             {
-                "query": "How do I install AgentCI?",
+                "query": "How do I install CIAgent?",
                 "description": "Installation smoke test",
                 "tags": ["smoke", "happy-path"],
                 "correctness": {
-                    "expected_in_answer": ["pip install", "agentci"],
+                    "expected_in_answer": ["pip install", "ciagent"],
                     "not_in_answer": ["error"],
                     "llm_judge": [{"rule": "Clear installation steps", "threshold": 0.7}],
                 },
@@ -92,7 +92,7 @@ def test_full_spec_with_all_fields():
 
 
 def test_multiple_queries_valid():
-    spec = AgentCISpec(
+    spec = CIAgentSpec(
         agent="router",
         queries=[
             {"query": "Cancel my subscription"},
@@ -104,21 +104,21 @@ def test_multiple_queries_valid():
 
 
 def test_defaults_section_accepted():
-    spec = AgentCISpec(
+    spec = CIAgentSpec(
         **minimal_spec(defaults={"cost": {"max_cost_multiplier": 2.0}})
     )
     assert spec.defaults == {"cost": {"max_cost_multiplier": 2.0}}
 
 
 def test_judge_config_section_accepted():
-    spec = AgentCISpec(
+    spec = CIAgentSpec(
         **minimal_spec(judge_config={"model": "claude-sonnet-4-6", "temperature": 0})
     )
     assert spec.judge_config["temperature"] == 0
 
 
 def test_tags_accepted_as_list():
-    spec = AgentCISpec(
+    spec = CIAgentSpec(
         agent="agent",
         queries=[{"query": "Hello", "tags": ["smoke", "edge-case"]}],
     )
@@ -199,17 +199,17 @@ def test_empty_query_string_fails():
 
 def test_missing_agent_fails():
     with pytest.raises(ValidationError):
-        AgentCISpec(queries=[minimal_query()])
+        CIAgentSpec(queries=[minimal_query()])
 
 
 def test_missing_queries_fails():
     with pytest.raises(ValidationError):
-        AgentCISpec(agent="agent")
+        CIAgentSpec(agent="agent")
 
 
 def test_empty_queries_list_fails():
     with pytest.raises(ValidationError):
-        AgentCISpec(agent="agent", queries=[])
+        CIAgentSpec(agent="agent", queries=[])
 
 
 def test_invalid_match_mode_fails():
@@ -388,7 +388,7 @@ class TestSpanAssertionSpec:
         spec = SpanAssertionSpec(
             selector=SpanSelector(kind=SpanKindSelector.TOOL, name="retrieve_docs"),
             asserts=[
-                SpanAssert(type=SpanAssertType.CONTAINS, field="output_data", value="AgentCI"),
+                SpanAssert(type=SpanAssertType.CONTAINS, field="output_data", value="CIAgent"),
                 SpanAssert(type=SpanAssertType.NOT_CONTAINS, field="output_data", value="error"),
                 SpanAssert(
                     type=SpanAssertType.LLM_JUDGE,

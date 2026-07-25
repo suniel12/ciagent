@@ -1,6 +1,6 @@
 [project]
 name = "ciagent"
-version = "0.15.0"
+version = "0.16.0"
 description = "Find out whether your AI agent's evals are lying to you: stability reports with flip attribution, LLM judge audits, and deterministic checks mined from your KB."
 readme = "README.md"
 license = {text = "Apache-2.0"}
@@ -66,10 +66,8 @@ include = [
 include = [
   "src/ciagent/templates/**/*",
   "src/ciagent/examples/**/*",
+  "src/ciagent/schema/*.json",
 ]
-
-[tool.setuptools.package-data]
-ciagent = ["templates/*.j2", "examples/*.yaml", "schemas/*.json"]
 
 [tool.pytest.ini_options]
 pythonpath = ["src"]

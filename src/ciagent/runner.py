@@ -1,4 +1,4 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
 Test execution engine.
@@ -31,7 +31,7 @@ class TestRunner:
             from .exceptions import ConfigError
             raise ConfigError(
                 "No agent import path provided in test suite.",
-                fix="Set 'agent: myapp.agent:run_agent' in your agentci.yaml file."
+                fix="Set 'agent: myapp.agent:run_agent' in your ciagent.yaml file."
             )
 
         try:

@@ -1,5 +1,5 @@
 """
-Tests for the AgentCI v2 Diff Engine (engine/diff.py).
+Tests for the CIAgent v2 Diff Engine (engine/diff.py).
 
 Tests the three-tier DiffReport: Correctness, Path, and Cost layers.
 Also tests backward compatibility with the v1 DiffResult list.
@@ -366,8 +366,8 @@ class TestComputeCostDeltas:
 
 class TestExtractAnswer:
     def test_extracts_string_output(self):
-        t = make_trace(output="Hello AgentCI!")
-        assert _extract_answer(t) == "Hello AgentCI!"
+        t = make_trace(output="Hello CIAgent!")
+        assert _extract_answer(t) == "Hello CIAgent!"
 
     def test_empty_trace_returns_empty_string(self):
         t = Trace(spans=[])

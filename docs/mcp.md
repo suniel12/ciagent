@@ -44,7 +44,7 @@ working, not an error; `ok` reports whether the invocation itself completed.
   call) require `allow_live=true`. Mock is always free and always allowed.
 - **Project jail.** Path arguments must resolve under `--project`
   (symlink-safe). Honest scope: this constrains paths, not code — running
-  against a project executes that project's own runner, so point the server
+  against a project executes that project's own adapter, so point the server
   only at repos you trust.
 - **Timeouts.** Every command gets a hard timeout (default 600s,
   `--timeout`, per-call `timeout_s`); on expiry the whole process group is

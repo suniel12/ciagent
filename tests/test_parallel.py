@@ -16,7 +16,7 @@ from ciagent.engine.parallel import (
     run_spec_parallel,
 )
 from ciagent.models import LLMCall, Span, Trace
-from ciagent.schema.spec_models import AgentCISpec, GoldenQuery
+from ciagent.schema.spec_models import CIAgentSpec, GoldenQuery
 
 
 # ── Fixtures ────────────────────────────────────────────────────────────────────
@@ -30,8 +30,8 @@ def _make_trace(query: str = "test") -> Trace:
     return t
 
 
-def _make_spec(queries: list[str], runner: str | None = None) -> AgentCISpec:
-    return AgentCISpec(
+def _make_spec(queries: list[str], runner: str | None = None) -> CIAgentSpec:
+    return CIAgentSpec(
         agent="test-agent",
         queries=[GoldenQuery(query=q) for q in queries],
         runner=runner,
@@ -160,9 +160,9 @@ class TestRunSpec:
 
     def test_hard_fail_propagates(self):
         """A correctness failure should appear in the result."""
-        from ciagent.schema.spec_models import CorrectnessSpec, GoldenQuery, AgentCISpec
+        from ciagent.schema.spec_models import CorrectnessSpec, GoldenQuery, CIAgentSpec
 
-        spec = AgentCISpec(
+        spec = CIAgentSpec(
             agent="test-agent",
             queries=[
                 GoldenQuery(

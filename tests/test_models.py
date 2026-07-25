@@ -29,12 +29,12 @@ class TestSpanAttributes:
             name="retrieve_docs",
             kind=SpanKind.TOOL_CALL,
             attributes={
-                "tool.args": {"query": "How do I install AgentCI?"},
-                "tool.result": "pip install agentci",
+                "tool.args": {"query": "How do I install CIAgent?"},
+                "tool.result": "pip install ciagent",
             },
         )
-        assert span.attributes["tool.args"]["query"] == "How do I install AgentCI?"
-        assert span.attributes["tool.result"] == "pip install agentci"
+        assert span.attributes["tool.args"]["query"] == "How do I install CIAgent?"
+        assert span.attributes["tool.result"] == "pip install ciagent"
 
     def test_attributes_round_trip_json(self):
         """Span.attributes serializes and deserializes through JSON correctly."""

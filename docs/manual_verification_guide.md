@@ -28,13 +28,13 @@ Since CIAgent is a CI tool, the ultimate test is running it in a real GitHub Act
     ```bash
     mkdir -p .github/workflows
     # Copy the template we just created
-    cp /path/to/ciagent/.github/workflows/agentci-template.yml .github/workflows/agentci.yml
+    cp /path/to/ciagent/.github/workflows/ciagent-template.yml .github/workflows/ciagent.yml
     ```
 
-4.  **Update `agentci.yml` dependency**:
+4.  **Update `ciagent.yml` dependency**:
     *Crucial Step for Testing:* Since `ciagent` isn't on PyPI yet (or is an old version), you need to tell the workflow where to install it from.
     
-    Edit `.github/workflows/agentci.yml`:
+    Edit `.github/workflows/ciagent.yml`:
     ```yaml
     - name: Install dependencies
       run: |

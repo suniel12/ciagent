@@ -1,7 +1,7 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
-AgentCI v2 Baseline Manager.
+CIAgent v2 Baseline Manager.
 
 Provides versioned golden baseline save/load/list with an optional
 correctness precheck to prevent saving broken baselines.
@@ -14,7 +14,7 @@ Baseline JSON structure:
         "version": "v2-fixed",
         "agent": "rag-agent",
         "captured_at": "2026-02-26T14:30:00Z",
-        "query": "How do I install AgentCI?",
+        "query": "How do I install CIAgent?",
         "metadata": {
             "model": "gpt-4o-mini",
             "spec_hash": "sha256:abc123...",
@@ -37,7 +37,7 @@ from ciagent.exceptions import BaselineError
 if TYPE_CHECKING:
     from ciagent.engine.results import LayerResult
     from ciagent.models import Trace
-    from ciagent.schema.spec_models import AgentCISpec, GoldenQuery
+    from ciagent.schema.spec_models import CIAgentSpec, GoldenQuery
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
@@ -47,7 +47,7 @@ def save_baseline(
     trace: "Trace",
     agent: str,
     version: str,
-    spec: "AgentCISpec",
+    spec: "CIAgentSpec",
     query_text: str = "",
     baseline_dir: str = "./golden",
     force: bool = False,
@@ -58,7 +58,7 @@ def save_baseline(
         trace:        Execution trace to save.
         agent:        Agent identifier (matches spec.agent).
         version:      Version tag, e.g. "v1-broken" or "v2-fixed".
-        spec:         The AgentCISpec (used for precheck and spec_hash).
+        spec:         The CIAgentSpec (used for precheck and spec_hash).
         query_text:   The query this baseline corresponds to.
         baseline_dir: Root directory for baseline files.
         force:        If True, skips the correctness precheck.
@@ -243,7 +243,7 @@ def list_baselines(
 
 def _find_query_spec(
     query_text: str,
-    spec: "AgentCISpec",
+    spec: "CIAgentSpec",
 ) -> Optional["GoldenQuery"]:
     """Find the GoldenQuery that matches query_text (exact string match)."""
     for q in spec.queries:
@@ -252,7 +252,7 @@ def _find_query_spec(
     return None
 
 
-def _compute_spec_hash(spec: "AgentCISpec") -> str:
+def _compute_spec_hash(spec: "CIAgentSpec") -> str:
     """Compute a short SHA-256 hash of the spec for traceability."""
     canonical = json.dumps(spec.model_dump(), sort_keys=True)
     return hashlib.sha256(canonical.encode()).hexdigest()[:12]

@@ -1,4 +1,4 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
 Judge Audit Engine — meta-evaluation of the LLM judge.
@@ -31,7 +31,7 @@ from typing import Any, Callable, Optional
 
 from ciagent.engine.correctness import evaluate_correctness
 from ciagent.engine.results import LayerStatus
-from ciagent.schema.spec_models import AgentCISpec, CorrectnessSpec, GoldenQuery
+from ciagent.schema.spec_models import CIAgentSpec, CorrectnessSpec, GoldenQuery
 
 # Verdict thresholds (documented in docs/judge-audit.md)
 FLIP_RATE_UNRELIABLE = 0.20        # >20% of judged queries flip on retest
@@ -241,7 +241,7 @@ class JudgeAuditReport:
 
 
 def run_judge_audit(
-    spec: AgentCISpec,
+    spec: CIAgentSpec,
     answers: dict[str, str],
     repeats: int = 3,
     labels: Optional[dict[str, bool]] = None,
@@ -253,7 +253,7 @@ def run_judge_audit(
     """Audit the spec's LLM judge against recorded answers.
 
     Args:
-        spec:     Loaded AgentCISpec (source of rubrics + deterministic checks).
+        spec:     Loaded CIAgentSpec (source of rubrics + deterministic checks).
         answers:  query text → recorded answer (from golden baselines).
         repeats:  Judge calls per rubric per query (Mode 2 retest stability).
         labels:   Optional query text → human pass/fail (Mode 3).
@@ -423,7 +423,7 @@ def load_answers_from_baselines(baseline_dir: str) -> dict[str, str]:
 
 
 def collect_live_answers(
-    spec: AgentCISpec,
+    spec: CIAgentSpec,
     queries: Optional[list[GoldenQuery]] = None,
     run_fn: Optional[Callable[[str], Any]] = None,
     progress: Optional[Callable[[str], None]] = None,
@@ -438,7 +438,7 @@ def collect_live_answers(
     goldens.**
 
     Args:
-        spec:     Loaded spec; ``spec.runner`` is resolved unless run_fn given.
+        spec:     Loaded spec; ``spec.adapter`` is resolved unless run_fn given.
         queries:  Queries to run (defaults to all spec queries). Callers pass
                   only the judged queries so cost matches the confirm gate.
         run_fn:   Injectable runner (tests); (query: str) → Trace | str.
@@ -453,12 +453,12 @@ def collect_live_answers(
     from ciagent.engine.runner import _extract_answer
 
     if run_fn is None:
-        if not spec.runner:
+        if not spec.adapter:
             raise ValueError(
                 "--live re-runs the agent, which needs a `runner:` key in the "
                 "spec (e.g. runner: \"myagent.run:run_agent\")."
             )
-        run_fn = resolve_runner(spec.runner)
+        run_fn = resolve_runner(spec.adapter)
 
     answers: dict[str, str] = {}
     for gq in queries if queries is not None else spec.queries:
@@ -505,7 +505,7 @@ def load_answers_from_results_json(path: str) -> dict[str, str]:
 
 def load_retrieval_flags_from_baselines(
     baseline_dir: str,
-    spec: AgentCISpec,
+    spec: CIAgentSpec,
 ) -> dict[str, Optional[bool]]:
     """Collect query → "was the recorded retrieval empty?" from baselines.
 

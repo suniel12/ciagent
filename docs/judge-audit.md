@@ -87,7 +87,7 @@ With the default source, `--baseline-dir` (default: the spec's
 `ciagent record` output and versioned `ciagent save` baselines are
 accepted. Queries are matched to the spec by query text.
 
-`--live` re-runs the agent (the spec needs a `runner:` key) for exactly the
+`--live` re-runs the agent (the spec needs a `adapter:` key) for exactly the
 judged queries, then scores the fresh answers. The confirm prompt counts
 both agent runs and judge calls.
 

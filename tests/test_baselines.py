@@ -1,5 +1,5 @@
 """
-Unit tests for the AgentCI v2 Baseline Manager.
+Unit tests for the CIAgent v2 Baseline Manager.
 
 Uses tmp_path for file system operations. Mocks evaluate_correctness
 for precheck tests.
@@ -16,7 +16,7 @@ from ciagent.baselines import list_baselines, load_baseline, save_baseline
 from ciagent.engine.results import LayerResult, LayerStatus
 from ciagent.exceptions import BaselineError
 from ciagent.models import Span, SpanKind, Trace
-from ciagent.schema.spec_models import AgentCISpec, CorrectnessSpec, GoldenQuery
+from ciagent.schema.spec_models import CIAgentSpec, CorrectnessSpec, GoldenQuery
 
 # Force runner module import before any patches.  Without this,
 # patch("ciagent.engine.correctness.evaluate_correctness") can cause
@@ -27,15 +27,15 @@ import ciagent.engine.runner  # noqa: F401
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 
-def make_trace(output: str = "pip install agentci") -> Trace:
+def make_trace(output: str = "pip install ciagent") -> Trace:
     span = Span(kind=SpanKind.AGENT, output_data=output)
     t = Trace(spans=[span])
     t.compute_metrics()
     return t
 
 
-def make_spec(query: str = "How do I install AgentCI?") -> AgentCISpec:
-    return AgentCISpec(
+def make_spec(query: str = "How do I install CIAgent?") -> CIAgentSpec:
+    return CIAgentSpec(
         agent="rag-agent",
         queries=[GoldenQuery(query=query)],
     )
@@ -97,7 +97,7 @@ class TestSaveBaseline:
     def test_force_true_skips_precheck(self, tmp_path):
         trace = make_trace()
         spec = make_spec(query="Q")
-        spec_with_correctness = AgentCISpec(
+        spec_with_correctness = CIAgentSpec(
             agent="rag-agent",
             queries=[GoldenQuery(
                 query="Q",
@@ -129,7 +129,7 @@ class TestSaveBaseline:
 
     def test_precheck_fails_raises_value_error(self, tmp_path):
         trace = make_trace()
-        spec_with_correctness = AgentCISpec(
+        spec_with_correctness = CIAgentSpec(
             agent="rag-agent",
             queries=[GoldenQuery(
                 query="Q",
@@ -161,14 +161,14 @@ class TestSaveBaseline:
     def test_stores_query_text(self, tmp_path):
         import json
         trace = make_trace()
-        spec = make_spec(query="How do I install AgentCI?")
+        spec = make_spec(query="How do I install CIAgent?")
         path = save_baseline(
             trace=trace, agent="rag-agent", version="v1",
-            spec=spec, query_text="How do I install AgentCI?",
+            spec=spec, query_text="How do I install CIAgent?",
             baseline_dir=str(tmp_path), force=True,
         )
         data = json.loads(path.read_text())
-        assert data["query"] == "How do I install AgentCI?"
+        assert data["query"] == "How do I install CIAgent?"
 
 
 # ── load_baseline ─────────────────────────────────────────────────────────────

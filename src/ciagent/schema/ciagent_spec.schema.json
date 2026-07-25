@@ -219,7 +219,7 @@
       "type": "object"
     },
     "GoldenQuery": {
-      "description": "A single test case in the AgentCI spec.",
+      "description": "A single test case in the CIAgent spec.",
       "properties": {
         "query": {
           "description": "The input stimulus sent to the agent",
@@ -892,6 +892,47 @@
       "title": "SpanSelector",
       "type": "object"
     },
+    "StagingSpec": {
+      "description": "Auto-staging config for failing `ciagent simulate` conversations.\n\n`enabled` defaults True since capture-time redaction ships (0.12): staged\nfiles are scrubbed of secrets and PII before they hit disk (see\nPlan_docs/redaction_capture.md). `staging: false` in the spec is the bool\nshorthand; it is coerced to `StagingSpec(enabled=False)`. `redact: false`\nis an explicit escape hatch and prints a warning at stage time.",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "description": "Auto-stage failing conversations (default ON; staged files are redacted)",
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "redact": {
+          "default": true,
+          "description": "Scrub secrets and PII from staged files at capture time",
+          "title": "Redact",
+          "type": "boolean"
+        },
+        "redact_patterns": {
+          "description": "Extra regexes to redact (replaced with [SECRET:custom#n])",
+          "items": {
+            "type": "string"
+          },
+          "title": "Redact Patterns",
+          "type": "array"
+        },
+        "cap": {
+          "default": 10,
+          "description": "Max staged conversations kept per scenario",
+          "minimum": 1,
+          "title": "Cap",
+          "type": "integer"
+        },
+        "max_age_days": {
+          "default": 30,
+          "description": "Age GC cutoff for staged files",
+          "minimum": 1,
+          "title": "Max Age Days",
+          "type": "integer"
+        }
+      },
+      "title": "StagingSpec",
+      "type": "object"
+    },
     "StopWhen": {
       "description": "Explicit early-exit condition for a scenario.\n\nTermination is deterministic and event-based only (eng review, binding):\nnever judge-based, never keyword-triggered. A scenario stops early when the\nnamed concrete event is observed in a turn's trace.",
       "properties": {
@@ -964,7 +1005,7 @@
       "type": "object"
     }
   },
-  "description": "Root schema for agentci_spec.yaml.",
+  "description": "Root schema for ciagent_spec.yaml.",
   "properties": {
     "version": {
       "default": 1,
@@ -983,7 +1024,7 @@
       "title": "Baseline Dir",
       "type": "string"
     },
-    "runner": {
+    "adapter": {
       "anyOf": [
         {
           "type": "string"
@@ -993,10 +1034,10 @@
         }
       ],
       "default": null,
-      "description": "Python dotted path to the agent runner callable, e.g. 'myagent.run:run_agent'. The function must accept (query: str) and return an ciagent.models.Trace. When set, 'ciagent test' can invoke the agent directly without pytest.",
-      "title": "Runner"
+      "description": "Python dotted path to your agent adapter: the function that invokes your agent and returns its trace, e.g. 'myagent.run:run_for_ciagent'. The function must accept (query: str) and return an ciagent.models.Trace (or a plain string; trace capture is automatic). When set, 'ciagent test' can invoke the agent directly without pytest. Deprecated alias accepted until 1.0: 'runner'.",
+      "title": "Adapter"
     },
-    "conversation_runner": {
+    "conversation_adapter": {
       "anyOf": [
         {
           "type": "string"
@@ -1006,8 +1047,8 @@
         }
       ],
       "default": null,
-      "description": "Python dotted path to the multi-turn runner callable for `ciagent simulate`, e.g. 'myagent.run:respond'. The function must accept (messages: list[dict]) with {'role', 'content'} entries and return the assistant's reply as a str (or a ciagent.models.Trace). Fresh state per scenario; history is passed explicitly.",
-      "title": "Conversation Runner"
+      "description": "Python dotted path to the multi-turn adapter callable for `ciagent simulate`, e.g. 'myagent.run:respond'. The function must accept (messages: list[dict]) with {'role', 'content'} entries and return the assistant's reply as a str (or a ciagent.models.Trace). Fresh state per scenario; history is passed explicitly. Deprecated alias accepted until 1.0: 'conversation_runner'.",
+      "title": "Conversation Adapter"
     },
     "defaults": {
       "anyOf": [
@@ -1066,11 +1107,15 @@
       },
       "title": "Scenarios",
       "type": "array"
+    },
+    "staging": {
+      "$ref": "#/$defs/StagingSpec",
+      "description": "Auto-staging config for failing simulate conversations"
     }
   },
   "required": [
     "agent"
   ],
-  "title": "AgentCISpec",
+  "title": "CIAgentSpec",
   "type": "object"
 }

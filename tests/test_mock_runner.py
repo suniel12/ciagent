@@ -71,9 +71,9 @@ class TestRunMockSpec:
     """Tests for run_mock_spec()."""
 
     def test_generates_traces_for_all_queries(self):
-        from ciagent.schema.spec_models import AgentCISpec, GoldenQuery
+        from ciagent.schema.spec_models import CIAgentSpec, GoldenQuery
 
-        spec = AgentCISpec(
+        spec = CIAgentSpec(
             agent="test-agent",
             queries=[
                 GoldenQuery(query="Hello"),
@@ -88,9 +88,9 @@ class TestRunMockSpec:
         assert "Goodbye" in traces
 
     def test_all_traces_are_valid(self):
-        from ciagent.schema.spec_models import AgentCISpec, GoldenQuery
+        from ciagent.schema.spec_models import CIAgentSpec, GoldenQuery
 
-        spec = AgentCISpec(
+        spec = CIAgentSpec(
             agent="test-agent",
             queries=[GoldenQuery(query="test query")],
         )

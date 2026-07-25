@@ -1,4 +1,4 @@
-# agentci.yaml — Default Configuration
+# ciagent.yaml — Default Configuration
 name: "my_agent_tests"
 agent: "agent:run_agent"  # Path to your agent function (module:function)
 framework: "generic"

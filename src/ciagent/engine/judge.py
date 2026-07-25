@@ -1,4 +1,4 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
 LLM-as-a-judge evaluation with safeguards.
@@ -169,7 +169,7 @@ def _load_context_file(context_file: str, spec_dir: Optional[str]) -> str:
     """Load a context reference file for doc-grounded judging.
 
     Resolves the path relative to `spec_dir` (the directory containing the
-    agentci_spec.yaml). Falls back to CWD if spec_dir is not provided.
+    ciagent_spec.yaml). Falls back to CWD if spec_dir is not provided.
 
     Raises:
         JudgeError: If the file does not exist or cannot be read.

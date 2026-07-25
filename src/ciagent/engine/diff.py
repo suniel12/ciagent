@@ -1,7 +1,7 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
-AgentCI v2 Diff Engine — Three-Tier Baseline Comparison.
+CIAgent v2 Diff Engine — Three-Tier Baseline Comparison.
 
 Compares two versioned baseline trace files (produced by `ciagent save`)
 and produces a structured DiffReport broken into three evaluation layers:
@@ -29,7 +29,7 @@ from typing import Any, Optional, TYPE_CHECKING
 if TYPE_CHECKING:
     from ciagent.conversation import ConversationEnvelope
     from ciagent.models import Trace
-    from ciagent.schema.spec_models import AgentCISpec
+    from ciagent.schema.spec_models import CIAgentSpec
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
@@ -130,7 +130,7 @@ class DiffReport:
         """Render the three-tier diff in a rich console box."""
         lines = [
             f"╔{'═' * 62}╗",
-            f"║  AgentCI Diff: {self.agent} ({self.from_version} → {self.to_version}){' ' * max(0, 62 - 16 - len(self.agent) - len(self.from_version) - len(self.to_version))}║",
+            f"║  CIAgent Diff: {self.agent} ({self.from_version} → {self.to_version}){' ' * max(0, 62 - 16 - len(self.agent) - len(self.from_version) - len(self.to_version))}║",
             f"╠{'═' * 62}╣",
         ]
 
@@ -202,7 +202,7 @@ class DiffReport:
 def diff_baselines(
     baseline_data: dict[str, Any],
     compare_data: dict[str, Any],
-    spec: Optional["AgentCISpec"] = None,
+    spec: Optional["CIAgentSpec"] = None,
 ) -> DiffReport:
     """
     Compare two versioned baseline trace files with three-tier analysis.
@@ -210,7 +210,7 @@ def diff_baselines(
     Args:
         baseline_data: Parsed JSON from the 'before' baseline file.
         compare_data:  Parsed JSON from the 'after' baseline file.
-        spec:          Optional AgentCISpec to run correctness layer evaluation.
+        spec:          Optional CIAgentSpec to run correctness layer evaluation.
 
     Returns:
         DiffReport with correctness_delta, path_deltas, cost_deltas, legacy_diffs.
@@ -285,7 +285,7 @@ def _compute_correctness_delta(
     baseline_trace: Optional["Trace"],
     compare_trace: Optional["Trace"],
     query_text: str,
-    spec: "AgentCISpec",
+    spec: "CIAgentSpec",
 ) -> dict[str, Any]:
     """Evaluate both traces against the spec and compare correctness results."""
     from ciagent.engine.correctness import evaluate_correctness
@@ -419,7 +419,7 @@ def _compute_cost_deltas(baseline: "Trace", compare: "Trace") -> list[MetricDelt
 
 
 def _retriever_tool_for(
-    spec: Optional["AgentCISpec"],
+    spec: Optional["CIAgentSpec"],
     query_text: Optional[str],
 ) -> Optional[str]:
     """The retriever tool named by this query's `retrieval:` spec, if any."""

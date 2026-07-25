@@ -1,4 +1,4 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
 Tests for the KB-derived check generator.
@@ -21,11 +21,11 @@ from ciagent.engine.check_generator import (
     merge_candidates,
     validate_candidates,
 )
-from ciagent.schema.spec_models import AgentCISpec, CorrectnessSpec, GoldenQuery
+from ciagent.schema.spec_models import CIAgentSpec, CorrectnessSpec, GoldenQuery
 
 
-def make_spec(*queries: GoldenQuery) -> AgentCISpec:
-    return AgentCISpec(agent="gen-test", queries=list(queries))
+def make_spec(*queries: GoldenQuery) -> CIAgentSpec:
+    return CIAgentSpec(agent="gen-test", queries=list(queries))
 
 
 def fake_llm(payload):
@@ -216,7 +216,7 @@ class TestCLIGenerateChecks:
     def _project(tmp_path, golden_answer="Our APR is 4.5 percent."):
         import json
 
-        spec = tmp_path / "agentci_spec.yaml"
+        spec = tmp_path / "ciagent_spec.yaml"
         spec.write_text(
             """
 agent: gen-cli-test
@@ -260,11 +260,11 @@ queries:
         )
         assert result.exit_code == 0, result.output
         assert "gate passed" in result.output
-        updated = yaml.safe_load((project / "agentci_spec.yaml").read_text())
+        updated = yaml.safe_load((project / "ciagent_spec.yaml").read_text())
         assert updated["queries"][0]["correctness"]["any_expected_in_answer"] == [
             "4.5%", "4.5 percent",
         ]
-        assert (project / "agentci_spec.yaml.bak").exists()
+        assert (project / "ciagent_spec.yaml.bak").exists()
 
     def test_brittle_check_rejected_and_not_written(self, tmp_path, monkeypatch):
         from click.testing import CliRunner
@@ -282,7 +282,7 @@ queries:
         )
         assert result.exit_code == 0, result.output
         assert "rejected by the validation gate" in result.output
-        updated = yaml.safe_load((project / "agentci_spec.yaml").read_text())
+        updated = yaml.safe_load((project / "ciagent_spec.yaml").read_text())
         assert "correctness" not in (updated["queries"][0] or {})
 
     def test_dry_run_writes_nothing(self, tmp_path, monkeypatch):
@@ -295,13 +295,13 @@ queries:
             {"field": "any_expected_in_answer", "value": ["4.5 percent"]},
         ])
         monkeypatch.chdir(project)
-        before = (project / "agentci_spec.yaml").read_text()
+        before = (project / "ciagent_spec.yaml").read_text()
         result = CliRunner().invoke(
             cli, ["generate-checks", "--kb", str(project / "kb"), "--dry-run"],
         )
         assert result.exit_code == 0, result.output
         assert "Dry run" in result.output
-        assert (project / "agentci_spec.yaml").read_text() == before
+        assert (project / "ciagent_spec.yaml").read_text() == before
 
     def test_yes_never_applies_unvalidated(self, tmp_path, monkeypatch):
         import shutil
@@ -321,5 +321,5 @@ queries:
         )
         assert result.exit_code == 0, result.output
         assert "unvalidated" in result.output
-        updated = yaml.safe_load((project / "agentci_spec.yaml").read_text())
+        updated = yaml.safe_load((project / "ciagent_spec.yaml").read_text())
         assert "correctness" not in (updated["queries"][0] or {})

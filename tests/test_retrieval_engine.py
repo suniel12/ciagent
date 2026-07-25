@@ -1,4 +1,4 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
 Tests for the F4 retrieval layer (layer 2.5) and its cross-feature wiring.
@@ -28,7 +28,7 @@ from ciagent.engine.retrieval import (
 )
 from ciagent.models import DiffType, Span, SpanKind, ToolCall, Trace
 from ciagent.schema.spec_models import (
-    AgentCISpec,
+    CIAgentSpec,
     CorrectnessSpec,
     GoldenQuery,
     RetrievalSpec,
@@ -434,8 +434,8 @@ def _stability_result(passed: bool, retrieval_result, answer: str) -> QueryResul
 
 
 class TestRetrievalVariance:
-    def _spec(self) -> AgentCISpec:
-        return AgentCISpec(agent="a", queries=[GoldenQuery(
+    def _spec(self) -> CIAgentSpec:
+        return CIAgentSpec(agent="a", queries=[GoldenQuery(
             query="q",
             correctness=CorrectnessSpec(expected_in_answer=["30 days"]),
             retrieval=RetrievalSpec(tool=RETRIEVER, forbid_empty=True),
@@ -469,7 +469,7 @@ class TestRetrievalVariance:
     def test_no_retrieval_spec_keeps_agent_variance(self):
         from ciagent.engine.stability import FlipSource, build_stability_report
 
-        spec = AgentCISpec(agent="a", queries=[GoldenQuery(
+        spec = CIAgentSpec(agent="a", queries=[GoldenQuery(
             query="q", correctness=CorrectnessSpec(expected_in_answer=["30 days"]),
         )])
         runs = [
@@ -513,10 +513,10 @@ class TestRetrievalVariance:
 
 
 class TestJudgeAuditEmptyRetrieval:
-    def _spec(self) -> AgentCISpec:
+    def _spec(self) -> CIAgentSpec:
         from ciagent.schema.spec_models import JudgeRubric
 
-        return AgentCISpec(agent="a", queries=[GoldenQuery(
+        return CIAgentSpec(agent="a", queries=[GoldenQuery(
             query="do you sell thermostats?",
             correctness=CorrectnessSpec(llm_judge=[JudgeRubric(rule="is it right?")]),
             retrieval=RetrievalSpec(tool=RETRIEVER),

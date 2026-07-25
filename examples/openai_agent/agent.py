@@ -8,14 +8,14 @@ Mock mode (default): Patches the OpenAI client's create method to return
 canned responses. The call still flows through the OpenAI client path,
 so CIAgent's capture.py can intercept and record tool calls.
 
-Live mode: Set AGENTCI_LIVE=1 and OPENAI_API_KEY to use real OpenAI API.
+Live mode: Set CIAGENT_LIVE=1 and OPENAI_API_KEY to use real OpenAI API.
 """
 
 import os
 import json
 import openai
 
-LIVE_MODE = os.environ.get("AGENTCI_LIVE", "0") == "1"
+LIVE_MODE = os.environ.get("CIAGENT_LIVE", "0") == "1"
 
 # --- Tool implementations (used in both modes) ---
 

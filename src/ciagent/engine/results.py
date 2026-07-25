@@ -1,7 +1,7 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
-Result data classes for the AgentCI v2 evaluation engine.
+Result data classes for the CIAgent v2 evaluation engine.
 
 Each query evaluation produces one QueryResult containing one LayerResult
 per layer. Layer severity:

@@ -7,7 +7,7 @@ the agent it is building.
 ## Skills
 
 - **onboard** — set up CIAgent in a repo from scratch: find the agent, write
-  the runner, record golden baselines, generate a spec, verify with a real
+  the adapter, record golden baselines, generate a spec, verify with a real
   run. Includes a cost gate before any live recording.
 - **check** — after any change to agent code, prompts, or the knowledge
   base: run the right CIAgent check (`test`, `test --runs 3 --flaky-sources=agent`,

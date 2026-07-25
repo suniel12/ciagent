@@ -13,6 +13,6 @@ agent's refund fires the gate every time (exit 1). No LLM judgment involved.
 **Real source:** the CIAgent support-router dogfood, where a persona insisting
 on a refund for a non-duplicate charge sometimes got one.
 
-**Adapt to your agent:** point `conversation_runner` at your runner and set
+**Adapt to your agent:** point `conversation_adapter` at your runner and set
 `forbidden_tools` to your irreversible actions (refund, delete, send, deploy).
 The gate is deterministic — it needs no golden and no judge.

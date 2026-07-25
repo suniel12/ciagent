@@ -190,7 +190,7 @@ scenarios:
 
 class TestSimulateCLI:
     def _write_spec(self, content=SPEC_YAML):
-        with open("agentci_spec.yaml", "w") as f:
+        with open("ciagent_spec.yaml", "w") as f:
             f.write(content)
 
     def test_mock_run_passes(self):
@@ -243,7 +243,7 @@ class TestSimulateCLI:
             self._write_spec()
             result = runner.invoke(cli, ["simulate", "--yes"])
         assert result.exit_code == 2
-        assert "conversation_runner" in result.output
+        assert "conversation_adapter" in result.output
 
     def test_failing_outcome_exits_1(self):
         runner = CliRunner()

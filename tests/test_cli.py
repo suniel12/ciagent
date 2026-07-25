@@ -34,11 +34,11 @@ def test_init_command_interactive(tmp_path):
         assert result.exit_code == 0
         assert "CIAgent Setup" in result.output
         assert "What is the import path" in result.output
-        assert os.path.exists("agentci_spec.yaml")
+        assert os.path.exists("ciagent_spec.yaml")
         
-        with open("agentci_spec.yaml") as f:
+        with open("ciagent_spec.yaml") as f:
             content = f.read()
-            assert "runner: \"my.custom.runner:run\"" in content
+            assert "adapter: \"my.custom.runner:run\"" in content
             assert "queries:" in content
             assert "How do I reset my password?" not in content  # default spec is empty
 
@@ -47,11 +47,11 @@ def test_init_command_example_flag(tmp_path):
     with runner.isolated_filesystem(temp_dir=tmp_path):
         result = runner.invoke(cli, ['init', '--example'], input="\n") # use default default="myagent.run:run_agent"
         assert result.exit_code == 0
-        assert os.path.exists("agentci_spec.yaml")
+        assert os.path.exists("ciagent_spec.yaml")
         
-        with open("agentci_spec.yaml") as f:
+        with open("ciagent_spec.yaml") as f:
             content = f.read()
-            assert "runner: \"myagent.run:run_agent\"" in content
+            assert "adapter: \"myagent.run:run_agent\"" in content
             assert "How do I reset my password?" in content
 
 def test_bootstrap_command_interactive(tmp_path):
@@ -74,10 +74,10 @@ def run(query: str) -> Trace:
         # Sequence: "Hello\n\ny\n"
         result = runner.invoke(cli, ['bootstrap', '--runner', 'dummy:run'], input="Hello\n\ny\n")
         assert result.exit_code == 0
-        assert os.path.exists("agentci_spec.yaml")
+        assert os.path.exists("ciagent_spec.yaml")
         assert os.path.exists("baselines/my-agent/v1-hello.json")
         
-        with open("agentci_spec.yaml") as f:
+        with open("ciagent_spec.yaml") as f:
             content = f.read()
             assert "query: Hello" in content
             assert "max_tool_calls: 2" in content
@@ -87,7 +87,7 @@ def run(query: str) -> Trace:
 def test_eval_command(tmp_path):
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path):
-        with open("agentci_spec.yaml", "w") as f:
+        with open("ciagent_spec.yaml", "w") as f:
             f.write("""
 version: 1.0
 agent: test-agent
@@ -518,7 +518,7 @@ class TestInitGoldenFileReporting:
             # The applied mapping is stated, not guessed at by the user.
             assert "rows read from 'rows'" in _flat(result.output)
             assert "'prompt' -> question" in _flat(result.output)
-            with open("agentci_spec.yaml") as f:
+            with open("ciagent_spec.yaml") as f:
                 spec = f.read()
             assert "Who wrote the Iliad?" in spec
 
@@ -533,7 +533,7 @@ class TestInitGoldenFileReporting:
             assert "0 golden pairs loaded" in _flat(result.output)
             assert "entries" in _flat(result.output)  # names the list it could not use
             # No spec is written from invented questions.
-            assert not os.path.exists("agentci_spec.yaml")
+            assert not os.path.exists("ciagent_spec.yaml")
 
     def test_flag_with_wrong_keys_exits_nonzero_and_names_keys(self, tmp_path):
         runner = CliRunner()
@@ -636,12 +636,12 @@ class TestScanProjectDeepKB:
 
 
 class TestMockTestCommand:
-    """Tests for agentci test --mock."""
+    """Tests for ciagent test --mock."""
 
     def test_mock_mode_no_runner_needed(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            with open("agentci_spec.yaml", "w") as f:
+            with open("ciagent_spec.yaml", "w") as f:
                 f.write(
                     "version: 1.0\nagent: test-agent\n"
                     "queries:\n  - query: hello\n  - query: goodbye\n"
@@ -653,7 +653,7 @@ class TestMockTestCommand:
     def test_mock_mode_with_expected_tools(self, tmp_path):
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            with open("agentci_spec.yaml", "w") as f:
+            with open("ciagent_spec.yaml", "w") as f:
                 f.write(
                     "version: 1.0\nagent: test-agent\n"
                     "queries:\n"
@@ -737,7 +737,7 @@ class TestGenerateSkeletonSpec:
 
     def test_rag_skeleton(self):
         spec = _generate_skeleton_spec("rag", [], "demo:run")
-        assert 'runner: "demo:run"' in spec
+        assert 'adapter: "demo:run"' in spec
         assert "TODO" in spec
         assert "Out-of-scope" in spec
 
@@ -750,7 +750,7 @@ class TestGenerateSkeletonSpec:
     def test_conversational_skeleton(self):
         spec = _generate_skeleton_spec("conversational", [], "chat:run")
         assert "TODO" in spec
-        assert 'runner: "chat:run"' in spec
+        assert 'adapter: "chat:run"' in spec
 
     def test_tool_skeleton_caps_at_five(self):
         tools = [f"tool_{i}" for i in range(10)]
@@ -808,8 +808,8 @@ class TestInitMockZeroKey:
                 input="\n\nmyagent:run\nn\n",
             )
             assert result.exit_code == 0
-            assert os.path.exists("agentci_spec.yaml")
-            with open("agentci_spec.yaml") as f:
+            assert os.path.exists("ciagent_spec.yaml")
+            with open("ciagent_spec.yaml") as f:
                 content = f.read()
                 assert "queries:" in content
 
@@ -836,7 +836,7 @@ class TestInitMockZeroKey:
                 input="\n\nmyagent:run\n",
             )
             assert result.exit_code == 0
-            with open("agentci_spec.yaml") as f:
+            with open("ciagent_spec.yaml") as f:
                 content = f.read()
                 assert "What is X?" in content
                 assert "How to Z?" in content
@@ -1000,11 +1000,11 @@ class TestCalibrateSpecFromTraces:
         assert result[1]["cost"]["max_llm_calls"] == 1
 
 
-# ── Tests for `agentci calibrate` command ────────────────────────────────────
+# ── Tests for `ciagent calibrate` command ────────────────────────────────────
 
 
 class TestCalibrateCommand:
-    """Tests for the `agentci calibrate` CLI command."""
+    """Tests for the `ciagent calibrate` CLI command."""
 
     def _write_spec(self, tmp_path, *, runner="my.agent:run", queries=None):
         """Write a minimal spec file and return its path."""
@@ -1020,7 +1020,7 @@ class TestCalibrateCommand:
             "runner": runner,
             "queries": queries,
         }
-        spec_path = tmp_path / "agentci_spec.yaml"
+        spec_path = tmp_path / "ciagent_spec.yaml"
         spec_path.write_text(yaml.dump(spec, sort_keys=False))
         return spec_path
 
@@ -1271,9 +1271,9 @@ class TestGenerateRunnerFile:
             ]
         }
         result = _generate_runner_file(tmp_path, context, ["search"], "tool")
-        assert result == "agentci_runner:run_agent"
+        assert result == "ciagent_adapter:run_agent"
 
-        runner_file = tmp_path / "agentci_runner.py"
+        runner_file = tmp_path / "ciagent_adapter.py"
         assert runner_file.exists()
         content = runner_file.read_text()
         assert "import anthropic" in content
@@ -1287,9 +1287,9 @@ class TestGenerateRunnerFile:
             ]
         }
         result = _generate_runner_file(tmp_path, context, ["lookup"], "tool")
-        assert result == "agentci_runner:run_agent"
+        assert result == "ciagent_adapter:run_agent"
 
-        content = (tmp_path / "agentci_runner.py").read_text()
+        content = (tmp_path / "ciagent_adapter.py").read_text()
         assert "import openai" in content
         assert "def run_agent(query: str)" in content
 
@@ -1301,7 +1301,7 @@ class TestGenerateRunnerFile:
         }
         result = _generate_runner_file(tmp_path, context, ["search"], "tool")
         assert result is None
-        assert not (tmp_path / "agentci_runner.py").exists()
+        assert not (tmp_path / "ciagent_adapter.py").exists()
 
     def test_detects_model_from_code(self, tmp_path):
         context = {
@@ -1310,7 +1310,7 @@ class TestGenerateRunnerFile:
             ]
         }
         result = _generate_runner_file(tmp_path, context, [], "conversational")
-        assert result == "agentci_runner:run_agent"
+        assert result == "ciagent_adapter:run_agent"
 
-        content = (tmp_path / "agentci_runner.py").read_text()
+        content = (tmp_path / "ciagent_adapter.py").read_text()
         assert "claude-haiku-3" in content

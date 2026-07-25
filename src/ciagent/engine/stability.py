@@ -1,4 +1,4 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
 Stability Engine — multi-run verdict aggregation and flip attribution.
@@ -31,7 +31,7 @@ from typing import TYPE_CHECKING, Optional
 from ciagent.engine.results import QueryResult
 
 if TYPE_CHECKING:
-    from ciagent.schema.spec_models import AgentCISpec, GoldenQuery
+    from ciagent.schema.spec_models import CIAgentSpec, GoldenQuery
 
 # Normalized answers with similarity at or above this ratio (but not identical)
 # are ambiguous: a paraphrase could flip a judge OR a deterministic keyword check.
@@ -184,7 +184,7 @@ class StabilityReport:
 
 
 def build_stability_report(
-    spec: "AgentCISpec",
+    spec: "CIAgentSpec",
     run_results: list[list[QueryResult]],
 ) -> StabilityReport:
     """Aggregate N runs of evaluation results into a stability report.

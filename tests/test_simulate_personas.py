@@ -416,7 +416,7 @@ class TestSimulateCLIPhase3:
         import sys
 
         with runner.isolated_filesystem():
-            with open("agentci_spec.yaml", "w") as f:
+            with open("ciagent_spec.yaml", "w") as f:
                 f.write(spec)
             with open("toy_costly_agent.py", "w") as f:
                 f.write(module_src)
@@ -468,7 +468,7 @@ class TestSimulateCLIPhase3:
     def test_runs_reports_stability_block(self):
         runner = CliRunner()
         with runner.isolated_filesystem():
-            with open("agentci_spec.yaml", "w") as f:
+            with open("ciagent_spec.yaml", "w") as f:
                 f.write(
                     "agent: a\nscenarios:\n"
                     "  - name: happy\n    turns: [\"hi\"]\n"
@@ -488,7 +488,7 @@ class TestSimulateCLIPhase3:
 
         runner = CliRunner()
         with runner.isolated_filesystem():
-            with open("agentci_spec.yaml", "w") as f:
+            with open("ciagent_spec.yaml", "w") as f:
                 f.write(
                     "agent: a\nscenarios:\n"
                     "  - name: gen\n    persona: angry customer\n"

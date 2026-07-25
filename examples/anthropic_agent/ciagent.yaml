@@ -1,4 +1,4 @@
-# agentci.yaml — Anthropic Article Summarizer Test Suite
+# ciagent.yaml — Anthropic Article Summarizer Test Suite
 name: "anthropic_summarizer_tests"
 agent: "examples.anthropic_agent.agent:run_agent"
 framework: "generic"

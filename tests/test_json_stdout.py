@@ -40,7 +40,7 @@ class TestSimulateJsonStdout:
     def test_stdout_is_pure_json(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(SIM_SPEC)
+            Path("ciagent_spec.yaml").write_text(SIM_SPEC)
             res = r.invoke(cli, ["simulate", "--mock", "--format", "json"])
         payload = json.loads(res.stdout)  # no banner-slicing workaround
         assert "scenarios" in payload
@@ -48,7 +48,7 @@ class TestSimulateJsonStdout:
     def test_banner_moved_to_stderr(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(SIM_SPEC)
+            Path("ciagent_spec.yaml").write_text(SIM_SPEC)
             res = r.invoke(cli, ["simulate", "--mock", "--format", "json"])
         assert "CIAgent" not in res.stdout
         assert "CIAgent" in res.stderr
@@ -56,7 +56,7 @@ class TestSimulateJsonStdout:
     def test_console_format_keeps_banner_on_stdout(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(SIM_SPEC)
+            Path("ciagent_spec.yaml").write_text(SIM_SPEC)
             res = r.invoke(cli, ["simulate", "--mock"])
         assert "CIAgent" in res.stdout
 
@@ -69,7 +69,7 @@ class TestSimulateJsonStdout:
         spec = SIM_SPEC + 'conversation_runner: "toy_agent:respond"\n'
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(spec)
+            Path("ciagent_spec.yaml").write_text(spec)
             Path("toy_agent.py").write_text(
                 "def respond(messages):\n    return 'i cannot help'\n"
             )
@@ -94,7 +94,7 @@ class TestSimulateJsonStdout:
                 + 'staging: false\n')
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(spec)
+            Path("ciagent_spec.yaml").write_text(spec)
             Path("toy_agent.py").write_text(
                 "def respond(messages):\n    return 'i cannot help'\n"
             )
@@ -114,7 +114,7 @@ class TestTestCmdJsonStdout:
     def test_stdout_is_pure_json(self):
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(TEST_SPEC)
+            Path("ciagent_spec.yaml").write_text(TEST_SPEC)
             res = r.invoke(cli, ["test", "--mock", "--format", "json"])
         payload = json.loads(res.stdout)
         assert isinstance(payload, dict)
@@ -125,7 +125,7 @@ class TestTestCmdJsonStdout:
         # into a later console-mode run in the same process.
         r = CliRunner()
         with r.isolated_filesystem():
-            Path("agentci_spec.yaml").write_text(TEST_SPEC)
+            Path("ciagent_spec.yaml").write_text(TEST_SPEC)
             r.invoke(cli, ["test", "--mock", "--format", "json"])
             res = r.invoke(cli, ["test", "--mock"])
         assert "CIAgent" in res.stdout

@@ -1,5 +1,5 @@
 """
-Unit tests for the AgentCI v2 Reporter.
+Unit tests for the CIAgent v2 Reporter.
 
 Uses capsys to capture stdout output. Mocks os.environ for GitHub detection.
 """
@@ -209,10 +209,10 @@ class TestJSONOutput:
 class TestConsoleOutput:
     def test_console_contains_query_text(self, capsys):
         with patch.dict("os.environ", {}, clear=True):
-            results = [make_result(query="How do I install AgentCI?")]
+            results = [make_result(query="How do I install CIAgent?")]
             report_results(results)
         out = capsys.readouterr().out
-        assert "How do I install AgentCI?" in out
+        assert "How do I install CIAgent?" in out
 
     def test_console_summary_line_present(self, capsys):
         with patch.dict("os.environ", {}, clear=True):
@@ -361,14 +361,14 @@ class TestPrometheusOutput:
             results = [make_result(query="Install query")]
             report_results(results, format="prometheus")
         out = capsys.readouterr().out
-        assert "agentci_correctness_pass" in out
+        assert "ciagent_correctness_pass" in out
 
     def test_prometheus_gauge_is_zero_on_fail(self, capsys):
         with patch.dict("os.environ", {}, clear=True):
             results = [make_result(query="Q", correctness=fail_layer())]
             report_results(results, format="prometheus")
         out = capsys.readouterr().out
-        assert "agentci_correctness_pass" in out
+        assert "ciagent_correctness_pass" in out
         assert "} 0" in out
 
     def test_prometheus_emits_cost_metrics_when_present(self, capsys):
@@ -381,9 +381,9 @@ class TestPrometheusOutput:
             results = [make_result(cost=cost_result)]
             report_results(results, format="prometheus")
         out = capsys.readouterr().out
-        assert "agentci_cost_usd" in out
-        assert "agentci_latency_ms" in out
-        assert "agentci_total_tokens" in out
+        assert "ciagent_cost_usd" in out
+        assert "ciagent_latency_ms" in out
+        assert "ciagent_total_tokens" in out
 
 
 # ── Answer Preview ────────────────────────────────────────────────────────────
@@ -491,19 +491,19 @@ class TestHTMLOutput:
         """HTML report contains per-query cards with query text."""
         output = tmp_path / "report.html"
         results = [
-            make_result(query="How do I install AgentCI?"),
+            make_result(query="How do I install CIAgent?"),
             make_result(query="What is RAG?", correctness=fail_layer("Missing keyword")),
         ]
         with patch.dict("os.environ", {}, clear=True):
             report_results(results, format="html", output_path=str(output))
         content = output.read_text()
-        assert "How do I install AgentCI?" in content
+        assert "How do I install CIAgent?" in content
         assert "What is RAG?" in content
         assert "FAIL" in content
         assert "Missing keyword" in content
 
     def test_html_default_output_path(self, capsys, monkeypatch):
-        """Default output path is agentci-report.html in current directory."""
+        """Default output path is ciagent-report.html in current directory."""
         import tempfile
         with tempfile.TemporaryDirectory() as tmpdir:
             monkeypatch.chdir(tmpdir)
@@ -511,4 +511,4 @@ class TestHTMLOutput:
             with patch.dict("os.environ", {}, clear=True):
                 report_results(results, format="html")
             from pathlib import Path
-            assert (Path(tmpdir) / "agentci-report.html").exists()
+            assert (Path(tmpdir) / "ciagent-report.html").exists()

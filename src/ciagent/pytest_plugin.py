@@ -1,9 +1,9 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
 pytest integration plugin.
 
-Provides fixtures and hooks for running AgentCI tests via pytest.
+Provides fixtures and hooks for running CIAgent tests via pytest.
 """
 from __future__ import annotations
 
@@ -17,10 +17,11 @@ from pathlib import Path
 
 
 def pytest_collect_file(parent, file_path):
-    if file_path.name == "agentci_spec.yaml":
-        return AgentCIFile.from_parent(parent, path=file_path)
+    # "agentci_spec.yaml" is the legacy spec filename, collected until 1.0.
+    if file_path.name in ("ciagent_spec.yaml", "agentci_spec.yaml"):
+        return CIAgentFile.from_parent(parent, path=file_path)
 
-class AgentCIFile(pytest.File):
+class CIAgentFile(pytest.File):
     def collect(self):
         from .loader import load_spec
         from .exceptions import ConfigError
@@ -33,11 +34,11 @@ class AgentCIFile(pytest.File):
                     name = f"{i+1:02d}_{short_name}"
                 else:
                     name = f"query_{i+1:02d}"
-                yield AgentCIItem.from_parent(self, name=name, spec=spec, query=query)
+                yield CIAgentItem.from_parent(self, name=name, spec=spec, query=query)
         except ConfigError as e:
-            raise pytest.UsageError(f"Error loading AgentCI spec: {e}")
+            raise pytest.UsageError(f"Error loading CIAgent spec: {e}")
 
-class AgentCIItem(pytest.Item):
+class CIAgentItem(pytest.Item):
     @classmethod
     def from_parent(cls, parent, *, name, spec, query):
         obj = super().from_parent(parent, name=name)
@@ -55,13 +56,13 @@ class AgentCIItem(pytest.Item):
         from .engine.results import LayerResult, LayerStatus
         
         # 1. Resolve Runner
-        if not self.spec.runner:
+        if not self.spec.adapter:
             raise pytest.UsageError(f"No runner defined in {self.spec.agent} spec. Cannot execute interactive test.")
         
         try:
-            runner_fn = resolve_runner(self.spec.runner)
+            runner_fn = resolve_runner(self.spec.adapter)
         except Exception as e:
-            raise AgentCITestFailure(self, f"Runner resolution failed: {e}")
+            raise CIAgentTestFailure(self, f"Runner resolution failed: {e}")
             
         # 2. Run agent
         try:
@@ -95,7 +96,7 @@ class AgentCIItem(pytest.Item):
             result = evaluate_correctness(answer, self.query.correctness, trace, getattr(self.spec, 'judge_config', None))
             if result.status == LayerStatus.FAIL:
                 messages = "\\n".join(result.messages)
-                raise AgentCITestFailure(self, f"Correctness FAIL:\\n{messages}")
+                raise CIAgentTestFailure(self, f"Correctness FAIL:\\n{messages}")
             elif result.status == LayerStatus.WARN:
                 # We can't log as warning in pytest natively without raising or using warnings
                 import warnings
@@ -106,7 +107,7 @@ class AgentCIItem(pytest.Item):
             p_result = evaluate_path(trace, self.query.path, baseline_trace)
             if p_result.status == LayerStatus.FAIL:
                 messages = "\\n".join(p_result.messages)
-                raise AgentCITestFailure(self, f"Path FAIL:\\n{messages}")
+                raise CIAgentTestFailure(self, f"Path FAIL:\\n{messages}")
             elif p_result.status == LayerStatus.WARN:
                  import warnings
                  warnings.warn(f"Path warning for {self.name}: " + "; ".join(p_result.messages))
@@ -116,20 +117,20 @@ class AgentCIItem(pytest.Item):
             c_result = evaluate_cost(trace, self.query.cost, baseline_trace)
             if c_result.status == LayerStatus.FAIL:
                 messages = "\\n".join(c_result.messages)
-                raise AgentCITestFailure(self, f"Cost FAIL:\\n{messages}")
+                raise CIAgentTestFailure(self, f"Cost FAIL:\\n{messages}")
             elif c_result.status == LayerStatus.WARN:
                  import warnings
                  warnings.warn(f"Cost warning for {self.name}: " + "; ".join(c_result.messages))
 
     def repr_failure(self, excinfo):
-        if isinstance(excinfo.value, AgentCITestFailure):
+        if isinstance(excinfo.value, CIAgentTestFailure):
             return str(excinfo.value)
         return super().repr_failure(excinfo)
 
     def reportinfo(self):
-        return self.fspath, 0, f"agentci: {self.name}"
+        return self.fspath, 0, f"ciagent: {self.name}"
 
-class AgentCITestFailure(Exception):
+class CIAgentTestFailure(Exception):
     def __init__(self, item, message):
         self.item = item
         self.message = message
@@ -148,8 +149,8 @@ def test(
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             return func(*args, **kwargs)
-        wrapper.pytestmark = [pytest.mark.agentci]
-        wrapper._agentci_config = {
+        wrapper.pytestmark = [pytest.mark.ciagent]
+        wrapper._ciagent_config = {
             "input": input,
             "assertions": assertions,
             "max_cost_usd": max_cost_usd,
@@ -161,8 +162,8 @@ def test(
 
 
 @pytest.fixture
-def agentci_trace(request):
-    config = getattr(request.function, "_agentci_config", {})
+def ciagent_trace(request):
+    config = getattr(request.function, "_ciagent_config", {})
     test_name = request.node.name
     
     with TraceContext(test_name=test_name) as ctx:
@@ -190,6 +191,6 @@ def agentci_trace(request):
 
 def pytest_configure(config):
     config.addinivalue_line(
-        "markers", "agentci: mark test as an AgentCI agent test"
+        "markers", "ciagent: mark test as an CIAgent agent test"
     )
 

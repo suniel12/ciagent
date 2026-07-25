@@ -10,7 +10,7 @@ mode runs the whole suite N times and reports the difference.
 ```bash
 ciagent test --runs 3                 # run every query 3 times, live
 ciagent test --runs 5 --fail-on-flaky # gate CI on verdict stability
-AGENTCI_MOCK_FLAKY=1 ciagent test --mock --runs 3   # zero-key demo
+CIAGENT_MOCK_FLAKY=1 ciagent test --mock --runs 3   # zero-key demo
 ```
 
 ## What you get
@@ -20,7 +20,7 @@ Per query:
 - **Verdict history** — `✅❌✅` across runs
 - **pass rate** — observed fraction of passing runs
 - **Flip source** — see below
-- Partial-aggregation flag when a query is missing from some runs (runner
+- Partial-aggregation flag when a query is missing from some runs (adapter
   failures), and a warning when duplicate query texts merge into one record
 - In **JSON output only**: pass@k / pass^k *estimates* (probability of ≥1 pass /
   all passes in k trials, computed from the observed pass rate with k = runs),

@@ -233,7 +233,7 @@ scenarios:
 
 class TestSimulateRecordReplayCLI:
     def _write_spec(self, content=SPEC_YAML):
-        with open("agentci_spec.yaml", "w") as f:
+        with open("ciagent_spec.yaml", "w") as f:
             f.write(content)
 
     def test_record_writes_golden_into_baseline_dir(self):

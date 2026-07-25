@@ -1,4 +1,4 @@
-# Copyright 2025-2026 The AgentCI Authors
+# Copyright 2025-2026 The CIAgent Authors
 # SPDX-License-Identifier: Apache-2.0
 """
 Unit + integration tests for the Stability Engine (multi-run flip attribution).
@@ -21,7 +21,7 @@ from ciagent.engine.stability import (
 )
 from ciagent.models import Span, SpanKind, ToolCall, Trace
 from ciagent.schema.spec_models import (
-    AgentCISpec,
+    CIAgentSpec,
     CorrectnessSpec,
     GoldenQuery,
     JudgeRubric,
@@ -60,8 +60,8 @@ def make_result(
     )
 
 
-def make_spec(*queries: GoldenQuery) -> AgentCISpec:
-    return AgentCISpec(agent="stability-test", queries=list(queries))
+def make_spec(*queries: GoldenQuery) -> CIAgentSpec:
+    return CIAgentSpec(agent="stability-test", queries=list(queries))
 
 
 def plain_query(text: str) -> GoldenQuery:
@@ -333,7 +333,7 @@ class TestSimilarity:
 class TestCLIStability:
     @pytest.fixture()
     def spec_file(self, tmp_path):
-        spec = tmp_path / "agentci_spec.yaml"
+        spec = tmp_path / "ciagent_spec.yaml"
         spec.write_text(
             """
 agent: stability-cli-test
@@ -367,9 +367,9 @@ queries:
         assert "STABLE" in result.output
 
     def test_flaky_mock_runs_flag_attribution_and_exit_zero(self, spec_file):
-        # AGENTCI_MOCK_FLAKY breaks even-indexed queries on odd runs
+        # CIAGENT_MOCK_FLAKY breaks even-indexed queries on odd runs
         result = self._invoke(
-            spec_file, ["--runs", "3"], env={"AGENTCI_MOCK_FLAKY": "1"},
+            spec_file, ["--runs", "3"], env={"CIAGENT_MOCK_FLAKY": "1"},
         )
         assert result.exit_code == 0, result.output
         assert "FLAKY" in result.output
@@ -378,7 +378,7 @@ queries:
     def test_fail_on_flaky_exits_one(self, spec_file):
         result = self._invoke(
             spec_file, ["--runs", "3", "--fail-on-flaky"],
-            env={"AGENTCI_MOCK_FLAKY": "1"},
+            env={"CIAGENT_MOCK_FLAKY": "1"},
         )
         assert result.exit_code == 1, result.output
 
@@ -387,7 +387,7 @@ queries:
 
         result = self._invoke(
             spec_file, ["--runs", "2", "--format", "json"],
-            env={"AGENTCI_MOCK_FLAKY": "1"},
+            env={"CIAGENT_MOCK_FLAKY": "1"},
         )
         payload = json.loads(result.output[result.output.index("{"):])
         assert payload["stability"]["runs"] == 2

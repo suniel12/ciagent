@@ -1,5 +1,5 @@
 """
-Unit tests for the AgentCI v2 YAML loader.
+Unit tests for the CIAgent v2 YAML loader.
 
 Uses pytest's tmp_path fixture for file system operations — no real file system
 pollution.
@@ -21,7 +21,7 @@ from ciagent.loader import filter_by_tags, load_spec
 
 def write_spec(tmp_path: Path, data: dict) -> Path:
     """Write a YAML spec to a temp file and return its path."""
-    p = tmp_path / "agentci_spec.yaml"
+    p = tmp_path / "ciagent_spec.yaml"
     p.write_text(yaml.dump(data), encoding="utf-8")
     return p
 

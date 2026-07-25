@@ -10,7 +10,7 @@ the agent behaves correctly, then diff future runs against it.
 ciagent record
 ```
 
-This runs every query in `agentci_spec.yaml` through the spec's runner and
+This runs every query in `ciagent_spec.yaml` through the spec's adapter and
 saves versioned baselines under `<baseline_dir>/<agent>/`. Pass a query (or a
 unique substring of one) to record a single baseline, `--version` to tag the
 files, and `--force-save` to skip the correctness precheck. `ciagent test`
@@ -19,8 +19,8 @@ picks the baselines up automatically.
 Use `ciagent save` to store an existing trace JSON as a versioned baseline
 and `ciagent baselines` to list the versions you have.
 
-Legacy v1 suites (`agentci.yaml`) still record a single golden trace with
-`ciagent record my_test_case -s agentci.yaml`; this path is deprecated and
+Legacy v1 suites (`ciagent.yaml`) still record a single golden trace with
+`ciagent record my_test_case -s ciagent.yaml`; this path is deprecated and
 will be removed in 0.9.0.
 
 ## Diffing
