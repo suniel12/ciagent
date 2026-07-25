@@ -26,6 +26,37 @@ jobs:
           echo "Amend or rebase to drop the trailer/footer."
           exit 1
         fi
+    - name: Fail on AI attribution in PR metadata
+      if: github.event_name == 'pull_request'
+      # The PR body becomes the squash-merge commit message, so title, body,
+      # and branch name must be gated pre-merge, not just commits already on
+      # the branch (this bit PR #67; caught manually). Fields are passed via
+      # env, never interpolated inline into the script: PR titles and bodies
+      # are untrusted input and inline ${{ }} is a script-injection vector.
+      env:
+        PR_TITLE: ${{ github.event.pull_request.title }}
+        PR_BODY: ${{ github.event.pull_request.body }}
+        PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+      run: |
+        pattern='co-authored-by:.*(claude|anthropic)|generated (with|by).*(claude|anthropic)'
+        fail=0
+        check() {
+          if printf '%s' "$2" | grep -qiE "$pattern"; then
+            echo "AI attribution found in PR $1."
+            fail=1
+          fi
+        }
+        check "title" "$PR_TITLE"
+        check "body" "$PR_BODY"
+        check "branch name" "$PR_BRANCH"
+        if printf '%s' "$PR_BRANCH" | grep -qi 'claude'; then
+          echo "Branch name contains 'claude': $PR_BRANCH"
+          fail=1
+        fi
+        if [ "$fail" -ne 0 ]; then
+          echo "Scrub the offending surface(s) before merge."
+          exit 1
+        fi
 
   test:
     runs-on: ubuntu-latest
