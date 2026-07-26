@@ -745,13 +745,60 @@ _RUNNER_BODY_HINTS = (
 )
 
 
-def _detect_runner(project_dir) -> str | None:
-    """Scan project files and return a best-guess 'module:function' runner path."""
+# Function names that look like agent entry points (prefix or exact/suffix match).
+_RUNNER_ENTRY_NAME_PATTERN = r"^(?:generate|answer|ask|chat|respond)|^main$|_api$"
+# Single-parameter names that suggest a user-facing query entry point.
+_RUNNER_ENTRY_PARAM_NAMES = {"query", "question", "prompt", "message"}
+
+
+def _split_fn_params(params: str) -> list[str]:
+    """Split a raw parameter-list string into stripped per-parameter chunks."""
+    return [p.strip() for p in params.split(",") if p.strip()]
+
+
+def _parse_param(param: str) -> tuple[str, str]:
+    """Return (name, annotation) for one parameter chunk, defaults stripped."""
+    name, _, annotation = param.partition(":")
+    return name.strip(), annotation.split("=")[0].strip()
+
+
+def _is_graph_node_fn(params: str) -> bool:
+    """True for LangGraph-style node/router functions: a lone graph-state param."""
+    parts = _split_fn_params(params)
+    if len(parts) != 1:
+        return False
+    name, annotation = _parse_param(parts[0])
+    return name == "state" or annotation.endswith("State")
+
+
+def _looks_like_entry_fn(fn_name: str, params: str) -> bool:
+    """True when the name or signature suggests a user-facing entry point."""
+    import re
+
+    if re.search(_RUNNER_ENTRY_NAME_PATTERN, fn_name):
+        return True
+    parts = _split_fn_params(params)
+    if len(parts) == 1:
+        name, annotation = _parse_param(parts[0])
+        return name in _RUNNER_ENTRY_PARAM_NAMES and annotation in ("", "str")
+    return False
+
+
+def _detect_runner(project_dir, exclude: list[str] | None = None) -> str | None:
+    """Scan project files and return a best-guess 'module:function' runner path.
+
+    Functions named in ``exclude`` (e.g. already-detected tools) and
+    LangGraph-style node functions are never offered as the adapter.
+    """
     import re
     from pathlib import Path
 
     project_dir = Path(project_dir)
-    fn_pattern = re.compile(r"^def (\w+)\s*\(", re.MULTILINE)
+    excluded = set(exclude or ())
+    fn_pattern = re.compile(r"^def (\w+)\s*\(([^)]*)\)", re.MULTILINE)
+    main_block_pattern = re.compile(
+        r'^if __name__\s*==\s*["\']__main__["\']\s*:(.*)', re.MULTILINE | re.DOTALL
+    )
 
     best: tuple[int, str] | None = None  # (priority, "module:fn")
 
@@ -777,15 +824,32 @@ def _detect_runner(project_dir) -> str | None:
             continue
         module = ".".join(rel.with_suffix("").parts)
 
-        for fn_name in fn_pattern.findall(content):
+        # Functions invoked under `if __name__ == "__main__":` are entry-ish.
+        main_block = main_block_pattern.search(content)
+        main_calls = (
+            set(re.findall(r"(\w+)\s*\(", main_block.group(1))) if main_block else set()
+        )
+
+        file_best: tuple[int, str] | None = None
+        for fn_name, fn_params in fn_pattern.findall(content):
+            if fn_name in excluded:
+                continue
+            if _is_graph_node_fn(fn_params):
+                continue
             priority = (
                 0 if fn_name == "run_for_ciagent" else
                 1 if fn_name == "run_agent" else
                 2 if fn_name in _RUNNER_FN_NAMES else
-                3
+                3 if fn_name in main_calls or _looks_like_entry_fn(fn_name, fn_params) else
+                4
             )
-            if best is None or priority < best[0]:
-                best = (priority, f"{module}:{fn_name}")
+            # Ties within a file go to the later definition — entry points tend
+            # to sit below the tools and nodes they orchestrate.
+            if file_best is None or priority <= file_best[0]:
+                file_best = (priority, f"{module}:{fn_name}")
+
+        if file_best is not None and (best is None or file_best[0] < best[0]):
+            best = file_best
 
     return best[1] if best else None
 
@@ -1725,7 +1789,7 @@ def init(hook, force, example, generate, agent_description, kb_path, run_mode, g
                     interview["decline_topics"] = decline
 
             # ── Step 5: Runner detection ─────────────────────────────
-            detected_runner = _detect_runner(Path("."))
+            detected_runner = _detect_runner(Path("."), exclude=detected_tools)
 
             # If no runner found, generate one automatically
             if not detected_runner and detected_tools and interview.get("run_mode") == "live":

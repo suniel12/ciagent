@@ -1249,6 +1249,186 @@ class TestDetectRunnerBroadened:
         assert "run_agent" in result
 
 
+# LangGraph-style agent file mirroring the frames-agent layout: the retriever
+# tool is defined first, graph node/router functions sit in the middle, and
+# the real entry point is the last top-level function.
+LANGGRAPH_AGENT_PY = '''\
+from typing import Literal, TypedDict
+from langchain_core.tools import tool
+
+
+class RAGState(TypedDict):
+    question: str
+    docs: list
+
+
+@tool
+def retrieve_docs(query: str) -> str:
+    """Search the knowledge base."""
+    return vector_store.similarity_search(query)
+
+
+def decompose_query(state: RAGState) -> dict:
+    return {"question": state["question"]}
+
+
+def generate_query_or_respond(state: RAGState):
+    return {}
+
+
+def multi_retrieve(state: RAGState) -> dict:
+    return {}
+
+
+def grade_documents(state: RAGState):
+    return {}
+
+
+def generate_answer(state: RAGState):
+    return {}
+
+
+def rewrite_question(state: RAGState):
+    return {}
+
+
+def route_after_grade(state: RAGState) -> Literal["generate_answer", "rewrite_question"]:
+    return "generate_answer"
+
+
+def generate_answer_api(query: str):
+    return graph.invoke({"question": query})
+'''
+
+
+class TestDetectRunnerEntryPointSelection:
+    """Tests for adapter selection in tool/node-heavy agent files."""
+
+    def _write_langgraph_agent(self, tmp_path):
+        pkg = tmp_path / "agent"
+        pkg.mkdir()
+        (pkg / "agent.py").write_text(LANGGRAPH_AGENT_PY)
+
+    def test_langgraph_entry_point_beats_tool_defined_first(self, tmp_path):
+        """The frames-agent repro: the last-defined API entry point wins,
+        not the retriever tool defined at the top of the file."""
+        self._write_langgraph_agent(tmp_path)
+        result = _detect_runner(tmp_path, exclude=["retrieve_docs"])
+        assert result == "agent.agent:generate_answer_api"
+
+    def test_langgraph_entry_point_wins_even_without_exclude(self, tmp_path):
+        """Last-defined tie-breaking picks the entry point over the tool
+        even when tool detection produced nothing to exclude."""
+        self._write_langgraph_agent(tmp_path)
+        result = _detect_runner(tmp_path)
+        assert result == "agent.agent:generate_answer_api"
+
+    def test_detected_tools_are_never_offered_as_adapter(self, tmp_path):
+        (tmp_path / "runner.py").write_text(
+            'def search_web(query: str) -> str:\n'
+            '    return client.messages.create(query)\n'
+            'def helper_fn(a, b):\n'
+            '    return a\n'
+        )
+        result = _detect_runner(tmp_path, exclude=["search_web"])
+        assert result == "runner:helper_fn"
+
+    def test_graph_node_functions_are_skipped(self, tmp_path):
+        """Functions taking only a graph state are nodes, not entry points."""
+        (tmp_path / "flow.py").write_text(
+            'def grade_documents(state: RAGState):\n'
+            '    return graph.invoke(state)\n'
+            'def route_next(state) -> str:\n'
+            '    return "end"\n'
+            'def process(payload: dict):\n'
+            '    return graph.invoke(payload)\n'
+        )
+        result = _detect_runner(tmp_path)
+        assert result == "flow:process"
+
+    def test_run_for_ciagent_still_wins_over_entry_names(self, tmp_path):
+        (tmp_path / "runner.py").write_text(
+            'def run_for_ciagent(query: str):\n'
+            '    return graph.invoke(query)\n'
+            'def generate_answer_api(query: str):\n'
+            '    return graph.invoke(query)\n'
+        )
+        result = _detect_runner(tmp_path)
+        assert result == "runner:run_for_ciagent"
+
+    def test_last_defined_wins_on_priority_tie(self, tmp_path):
+        (tmp_path / "runner.py").write_text(
+            'def first_helper(a, b):\n'
+            '    return graph.invoke(a)\n'
+            'def second_helper(a, b):\n'
+            '    return graph.invoke(a)\n'
+        )
+        result = _detect_runner(tmp_path)
+        assert result == "runner:second_helper"
+
+    def test_function_called_in_main_block_preferred(self, tmp_path):
+        (tmp_path / "pipeline.py").write_text(
+            'def kickoff_pipeline(topic, depth):\n'
+            '    return graph.invoke(topic)\n'
+            'def helper(a, b):\n'
+            '    return a\n'
+            'if __name__ == "__main__":\n'
+            '    kickoff_pipeline("agents", 2)\n'
+        )
+        result = _detect_runner(tmp_path)
+        assert result == "pipeline:kickoff_pipeline"
+
+    def test_single_query_param_signature_preferred(self, tmp_path):
+        (tmp_path / "runner.py").write_text(
+            'def handle(question: str):\n'
+            '    return graph.invoke(question)\n'
+            'def util(a, b):\n'
+            '    return a\n'
+        )
+        result = _detect_runner(tmp_path)
+        assert result == "runner:handle"
+
+
+class TestInitAdapterDetectionInteractive:
+    """init --generate offers the right adapter and honors a typed override."""
+
+    def _langgraph_project(self):
+        os.makedirs("agent", exist_ok=True)
+        with open("agent/agent.py", "w") as f:
+            f.write(LANGGRAPH_AGENT_PY)
+
+    def test_detected_adapter_is_entry_point_not_tool(self, tmp_path):
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            self._langgraph_project()
+            # mock mode, KB default, skip golden pairs, accept adapter
+            # default, skip interactive queries
+            result = runner.invoke(
+                cli, ['init', '--generate'], input="mock\n\n\n\nn\n",
+            )
+            out = _flat(result.output)
+            assert "Detected adapter: agent.agent:generate_answer_api" in out
+            with open("ciagent_spec.yaml") as f:
+                spec = f.read()
+            assert "agent.agent:generate_answer_api" in spec
+            assert "adapter: \"agent.agent:retrieve_docs\"" not in spec
+
+    def test_interactive_prompt_allows_override(self, tmp_path):
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            self._langgraph_project()
+            # mock mode, KB default, skip golden pairs, type a custom
+            # adapter, skip interactive queries
+            result = runner.invoke(
+                cli, ['init', '--generate'],
+                input="mock\n\n\nmy_pkg.custom:my_entry\nn\n",
+            )
+            with open("ciagent_spec.yaml") as f:
+                spec = f.read()
+            assert "my_pkg.custom:my_entry" in spec
+            assert "generate_answer_api" not in spec
+
+
 # ── Tests for runner generation (Change 3) ───────────────────────────────────
 
 
