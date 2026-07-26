@@ -28,6 +28,14 @@ from ciagent.cli import cli
 REPO_ROOT = Path(__file__).resolve().parent.parent
 PLUGIN_DIR = REPO_ROOT / "plugins" / "ciagent"
 
+
+def _package_version() -> str:
+    return re.search(
+        r'^version\s*=\s*"([^"]+)"',
+        (REPO_ROOT / "pyproject.toml").read_text(),
+        re.MULTILINE,
+    ).group(1)
+
 TOY_RUNNER = '''
 def run_for_ciagent(query: str) -> str:
     if "return" in query.lower():
@@ -159,11 +167,7 @@ class TestPluginArtifacts:
         0.10.0 through five releases because nothing checked them; this test
         (which also runs in the release.yml gate) makes that drift a CI
         failure instead of a stale install dialog."""
-        pkg_version = re.search(
-            r'^version\s*=\s*"([^"]+)"',
-            (REPO_ROOT / "pyproject.toml").read_text(),
-            re.MULTILINE,
-        ).group(1)
+        pkg_version = _package_version()
         p = json.loads((PLUGIN_DIR / ".claude-plugin" / "plugin.json").read_text())
         m = json.loads((REPO_ROOT / ".claude-plugin" / "marketplace.json").read_text())
         assert p["version"] == pkg_version, (
@@ -175,6 +179,26 @@ class TestPluginArtifacts:
             f"{m['plugins'][0]['version']} != package version {pkg_version} "
             f"— bump it with the release"
         )
+
+    @pytest.mark.parametrize("skill", ["onboard", "check"])
+    def test_skill_version_pin_matches_package(self, skill):
+        """Each skill embeds 'written for ciagent X.Y.Z' as its runtime
+        version-skew check (a stale plugin install teaches outdated commands;
+        the pin lets the skill compare itself against `ciagent --version`).
+        A stale pin would make the skill flag every up-to-date install as
+        skewed, so it must track the package version."""
+        text = (PLUGIN_DIR / "skills" / skill / "SKILL.md").read_text()
+        pins = re.findall(r"written for ciagent (\d+\.\d+\.\d+)", text)
+        assert pins, (
+            f"skill '{skill}' has no 'written for ciagent X.Y.Z' version pin "
+            f"for its version-skew check"
+        )
+        pkg_version = _package_version()
+        for pin in pins:
+            assert pin == pkg_version, (
+                f"skill '{skill}' version pin {pin} != package version "
+                f"{pkg_version}: bump it with the release"
+            )
 
     @pytest.mark.parametrize("skill", ["onboard", "check"])
     def test_skill_frontmatter(self, skill):

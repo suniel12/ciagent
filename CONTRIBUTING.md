@@ -44,8 +44,16 @@ We use `ruff` for linting and formatting. Please ensure your code passes checks 
 
 Releases are tag-driven — never upload to PyPI by hand:
 
-1. Bump `version` in `pyproject.toml` and move the `[Unreleased]` CHANGELOG section
-   under the new version heading (in a normal PR).
+1. Bump the version everywhere it appears, in a normal PR:
+   - `version` in `pyproject.toml`
+   - `version` in `plugins/ciagent/.claude-plugin/plugin.json` and
+     `.claude-plugin/marketplace.json`
+   - the "written for ciagent X.Y.Z" pin in both plugin skills
+     (`plugins/ciagent/skills/*/SKILL.md`), which the skills use at runtime to
+     detect a stale plugin install
+
+   The test suite fails on any mismatch. Also move the `[Unreleased]`
+   CHANGELOG section under the new version heading.
 2. After merge: `git tag vX.Y.Z && git push --tags`
 
 The release workflow builds the package, refuses to publish if the tag doesn't match
