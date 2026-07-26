@@ -54,6 +54,32 @@ def test_init_command_example_flag(tmp_path):
             assert "adapter: \"myagent.run:run_agent\"" in content
             assert "How do I reset my password?" in content
 
+def test_init_non_git_dir_skips_workflow(tmp_path):
+    """init outside a git repo must not scaffold GitHub Actions or print git steps."""
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        result = runner.invoke(cli, ['init'], input="my.custom.runner:run\n")
+        assert result.exit_code == 0
+        assert not os.path.exists(".github/workflows/ciagent.yml")
+        assert "not a git repository" in result.output
+        assert "git init" in result.output
+        # Git-specific Next Steps must be absent
+        assert "git push" not in result.output
+        assert "secrets" not in result.output
+
+
+def test_init_git_dir_creates_workflow(tmp_path):
+    """init inside a git repo scaffolds the workflow and prints git Next Steps."""
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        os.mkdir(".git")
+        result = runner.invoke(cli, ['init'], input="my.custom.runner:run\n")
+        assert result.exit_code == 0
+        assert os.path.exists(".github/workflows/ciagent.yml")
+        assert "not a git repository" not in result.output
+        assert "git push" in result.output
+
+
 def test_bootstrap_command_interactive(tmp_path):
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path):
