@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added: plugin version-skew detection
+- Both plugin skills (`onboard`, `check`) now start with a version-skew check:
+  they compare `ciagent --version` against the version the skill text was
+  written for, and on mismatch tell the user to update the plugin
+  (`/plugin marketplace update ciagent`, then `/plugin update ciagent@ciagent`)
+  and/or the CLI (`pip install -U ciagent`) before proceeding. Catches the
+  stale-plugin case where pip upgrades the CLI but the plugin keeps teaching
+  old command vocabulary
+- A test keeps the skill version pins in sync with `pyproject.toml`, alongside
+  the existing plugin.json/marketplace.json version gate; the release
+  checklist in CONTRIBUTING.md now lists every place the version must be
+  bumped
+
 ## [0.16.0] - 2026-07-24
 
 ### Fixed: silent golden-file data loss in `init --generate`

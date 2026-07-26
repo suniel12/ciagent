@@ -21,6 +21,12 @@ Work through the steps in order. Do not skip the cost gate in step 4.
   `pip install "ciagent[openai]"`, `[anthropic]`, `[langgraph]`, or `[all]`.
 - Sanity check: `ciagent --version` then `ciagent doctor` (it reports what is
   missing; a missing spec is expected at this point).
+- Version skew: this skill text is written for ciagent 0.16.0. If
+  `ciagent --version` prints a different version, the plugin and the CLI are
+  out of sync and the commands taught here may not match the installed CLI.
+  Stop and tell the user to update the plugin
+  (`/plugin marketplace update ciagent`, then `/plugin update ciagent@ciagent`)
+  and/or the CLI (`pip install -U ciagent`) before continuing.
 
 ## 2. Write the adapter
 
