@@ -1946,11 +1946,16 @@ queries:
     pre_push_dest = Path(".git/hooks/pre-push")
     created_workflow = False
 
-    # 1. Create GitHub Actions Workflow
-    github_action_dest.parent.mkdir(parents=True, exist_ok=True)
-    if github_action_dest.exists() and not force:
+    # 1. Create GitHub Actions Workflow (only useful inside a git repository)
+    if not Path(".git").exists():
+        console.print(
+            f"[yellow]Skipped:[/] {github_action_dest} (not a git repository). "
+            f"Run [cyan]git init[/], then rerun [cyan]ciagent init[/] to add the CI workflow."
+        )
+    elif github_action_dest.exists() and not force:
         console.print(f"[yellow]Skipped:[/] {github_action_dest} already exists. Use --force to overwrite.")
     else:
+        github_action_dest.parent.mkdir(parents=True, exist_ok=True)
         template_path = template_dir / "github_action.yml.j2"
         try:
             with open(template_path, "r") as f:
