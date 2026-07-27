@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed: parallel --workers N inflated tokens/cost by ~Nx (#76)
+- With `ciagent record` / `ciagent test` under the default `--workers 4`,
+  every worker thread's `TraceContext` installed its own SDK patch on the
+  shared class attributes (the install-once guard was a per-thread
+  ContextVar), so one real LLM call executed N stacked wrappers and was
+  recorded N times into the calling query's span. Cost budgets tuned against
+  `--workers 1` baselines then produced false WARN/FAIL verdicts, and
+  baselines recorded in parallel silently stored ~Nx inflated golden numbers
+- Patch installation is now a process-global refcount behind a lock: the
+  first active context installs, the last one out restores, and an
+  early-finishing query can no longer strip patches from under still-running
+  ones. Per-query attribution was already thread-correct and is unchanged
+
 ### Fixed: silent zero tokens and zero cost for langchain-openai agents
 - LangChain / LangGraph agents using langchain-openai recorded zero tokens and
   zero cost for every LLM call, so cost guardrails passed while measuring

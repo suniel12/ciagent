@@ -197,10 +197,11 @@ class TestNestedTraceContext:
             assert openai.resources.chat.completions.Completions.create is patched_once
         assert openai.resources.chat.completions.Completions.create is original
 
-    def test_patch_depth_recovers_after_exception(self):
-        from ciagent.capture import TraceContext, _patch_depth
+    def test_patch_refcount_recovers_after_exception(self):
+        import ciagent.capture as capture_mod
 
         with pytest.raises(RuntimeError):
-            with TraceContext(agent_name="outer"):
+            with capture_mod.TraceContext(agent_name="outer"):
                 raise RuntimeError("boom")
-        assert _patch_depth.get() == 0
+        assert capture_mod._patch_refcount == 0
+        assert capture_mod._patch_restores == []
