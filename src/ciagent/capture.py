@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import time
 import warnings
+import threading
 import contextvars
 from contextlib import contextmanager
 from .models import Trace, Span, LLMCall, ToolCall, SpanKind
@@ -55,12 +56,20 @@ _active_trace: contextvars.ContextVar[Trace | None] = contextvars.ContextVar(
 _active_span: contextvars.ContextVar[Span | None] = contextvars.ContextVar(
     '_active_span', default=None
 )
-# Nesting depth of active TraceContexts. SDK patches are installed only by the
-# outermost context — stacked patches would record every LLM call once per
-# wrapper into the same active span.
-_patch_depth: contextvars.ContextVar[int] = contextvars.ContextVar(
-    '_patch_depth', default=0
-)
+# Process-global refcount of active TraceContexts. The SDK patches target
+# shared class attributes, so installation must be global too: the first
+# context in (across ALL threads) installs, the last one out restores.
+#
+# This was previously a ContextVar, which is per-thread — under a parallel
+# runner (ciagent record/test --workers N) every worker thread saw depth 0
+# and stacked its own patch onto the shared class attribute, so one real LLM
+# call executed N wrappers in the calling thread and was recorded N times
+# into that thread's span, inflating tokens/cost by ~Nx (issue #76). Restore
+# functions live globally for the same reason: an early-finishing context
+# must not rip the patches out from under still-running ones.
+_patch_lock = threading.Lock()
+_patch_refcount = 0
+_patch_restores: list = []
 # True while a resource-level patch (Completions.create) is executing the
 # original SDK call. The transport-level patch checks this so a call that was
 # already recorded at the resource level isn't recorded a second time when it
@@ -136,14 +145,21 @@ class TraceContext:
         self._trace_token = _active_trace.set(self.trace)
         self._span_token = _active_span.set(root_span)
 
-        # Apply monkey patches only in the outermost context: stacked patches
-        # would record every LLM call once per wrapper into the active span
-        # (e.g. a Trace-returning runner that uses TraceContext itself, wrapped
-        # again by _run_with_retry)
-        if _patch_depth.get() == 0:
-            self._patch_openai()
-            self._patch_anthropic()
-        _patch_depth.set(_patch_depth.get() + 1)
+        # Apply monkey patches only in the first active context process-wide:
+        # stacked patches would record every LLM call once per wrapper into
+        # the calling thread's active span (e.g. a Trace-returning runner
+        # that uses TraceContext itself, wrapped again by _run_with_retry, or
+        # N parallel worker threads each entering their own context).
+        global _patch_refcount
+        with _patch_lock:
+            if _patch_refcount == 0:
+                self._patch_openai()
+                self._patch_anthropic()
+                # Restores are global: the last context out runs them, which
+                # may not be the one that installed
+                _patch_restores.extend(self._patches)
+                self._patches = []
+            _patch_refcount += 1
 
         self._start_time = time.perf_counter()
         return self
@@ -161,11 +177,16 @@ class TraceContext:
         # Surface silent-zero cost capture instead of passing quietly
         self._warn_if_usage_missing()
 
-        # Remove patches (only the outermost context installed any)
-        _patch_depth.set(max(_patch_depth.get() - 1, 0))
-        for restore_fn in self._patches:
-            restore_fn()
-        self._patches = []
+        # Remove patches only when the last active context (process-wide)
+        # exits; earlier exits must leave them in place for contexts still
+        # running on other threads
+        global _patch_refcount
+        with _patch_lock:
+            _patch_refcount = max(_patch_refcount - 1, 0)
+            if _patch_refcount == 0:
+                for restore_fn in _patch_restores:
+                    restore_fn()
+                _patch_restores.clear()
 
         # Restore the enclosing context (None only when outermost)
         if self._trace_token is not None:
