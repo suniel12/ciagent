@@ -12,7 +12,7 @@ read the result correctly, and never paper over a failure.
 
 ## Version skew check
 
-This skill text is written for ciagent 0.16.1. Run `ciagent --version` first.
+This skill text is written for ciagent 0.16.2. Run `ciagent --version` first.
 If it prints a different version, the plugin and the CLI are out of sync and
 the commands below may not match the installed CLI. Stop and tell the user to
 update the plugin (`/plugin marketplace update ciagent`, then
