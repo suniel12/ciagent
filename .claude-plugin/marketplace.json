@@ -11,8 +11,8 @@
     {
       "name": "ciagent",
       "source": "./plugins/ciagent",
-      "description": "Onboard CIAgent into a repo (runner + golden baselines + spec) and run its eval-reliability checks after every change to your AI agent.",
-      "version": "0.16.0",
+      "description": "Onboard CIAgent into a repo (adapter + golden baselines + spec) and run its eval-reliability checks after every change to your AI agent.",
+      "version": "0.16.1",
       "author": {
         "name": "Sunil Pandey",
         "url": "https://github.com/suniel12"

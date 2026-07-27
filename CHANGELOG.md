@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.16.1] - 2026-07-26
+
+Three fixes found by dogfooding `init` as a new user against a real LangGraph
+RAG agent.
+
+### Fixed: `init` offered a tool as the adapter entry point
+- Adapter auto-detection gave every non-`run*` function the same priority and
+  kept the first one found, so in a LangGraph-style file the tool defined at
+  the top (for example `retrieve_docs`) was offered as the adapter instead of
+  the real entry point defined at the bottom (for example `generate_answer_api`),
+  even though `init` had just listed that same function as a detected tool
+- Detected tools and graph node/router functions (those whose only parameter is
+  a graph state) are now excluded as candidates. Entry-like functions are
+  preferred: names matching `generate*`/`answer*`/`ask*`/`chat*`/`respond*`/
+  `main`/`*_api`, a single string query-style parameter, or a function invoked
+  under `if __name__ == "__main__"`. Remaining ties break toward the
+  last-defined function in the file
+
+### Fixed: `init` scaffolded GitHub Actions outside a git repository
+- `init` created `.github/workflows/ciagent.yml`, appended to `.gitignore`, and
+  printed `git add` / repository secrets / `git push` next steps even when run
+  in a directory with no git repository, where none of it was actionable. The
+  workflow scaffold is now gated on the presence of `.git`, with a short note
+  pointing at `git init`, and the next steps drop the git-specific items
+
 ### Added: plugin version-skew detection
 - Both plugin skills (`onboard`, `check`) now start with a version-skew check:
   they compare `ciagent --version` against the version the skill text was
