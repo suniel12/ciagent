@@ -27,6 +27,17 @@ from ciagent.cli import (
     _calibrate_spec_from_traces,
 )
 
+def test_run_command_prints_deprecation(tmp_path):
+    runner = CliRunner()
+    with runner.isolated_filesystem(temp_dir=tmp_path):
+        result = runner.invoke(cli, ['run'])
+        assert "DEPRECATED" in result.output
+        # Removal milestone must match the 1.0 convention (see CHANGELOG 0.16.0)
+        # and never reference an already-shipped version.
+        assert "removed at 1.0" in result.output
+        assert "ciagent test" in result.output
+
+
 def test_init_command_interactive(tmp_path):
     runner = CliRunner()
     with runner.isolated_filesystem(temp_dir=tmp_path):

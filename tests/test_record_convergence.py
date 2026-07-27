@@ -171,6 +171,9 @@ class TestRecordV1Legacy:
 
         result = CliRunner().invoke(cli, ["record", "test_hello"], input="n\n")
         assert "DEPRECATED" in result.output
+        # Removal milestone must match the 1.0 convention (see CHANGELOG 0.16.0)
+        # and never reference an already-shipped version.
+        assert "removed at 1.0" in result.output
 
 
 class TestDiscoverBaselines:

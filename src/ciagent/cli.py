@@ -5,8 +5,7 @@ CIAgent Command Line Interface.
 
 Commands:
   ciagent init          Scaffold a new test suite
-  ciagent run           Execute test suite
-  ciagent run --runs N  Statistical mode (run N times)
+  ciagent run           Execute test suite (deprecated: use 'ciagent test', removed at 1.0)
   ciagent record        Run agent live, save golden trace
   ciagent diff          Compare latest run against golden
   ciagent report        Generate HTML report from last run
@@ -2228,11 +2227,11 @@ from collections import defaultdict
 @click.option('--ci', is_flag=True, help='CI mode: exit code 1 on any failure')
 @click.option('--json', 'output_json', is_flag=True, help='Output results as JSON (for agent consumption)')
 def run(suite, runs, tag, diff, html, fail_on_cost, ci, output_json):
-    """Execute the test suite. (DEPRECATED — use 'ciagent test')"""
+    """Execute the test suite. (DEPRECATED: use 'ciagent test')"""
     if not output_json:
         console.print(
             "[yellow]DEPRECATED:[/] 'ciagent run' is the legacy suite runner and will "
-            "be removed in 0.9.0. Use [cyan]ciagent test[/] "
+            "be removed at 1.0. Use [cyan]ciagent test[/] "
             "(and [cyan]ciagent test --runs N[/] for stability) instead.\n"
         )
         console.print(f"[bold blue]Agent CI[/] Running suite: [cyan]{suite}[/]")
@@ -2558,7 +2557,7 @@ def _record_v1(suite, test_name, output, output_json):
     if not output_json:
         console.print(
             "[yellow]DEPRECATED:[/] recording from v1 ciagent.yaml suites will be "
-            "removed in 0.9.0. Migrate to ciagent_spec.yaml and 'ciagent record'.\n"
+            "removed at 1.0. Migrate to ciagent_spec.yaml and 'ciagent record'.\n"
         )
 
     try:

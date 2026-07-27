@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Deprecation messages for `ciagent run`, v1 `ciagent.yaml` recording, and the
+  `ciagent.config.load_config` shim (plus the golden-traces doc) now state the
+  real removal milestone: 1.0, matching the convention set in 0.16.0 for the
+  other legacy fallbacks. They previously said 0.9.0, which shipped the day
+  after the deprecation landed (0.8.0) without the removal happening
+
 ### Fixed: silent zero tokens and zero cost for langchain-openai agents
 - LangChain / LangGraph agents using langchain-openai recorded zero tokens and
   zero cost for every LLM call, so cost guardrails passed while measuring
