@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed: silent zero tokens and zero cost for langchain-openai agents
+- LangChain / LangGraph agents using langchain-openai recorded zero tokens and
+  zero cost for every LLM call, so cost guardrails passed while measuring
+  nothing. langchain-openai calls `client.with_raw_response.create(...)`, a
+  wrapper that binds the resource method at construction time, so the
+  `Completions.create` monkeypatch never fired. Capture now also patches the
+  openai client's transport-level `request()`, which every variant funnels
+  through (`with_raw_response`, `responses.create`, the `parse` paths), with a
+  reentrancy guard so calls seen at the resource level are not recorded twice
+- `attach_langgraph_state()` now falls back to reading token usage from each
+  AIMessage's `usage_metadata` (which LangChain populates independently of the
+  SDK call path) whenever the recorded LLM calls carry no usage, so LangGraph
+  users get tokens and cost even on SDK paths the patches cannot see,
+  including streaming. The LangGraph adapter's `parse_state()` does the same
+  instead of logging bare message stubs
+- Traces now expose `total_tokens_in` / `total_tokens_out` rollups (the split
+  previously existed only per span), and `Span.compute_metrics()` no longer
+  zeroes adapter-populated totals or crashes on legacy dict entries in
+  `llm_calls`
+- A trace that finishes with LLM calls recorded but zero tokens and zero cost
+  now emits a loud `CostCaptureWarning` instead of passing quietly
+
 ## [0.16.1] - 2026-07-26
 
 Three fixes found by dogfooding `init` as a new user against a real LangGraph

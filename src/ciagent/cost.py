@@ -51,3 +51,39 @@ def compute_cost(
     input_cost = (tokens_in / 1_000_000) * pricing[0]
     output_cost = (tokens_out / 1_000_000) * pricing[1]
     return round(float(input_cost + output_cost), 6)
+
+
+def infer_provider(model: str) -> str:
+    """Best-effort provider from a model name.
+
+    Used when usage comes from provider-agnostic metadata (e.g. LangChain
+    AIMessage.usage_metadata) that doesn't say which SDK produced it.
+    Returns "" when the model name doesn't identify a known provider.
+    """
+    name = (model or "").lower()
+    if name.startswith("claude"):
+        return "anthropic"
+    if name.startswith(("gpt", "o1", "o3", "o4", "chatgpt")):
+        return "openai"
+    return ""
+
+
+def compute_cost_for_model(
+    model: str,
+    tokens_in: int,
+    tokens_out: int,
+    provider: str = "",
+) -> float:
+    """Compute cost when the provider may be unknown.
+
+    Tries the given provider first, then falls back to inferring it from
+    the model name, then to searching every pricing table. Returns 0.0 for
+    models with no known pricing (same contract as compute_cost).
+    """
+    candidates = [p for p in (provider, infer_provider(model)) if p]
+    candidates += [p for p in PRICING if p not in candidates]
+    for candidate in candidates:
+        cost = compute_cost(candidate, model, tokens_in, tokens_out)
+        if cost:
+            return cost
+    return 0.0

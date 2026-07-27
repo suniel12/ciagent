@@ -128,10 +128,31 @@ class Span(BaseModel):
     guardrail_triggered: bool = False
 
     def compute_metrics(self) -> None:
-        """Roll up metrics from child LLM calls."""
-        self.total_tokens_in = sum(c.tokens_in for c in self.llm_calls)
-        self.total_tokens_out = sum(c.tokens_out for c in self.llm_calls)
-        self.total_cost_usd = sum(c.cost_usd for c in self.llm_calls)
+        """Roll up metrics from child LLM calls.
+
+        llm_calls entries may be raw dicts (some adapters append message
+        stubs after model construction, which pydantic does not re-validate),
+        so read fields defensively. Adapters may also pre-populate the span
+        totals directly from framework usage metadata when per-call records
+        carry no usage; in that case the pre-populated totals are kept
+        instead of being zeroed.
+        """
+        def _field(call: Any, key: str) -> float:
+            if isinstance(call, dict):
+                value = call.get(key, 0)
+            else:
+                value = getattr(call, key, 0)
+            return value or 0
+
+        tokens_in = sum(_field(c, "tokens_in") for c in self.llm_calls)
+        tokens_out = sum(_field(c, "tokens_out") for c in self.llm_calls)
+        cost = sum(_field(c, "cost_usd") for c in self.llm_calls)
+
+        if tokens_in or tokens_out or not (self.total_tokens_in or self.total_tokens_out):
+            self.total_tokens_in = int(tokens_in)
+            self.total_tokens_out = int(tokens_out)
+        if cost or not self.total_cost_usd:
+            self.total_cost_usd = cost
 
 
 class Trace(BaseModel):
@@ -151,6 +172,8 @@ class Trace(BaseModel):
     # Aggregated metrics
     total_cost_usd: float = 0.0
     total_tokens: int = 0
+    total_tokens_in: int = 0
+    total_tokens_out: int = 0
     total_duration_ms: float = 0.0
     total_llm_calls: int = 0
     total_tool_calls: int = 0
@@ -167,7 +190,9 @@ class Trace(BaseModel):
         for span in self.spans:
             span.compute_metrics()
         self.total_cost_usd = sum(s.total_cost_usd for s in self.spans)
-        self.total_tokens = sum(s.total_tokens_in + s.total_tokens_out for s in self.spans)
+        self.total_tokens_in = sum(s.total_tokens_in for s in self.spans)
+        self.total_tokens_out = sum(s.total_tokens_out for s in self.spans)
+        self.total_tokens = self.total_tokens_in + self.total_tokens_out
         self.total_llm_calls = sum(len(s.llm_calls) for s in self.spans)
         self.total_tool_calls = sum(len(s.tool_calls) for s in self.spans)
 
