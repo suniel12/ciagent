@@ -7,12 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- Deprecation messages for `ciagent run`, v1 `ciagent.yaml` recording, and the
-  `ciagent.config.load_config` shim (plus the golden-traces doc) now state the
-  real removal milestone: 1.0, matching the convention set in 0.16.0 for the
-  other legacy fallbacks. They previously said 0.9.0, which shipped the day
-  after the deprecation landed (0.8.0) without the removal happening
+## [0.16.2] - 2026-07-27
+
+Two capture fixes found by dogfooding cost guardrails against a real
+LangGraph RAG agent, plus a deprecation-text correction.
+
 ### Fixed: parallel --workers N inflated tokens/cost by ~Nx (#76)
 - With `ciagent record` / `ciagent test` under the default `--workers 4`,
   every worker thread's `TraceContext` installed its own SDK patch on the
@@ -47,6 +46,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `llm_calls`
 - A trace that finishes with LLM calls recorded but zero tokens and zero cost
   now emits a loud `CostCaptureWarning` instead of passing quietly
+
+### Changed
+- Deprecation messages for `ciagent run`, v1 `ciagent.yaml` recording, and the
+  `ciagent.config.load_config` shim (plus the golden-traces doc) now state the
+  real removal milestone: 1.0, matching the convention set in 0.16.0 for the
+  other legacy fallbacks. They previously said 0.9.0, which shipped the day
+  after the deprecation landed (0.8.0) without the removal happening
 
 ## [0.16.1] - 2026-07-26
 
