@@ -4,7 +4,8 @@
 LangGraph Adapter.
 """
 from .base import BaseAdapter
-from ciagent.models import Trace, Span, ToolCall
+from ciagent.models import Trace, Span, ToolCall, LLMCall
+from ciagent.cost import compute_cost_for_model
 import time
 from typing import Any
 
@@ -114,15 +115,29 @@ class LangGraphAdapter(BaseAdapter):
 
                     current_span.tool_calls.append(tool_call)
                     
-            # Check for token usage
-            if hasattr(msg, "usage_metadata") and msg.usage_metadata:
-                usage = msg.usage_metadata
-                current_span.total_tokens_in += usage.get("input_tokens", 0)
-                current_span.total_tokens_out += usage.get("output_tokens", 0)
-                
-            # Log all text bits as LLM Calls
-            if hasattr(msg, "content") and msg.content and getattr(msg, "type", "") == "ai":
-                current_span.llm_calls.append({"role": "ai", "content": str(msg.content)})
+            # Log each AI message as an LLM call, with token usage and cost
+            # from usage_metadata (LangChain populates it regardless of the
+            # underlying SDK call path). compute_metrics() rolls these up
+            # into span and trace totals.
+            if getattr(msg, "type", "") == "ai":
+                usage = getattr(msg, "usage_metadata", None) or {}
+                tokens_in = usage.get("input_tokens", 0) or 0
+                tokens_out = usage.get("output_tokens", 0) or 0
+                content = getattr(msg, "content", "") or ""
+                if content or usage:
+                    meta = getattr(msg, "response_metadata", None) or {}
+                    model = meta.get("model_name") or meta.get("model") or ""
+                    provider = meta.get("model_provider") or ""
+                    current_span.llm_calls.append(LLMCall(
+                        model=model,
+                        provider=provider,
+                        output_text=str(content),
+                        tokens_in=tokens_in,
+                        tokens_out=tokens_out,
+                        cost_usd=compute_cost_for_model(
+                            model, tokens_in, tokens_out, provider
+                        ),
+                    ))
                 
         trace.spans.append(current_span)
         return trace
