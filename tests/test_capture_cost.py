@@ -8,6 +8,7 @@ tokens and zero cost. These tests pin the transport-level patch, the
 LangGraph usage_metadata fallback, the metric rollups, and the loud warning
 that surfaces any remaining silent-zero traces.
 """
+import threading
 import warnings
 
 import pytest
@@ -282,6 +283,109 @@ class TestResponsesAPICapture:
         assert [tc.tool_name for tc in span.tool_calls] == ["lookup"]
         assert span.tool_calls[0].arguments == {"id": 7}
         assert span.tool_calls[0].result == "found"
+
+
+# ── Parallel workers (issue #76) ─────────────────────────────────────────────
+
+class TestParallelCapture:
+    """Regression tests for issue #76: with --workers N, each worker thread's
+    TraceContext installed its own patch on the shared class attributes, so
+    one real LLM call executed N stacked wrappers and was recorded N times
+    into the calling thread's span (~Nx token/cost inflation)."""
+
+    def test_concurrent_contexts_record_once_per_call(self, fake_openai_transport):
+        client = fake_openai_transport["client"]
+        n = 4
+        # First barrier: all contexts entered before any call (max stacking
+        # under the old per-thread depth). Second: every context stays open
+        # until all calls recorded (old code let early exits strip patches).
+        barrier = threading.Barrier(n, timeout=10)
+        traces = {}
+        errors = []
+
+        def worker(i):
+            try:
+                with TraceContext(agent_name=f"worker-{i}") as ctx:
+                    barrier.wait()
+                    client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[{"role": "user", "content": f"q{i}"}],
+                    )
+                    barrier.wait()
+                traces[i] = ctx.trace
+            except Exception as exc:  # pragma: no cover - surfaced via assert
+                errors.append(exc)
+
+        threads = [threading.Thread(target=worker, args=(i,)) for i in range(n)]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+
+        assert not errors
+        assert len(traces) == n
+        for i, trace in traces.items():
+            span = trace.spans[0]
+            assert len(span.llm_calls) == 1, (
+                f"worker {i} recorded {len(span.llm_calls)} llm_calls for 1 real call"
+            )
+            assert span.llm_calls[0].tokens_in == 120
+            assert span.llm_calls[0].tokens_out == 30
+            assert trace.total_tokens == 150
+
+        # All contexts exited: patches must be fully restored
+        import openai
+        assert (
+            openai.resources.chat.completions.Completions.create
+            is _PRISTINE_COMPLETIONS_CREATE
+        )
+
+    def test_patches_survive_until_last_context_exits(self, fake_openai_transport):
+        """A context exiting early must not strip patches from under a
+        context still running on another thread."""
+        client = fake_openai_transport["client"]
+        early_exited = threading.Event()
+        late_entered = threading.Event()
+        result = {}
+        errors = []
+
+        def early_exiter():
+            try:
+                with TraceContext(agent_name="early"):
+                    assert late_entered.wait(timeout=10)
+                early_exited.set()
+            except Exception as exc:  # pragma: no cover
+                errors.append(exc)
+                early_exited.set()
+
+        def late_caller():
+            try:
+                with TraceContext(agent_name="late") as ctx:
+                    late_entered.set()
+                    assert early_exited.wait(timeout=10)
+                    # 'early' has exited; capture must still work here
+                    client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[{"role": "user", "content": "hi"}],
+                    )
+                result["trace"] = ctx.trace
+            except Exception as exc:  # pragma: no cover
+                errors.append(exc)
+
+        threads = [
+            threading.Thread(target=early_exiter),
+            threading.Thread(target=late_caller),
+        ]
+        for t in threads:
+            t.start()
+        for t in threads:
+            t.join(timeout=30)
+
+        assert not errors
+        span = result["trace"].spans[0]
+        assert len(span.llm_calls) == 1
+        assert span.llm_calls[0].tokens_in == 120
+        assert span.llm_calls[0].cost_usd > 0
 
 
 # ── LangGraph usage_metadata fallback ────────────────────────────────────────
