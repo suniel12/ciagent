@@ -509,6 +509,16 @@ def _emit_json(
     stability: Optional["StabilityReport"] = None,
 ) -> None:
     """Structured JSON for dashboards and external tooling."""
+    # With --runs N the suite ran N times, so N answers exist per query but
+    # only the representative one reaches `results[i].answer`. Attach the full
+    # per-run list so external graders (LLM-as-judge, oracle grading, human
+    # review) get the repeats they already paid for instead of re-running the
+    # suite N times. Keyed by query text, the same grouping key the stability
+    # report uses, so `answers` and `verdicts` stay index-aligned.
+    per_run_answers: dict[str, list[str]] = {}
+    if stability is not None and stability.runs > 1:
+        per_run_answers = {q.query: q.answers for q in stability.queries}
+
     output: dict[str, Any] = {
         "summary": {
             "total": len(results),
@@ -516,7 +526,10 @@ def _emit_json(
             "failed": sum(1 for r in results if r.hard_fail),
             "warnings": sum(1 for r in results if r.has_warnings),
         },
-        "results": [_serialize_result(r) for r in results],
+        "results": [
+            _serialize_result(r, answers=per_run_answers.get(r.query))
+            for r in results
+        ],
     }
     if stability is not None:
         output["stability"] = _serialize_stability(stability)
@@ -555,6 +568,11 @@ def _serialize_stability(report: "StabilityReport") -> dict[str, Any]:
                 "flip_source": q.flip_source.value if q.flip_source else None,
                 "flip_reason": q.flip_reason or None,
                 "answer_similarity": q.answer_similarity,
+                # Per-run attribution: every list below is index-aligned with
+                # `verdicts` and with `results[i].answers`, so a consumer can
+                # tie a graded answer back to its run's trace, tokens and cost.
+                "trace_ids": q.trace_ids,
+                "total_tokens": q.total_tokens,
                 "cost_usd": q.cost_usd,
                 "latency_ms": q.latency_ms,
             }
@@ -563,19 +581,30 @@ def _serialize_stability(report: "StabilityReport") -> dict[str, Any]:
     }
 
 
-def _serialize_result(r: QueryResult) -> dict[str, Any]:
+def _serialize_result(
+    r: QueryResult,
+    answers: Optional[list[str]] = None,
+) -> dict[str, Any]:
     # Answer text included so JSON consumers (coding agents, judge-audit
     # answer sources) can see what the agent said, not just the verdicts.
     # Same extractor the correctness layer uses, so any trace shape the
     # evaluator can grade also serializes its answer.
+    #
+    # `answers` (per-run texts, --runs N only) is additive: `answer` keeps its
+    # historical meaning (the representative run), so existing consumers read
+    # the same field they always did.
     answer = None
     if r.trace is not None:
         from .runner import _extract_answer
 
         answer = _extract_answer(r.trace) or None
-    return {
+    out: dict[str, Any] = {
         "query": r.query,
         "answer": answer,
+    }
+    if answers is not None:
+        out["answers"] = answers
+    out |= {
         "hard_fail": r.hard_fail,
         "has_warnings": r.has_warnings,
         "correctness": {
@@ -599,6 +628,7 @@ def _serialize_result(r: QueryResult) -> dict[str, Any]:
             "details": r.cost.details,
         },
     }
+    return out
 
 
 # ── Prometheus Output ──────────────────────────────────────────────────────────
