@@ -110,6 +110,74 @@ class TestSimulateJsonStdout:
         assert "repro was found" in res.stderr
 
 
+AUDIT_SPEC = """
+agent: audit-json-test
+adapter: "audit_toy_agent:run_agent"
+baseline_dir: ./golden
+queries:
+  - query: "what is the refund policy?"
+    correctness:
+      expected_in_answer: ["refund"]
+      llm_judge:
+        - rule: "is the answer helpful?"
+"""
+
+AUDIT_AGENT = """
+from ciagent.models import Span, Trace
+
+
+def run_agent(query):
+    trace = Trace()  # no test_name — the query lives on the baseline wrapper
+    answer = "Our refund policy allows returns within 30 days."
+    trace.spans.append(Span(kind="agent", name="toy", output_data=answer))
+    trace.metadata["final_output"] = answer
+    return trace
+"""
+
+
+class TestJudgeAuditBaselinesSource:
+    """judge-audit's DEFAULT answer source: baselines written by `ciagent record`.
+
+    The other tests here feed it `--answers results.json`; this one exercises
+    the path that reads golden baselines straight off disk.
+    """
+
+    def _record_then_audit(self, monkeypatch, extra_args):
+        import sys
+
+        monkeypatch.setattr(
+            "ciagent.engine.judge.run_judge",
+            lambda **kw: {"passed": True, "score": 5, "rationale": "fine"},
+        )
+        r = CliRunner()
+        with r.isolated_filesystem():
+            Path("ciagent_spec.yaml").write_text(AUDIT_SPEC)
+            Path("audit_toy_agent.py").write_text(AUDIT_AGENT)
+            sys.path.insert(0, ".")
+            try:
+                rec = r.invoke(cli, ["record"])
+                assert rec.exit_code == 0, rec.output
+                return r.invoke(cli, ["judge-audit", "--repeats", "1", "--yes"] + extra_args)
+            finally:
+                sys.path.remove(".")
+                sys.modules.pop("audit_toy_agent", None)
+
+    def test_json_run_succeeds_on_recorded_baselines(self, monkeypatch):
+        res = self._record_then_audit(monkeypatch, ["--format", "json"])
+        assert res.exit_code == 0, res.output
+        payload = json.loads(res.stdout)  # pure JSON, no banner-slicing
+        assert payload["verdict"] in {"TRUSTWORTHY", "NEEDS CALIBRATION"}
+        assert len(payload["queries"]) == 1
+        assert payload["queries"][0]["false_pass"] is False
+        assert "CIAgent" not in res.stdout
+        assert "answers: golden baselines" in res.stderr
+
+    def test_console_run_does_not_report_missing_answers(self, monkeypatch):
+        res = self._record_then_audit(monkeypatch, [])
+        assert res.exit_code == 0, res.output
+        assert "No recorded answers found" not in res.output
+
+
 class TestTestCmdJsonStdout:
     def test_stdout_is_pure_json(self):
         r = CliRunner()

@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed: judge-audit could not read the baselines it defaults to
+- `ciagent judge-audit` with its default answer source (golden baselines) always
+  exited 2 with "No recorded answers found" whenever the agent's runner returned
+  its own `Trace`. `ciagent record` writes a wrapper carrying the query, and the
+  nested trace it wraps keeps the runner's empty `test_name`; the loader narrowed
+  to that nested trace before looking for a query, so every such baseline was
+  skipped. Runners returning a plain string were unaffected, which is why the
+  gap went unnoticed
+- `load_answers_from_baselines()` now reads the query from the wrapper first and
+  falls back to the nested lookups for flat and legacy files, and falls back to
+  wrapper-level `metadata.final_output` for the answer. A baseline file holding
+  a JSON list is now skipped like other malformed files instead of raising
+
 ## [0.16.2] - 2026-07-27
 
 Two capture fixes found by dogfooding cost guardrails against a real
