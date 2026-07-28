@@ -102,6 +102,14 @@ class QueryStability:
     flip_source: Optional[FlipSource] = None
     flip_reason: str = ""                   # human-readable one-liner
     answer_similarity: float = 1.0          # min pairwise similarity of normalized answers
+    # Per-run artifacts, index-aligned with `verdicts` by construction: every
+    # list is built from the same per-run result list in the same order, so
+    # answers[i] is the text that produced verdicts[i]. Without this, the N-1
+    # non-representative answers are generated, graded, and thrown away, and a
+    # consumer grading externally has to re-run the suite to get them back.
+    answers: list[str] = field(default_factory=list)
+    trace_ids: list[str] = field(default_factory=list)
+    total_tokens: list[int] = field(default_factory=list)
     cost_usd: list[float] = field(default_factory=list)
     latency_ms: list[float] = field(default_factory=list)
     expected_runs: int = 0                  # session run count; < means partial aggregation
@@ -400,23 +408,27 @@ def _build_query_stability(
     expected_runs: int = 0,
 ) -> QueryStability:
     verdicts = [not r.hard_fail for r in results]
-    answers = [_normalize_answer(_answer_of(r)) for r in results]
+    raw_answers = [_answer_of(r) for r in results]
+    normalized = [_normalize_answer(a) for a in raw_answers]
     tool_seqs = [_tool_sequence_of(r) for r in results]
 
     qs = QueryStability(
         query=query_text,
         verdicts=verdicts,
+        answers=raw_answers,
+        trace_ids=[_trace_id_of(r) for r in results],
+        total_tokens=[int(_trace_attr(r, "total_tokens")) for r in results],
         cost_usd=[_trace_attr(r, "total_cost_usd") for r in results],
         latency_ms=[_trace_attr(r, "total_duration_ms") for r in results],
         expected_runs=expected_runs or len(results),
     )
-    qs.answer_similarity = _min_pairwise_similarity(answers)
+    qs.answer_similarity = _min_pairwise_similarity(normalized)
 
     if not qs.flipped:
         return qs
 
     qs.flip_source, qs.flip_reason = _attribute_flip(
-        answers=answers,
+        answers=normalized,
         tool_seqs=tool_seqs,
         similarity=qs.answer_similarity,
         has_judge=_query_has_judge(query_spec),
@@ -593,6 +605,11 @@ def _tool_sequence_of(r: QueryResult) -> tuple[str, ...]:
     if trace is None:
         return ()
     return tuple(getattr(trace, "tool_call_sequence", ()) or ())
+
+
+def _trace_id_of(r: QueryResult) -> str:
+    trace = getattr(r, "trace", None)
+    return str(getattr(trace, "trace_id", "") or "") if trace is not None else ""
 
 
 def _trace_attr(r: QueryResult, attr: str) -> float:

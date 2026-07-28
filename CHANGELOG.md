@@ -19,6 +19,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   falls back to the nested lookups for flat and legacy files, and falls back to
   wrapper-level `metadata.final_output` for the answer. A baseline file holding
   a JSON list is now skipped like other malformed files instead of raising
+### Added: `--runs N --format json` keeps every run's answer
+- `ciagent test --runs N` executed each query N times but the JSON output kept
+  one answer per query and discarded the other N-1. Anyone grading answers
+  outside CIAgent (LLM-as-judge, gold-aware oracle grading, human review, any
+  custom metric) paid N times the API cost for one run's worth of usable data,
+  and had to invoke `--runs 1` N times and merge the results by hand to get
+  back what the tool already had in memory
+- `results[i].answers` now carries every run's answer text when `runs > 1`,
+  index-aligned with `stability.queries[i].verdicts`. The stability block also
+  gained per-run `trace_ids` and `total_tokens` alongside the existing
+  `cost_usd` and `latency_ms`, so a consumer can attribute cost and tokens to
+  the run whose answer it just graded
+- This makes `--runs N` directly usable for external grading and for
+  majority-vote denoising, which matters because run-to-run variance is large:
+  two identical retrieval configurations graded over the same 20 questions
+  scored 35% and 25% with no change between them, so a single-run external
+  grade is not trustworthy on its own
+- Backward compatible: `results[i].answer` still holds the representative
+  (last) run and is unchanged, and `answers` is absent when `runs` is 1
 
 ## [0.16.2] - 2026-07-27
 

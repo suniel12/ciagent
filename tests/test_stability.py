@@ -403,3 +403,194 @@ queries:
         result = self._invoke(spec_file, [])
         assert result.exit_code == 0, result.output
         assert "Stability Report" not in result.output
+
+
+# ── Per-run answers (--runs N is only worth its cost if the answers survive) ───
+
+
+class TestPerRunAnswers:
+    """`--runs N` costs N times the API spend. Before this, the JSON output
+    kept one answer per query and discarded the other N-1, so anyone grading
+    externally (LLM-as-judge, oracle grading, human review, majority vote) paid
+    for repeats they could not read. These tests pin the answers to the output.
+    """
+
+    def test_answers_align_with_verdicts(self):
+        spec = make_spec(plain_query("q1"))
+        runs = [
+            [make_result("q1", True, answer="first answer")],
+            [make_result("q1", False, answer="second answer")],
+            [make_result("q1", True, answer="third answer")],
+        ]
+        q = build_stability_report(spec, runs).queries[0]
+        assert q.answers == ["first answer", "second answer", "third answer"]
+        assert q.verdicts == [True, False, True]
+        # the failing run's answer is recoverable by index
+        assert q.answers[q.verdicts.index(False)] == "second answer"
+
+    def test_per_run_cost_attribution_is_index_aligned(self):
+        spec = make_spec(plain_query("q1"))
+        runs = [
+            [make_result("q1", True, answer="a")],
+            [make_result("q1", True, answer="b")],
+        ]
+        q = build_stability_report(spec, runs).queries[0]
+        for series in (q.trace_ids, q.total_tokens, q.cost_usd, q.latency_ms):
+            assert len(series) == len(q.verdicts)
+        assert len(set(q.trace_ids)) == 2  # one trace per run, not reused
+
+    def test_partial_query_answers_track_present_runs(self):
+        spec = make_spec(plain_query("q1"), plain_query("q2"))
+        runs = [
+            [make_result("q1", True, answer="a"), make_result("q2", True, answer="b")],
+            [make_result("q1", True, answer="c")],  # q2's adapter failed
+        ]
+        q2 = next(q for q in build_stability_report(spec, runs).queries
+                  if q.query == "q2")
+        assert q2.answers == ["b"]
+        assert len(q2.answers) == len(q2.verdicts)
+
+    def test_normalization_does_not_leak_into_stored_answers(self):
+        # Attribution compares normalized text; the stored answers must stay
+        # verbatim or an external grader sees a lowercased, reflowed answer.
+        spec = make_spec(plain_query("q1"))
+        runs = [
+            [make_result("q1", True, answer="  Mixed   CASE answer\n")],
+            [make_result("q1", True, answer="Mixed CASE answer")],
+        ]
+        q = build_stability_report(spec, runs).queries[0]
+        assert q.answers[0] == "  Mixed   CASE answer\n"
+        assert q.answer_similarity == 1.0  # still normalized for comparison
+
+
+class TestPerRunAnswersJSON:
+    """End-to-end through the CLI with a stub adapter that returns a
+    distinguishable answer per call, so ordering is observable."""
+
+    ANSWERS = {
+        "alpha query": [
+            "alpha refund answer one",
+            "alpha refund answer two",
+            "alpha refund answer three",
+        ],
+        "beta query": [
+            "beta refund answer one",
+            "beta declined answer two",  # missing the keyword: run 2 fails
+            "beta refund answer three",
+        ],
+    }
+
+    STUB = '''
+import threading
+
+from ciagent.models import LLMCall, Span, SpanKind, Trace
+
+_LOCK = threading.Lock()
+_CALLS: dict[str, int] = {}
+
+ANSWERS = %r
+
+
+def run(query: str) -> Trace:
+    with _LOCK:
+        index = _CALLS.get(query, 0)
+        _CALLS[query] = index + 1
+    span = Span(
+        kind=SpanKind.AGENT,
+        name="agent",
+        llm_calls=[LLMCall(model="stub", tokens_in=5, tokens_out=7)],
+    )
+    trace = Trace(spans=[span])
+    trace.metadata["final_output"] = ANSWERS[query][index]
+    trace.compute_metrics()
+    return trace
+'''
+
+    SPEC = """
+agent: per-run-answers
+adapter: "{module}:run"
+queries:
+  - query: "alpha query"
+    correctness:
+      expected_in_answer: ["refund"]
+  - query: "beta query"
+    correctness:
+      expected_in_answer: ["refund"]
+"""
+
+    def _run(self, tmp_path, monkeypatch, module, args):
+        import json
+        import sys
+
+        from click.testing import CliRunner
+
+        from ciagent.cli import cli
+
+        (tmp_path / f"{module}.py").write_text(self.STUB % self.ANSWERS)
+        spec = tmp_path / "ciagent_spec.yaml"
+        spec.write_text(self.SPEC.format(module=module))
+
+        monkeypatch.chdir(tmp_path)
+        monkeypatch.syspath_prepend(str(tmp_path))
+        try:
+            result = CliRunner().invoke(
+                cli,
+                ["test", "--config", str(spec), "--yes", "--format", "json", *args],
+            )
+        finally:
+            sys.modules.pop(module, None)
+        assert result.exception is None or isinstance(
+            result.exception, SystemExit
+        ), result.exception
+        raw = result.stdout
+        return json.loads(raw[raw.index("{"):]), result
+
+    def test_runs_three_preserves_every_answer_in_order(self, tmp_path, monkeypatch):
+        payload, _ = self._run(
+            tmp_path, monkeypatch, "stub_runs_three", ["--runs", "3"],
+        )
+        by_query = {r["query"]: r for r in payload["results"]}
+        for query, expected in self.ANSWERS.items():
+            assert by_query[query]["answers"] == expected, query
+            # `answer` keeps its old meaning: the representative (last) run
+            assert by_query[query]["answer"] == expected[-1]
+
+    def test_answers_index_align_with_stability_verdicts(self, tmp_path, monkeypatch):
+        payload, _ = self._run(
+            tmp_path, monkeypatch, "stub_align", ["--runs", "3"],
+        )
+        answers = {r["query"]: r["answers"] for r in payload["results"]}
+        stability = {q["query"]: q for q in payload["stability"]["queries"]}
+
+        beta = stability["beta query"]
+        assert beta["verdicts"] == [True, False, True]
+        failing_run = beta["verdicts"].index(False)
+        assert answers["beta query"][failing_run] == "beta declined answer two"
+        assert "refund" not in answers["beta query"][failing_run]
+
+        alpha = stability["alpha query"]
+        assert alpha["verdicts"] == [True, True, True]
+        assert len(answers["alpha query"]) == len(alpha["verdicts"]) == 3
+
+    def test_per_run_cost_attribution_present(self, tmp_path, monkeypatch):
+        payload, _ = self._run(
+            tmp_path, monkeypatch, "stub_cost", ["--runs", "3"],
+        )
+        beta = next(q for q in payload["stability"]["queries"]
+                    if q["query"] == "beta query")
+        assert len(beta["trace_ids"]) == 3
+        assert len(set(beta["trace_ids"])) == 3
+        assert beta["total_tokens"] == [12, 12, 12]
+        assert len(beta["cost_usd"]) == len(beta["latency_ms"]) == 3
+
+    def test_single_run_shape_unchanged(self, tmp_path, monkeypatch):
+        payload, _ = self._run(tmp_path, monkeypatch, "stub_single", [])
+        assert "stability" not in payload
+        for result in payload["results"]:
+            assert "answers" not in result
+            assert set(result) == {
+                "query", "answer", "hard_fail", "has_warnings",
+                "correctness", "path", "retrieval", "cost",
+            }
+        by_query = {r["query"]: r for r in payload["results"]}
+        assert by_query["alpha query"]["answer"] == "alpha refund answer one"
