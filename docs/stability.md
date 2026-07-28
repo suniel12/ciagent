@@ -26,6 +26,8 @@ Per query:
   all passes in k trials, computed from the observed pass rate with k = runs),
   plus cost and latency per run. They live in JSON, explicitly labeled, because
   at small k they restate the pass rate — the console shows observed facts only.
+- In **JSON output only**: every run's answer text (see below), so `--runs N`
+  produces N gradeable answers per query rather than one.
 
 Suite-level: score per run side by side, flip counts by source, and a
 `STABLE` / `FLAKY` verdict.
@@ -70,8 +72,71 @@ fails deterministically is a regression, not noise.
 - **github** — `::warning` annotation per flipped query (source-labelled),
   `::error` for consistent failures
 - **json** — `stability` block with per-query verdict histories, estimates,
-  flip sources, cost/latency per run
+  flip sources, cost/latency/tokens/trace ids per run, plus `results[i].answers`
+  with every run's answer text
 - **html** — stability card in the report dashboard
+
+## Grading the repeats yourself
+
+`--runs N` runs each query N times, and `--format json` hands you all N
+answers:
+
+```jsonc
+{
+  "results": [
+    {
+      "query": "what is the refund policy?",
+      "answer": "refunds within 30 days",          // representative run, unchanged
+      "answers": [                                  // present only when runs > 1
+        "refunds within 30 days",
+        "you can request a refund for a month",
+        "refunds within 30 days"
+      ]
+    }
+  ],
+  "stability": {
+    "queries": [
+      {
+        "query": "what is the refund policy?",
+        "verdicts": [true, false, true],
+        "trace_ids": ["...", "...", "..."],
+        "total_tokens": [812, 903, 810],
+        "cost_usd": [0.004, 0.005, 0.004],
+        "latency_ms": [1220, 1355, 1198]
+      }
+    ]
+  }
+}
+```
+
+`results[i].answers` is index-aligned with `stability.queries[i].verdicts` and
+with the per-run `trace_ids`, `total_tokens`, `cost_usd` and `latency_ms`
+lists, so run 2's answer, verdict, trace and cost all sit at index 1. Queries
+that an adapter failed to answer in some run aggregate over the runs where
+they appear, so every list shortens together (the record is flagged
+`partial`). `results` lists the representative run's queries, so read
+`stability.queries` when you need the full set including a query the adapter
+dropped in that run.
+
+Two things this makes possible:
+
+1. **External grading.** If you grade answers with your own metric (an
+   LLM judge, gold-aware oracle grading, a human pass), you can now grade all
+   N answers from one `ciagent test --runs N` invocation. Previously the
+   non-representative answers were generated, evaluated and discarded, so
+   getting N gradeable answers meant N separate `--runs 1` invocations merged
+   by hand: N times the API spend for the same data the tool already had.
+2. **Majority-vote denoising.** Run-to-run variance is large enough that
+   single-run external grading is not trustworthy. Two identical
+   configurations of the same retrieval setup, graded over the same 20
+   questions with nothing changed between them, scored 35% and 25%: 10% of
+   questions flipped on noise alone. Grading all N answers and taking the
+   majority verdict per query turns repeats you already paid for into a
+   materially steadier number.
+
+Backward compatibility: `answer` keeps its meaning (the representative run)
+and is always present. `answers` is added only when `runs > 1`, so single-run
+output is byte-for-byte what it was.
 
 ## Cost
 
