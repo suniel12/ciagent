@@ -280,8 +280,88 @@ class TestLoaders:
         answers = load_answers_from_baselines(str(tmp_path))
         assert answers == {"wrapped query": "fallback"}
 
+    def test_load_answers_reads_query_from_wrapper(self, tmp_path):
+        # `ciagent record` shape: the query lives on the wrapper and the
+        # nested trace's test_name is empty (runner built its own Trace).
+        import json
+
+        (tmp_path / "c.json").write_text(json.dumps({
+            "schema_version": 1,
+            "version": "v1-refund",
+            "agent": "wrapper-agent",
+            "query": "what is the refund policy?",
+            "metadata": {"model": "unknown", "precheck_passed": True},
+            "trace": {
+                "spans": [{"kind": "agent", "name": "a", "output_data": "span text"}],
+                "test_name": "",
+                "metadata": {"final_output": "Refunds within 30 days."},
+            },
+        }))
+        answers = load_answers_from_baselines(str(tmp_path))
+        assert answers == {"what is the refund policy?": "Refunds within 30 days."}
+
+    def test_load_answers_reads_answer_from_wrapper_metadata(self, tmp_path):
+        # No final_output on the nested trace: fall back to the wrapper's.
+        import json
+
+        (tmp_path / "d.json").write_text(json.dumps({
+            "query": "where is my order?",
+            "metadata": {"final_output": "It ships tomorrow."},
+            "trace": {"spans": [], "test_name": "", "metadata": {}},
+        }))
+        answers = load_answers_from_baselines(str(tmp_path))
+        assert answers == {"where is my order?": "It ships tomorrow."}
+
+    def test_load_answers_from_recorded_v2_baselines(self, tmp_path, monkeypatch):
+        """End to end: `ciagent record` on a v2 spec, then load its answers.
+
+        The runner returns its own Trace, so the nested test_name is empty —
+        the regression that made judge-audit's default source always empty.
+        """
+        import sys
+
+        from click.testing import CliRunner
+
+        from ciagent.cli import cli
+
+        (tmp_path / "wrapper_query_agent.py").write_text(
+            "from ciagent.models import Span, Trace\n"
+            "\n"
+            "\n"
+            "def run_agent(query):\n"
+            "    trace = Trace()  # no test_name — nested trace carries no query\n"
+            "    trace.spans.append(\n"
+            "        Span(kind='agent', name='toy', output_data='Refunds within 30 days.')\n"
+            "    )\n"
+            "    trace.metadata['final_output'] = 'Refunds within 30 days.'\n"
+            "    return trace\n"
+        )
+        (tmp_path / "ciagent_spec.yaml").write_text(
+            'agent: record-loader-test\n'
+            'adapter: "wrapper_query_agent:run_agent"\n'
+            'baseline_dir: ./golden\n'
+            'queries:\n'
+            '  - query: "what is the refund policy?"\n'
+            '    correctness:\n'
+            '      expected_in_answer: ["refund"]\n'
+        )
+        monkeypatch.syspath_prepend(str(tmp_path))
+        monkeypatch.chdir(tmp_path)
+        try:
+            result = CliRunner().invoke(cli, ["record"])
+            assert result.exit_code == 0, result.output
+        finally:
+            sys.modules.pop("wrapper_query_agent", None)
+
+        answers = load_answers_from_baselines(str(tmp_path / "golden"))
+        assert answers == {"what is the refund policy?": "Refunds within 30 days."}
+
     def test_load_answers_skips_malformed(self, tmp_path):
         (tmp_path / "bad.json").write_text("{not json")
+        assert load_answers_from_baselines(str(tmp_path)) == {}
+
+    def test_load_answers_skips_non_dict_json(self, tmp_path):
+        (tmp_path / "list.json").write_text('[{"spans": []}]')
         assert load_answers_from_baselines(str(tmp_path)) == {}
 
     def test_load_labels_yaml_variants(self, tmp_path):

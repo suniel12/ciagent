@@ -386,8 +386,12 @@ def _judge_all_rubrics(
 def load_answers_from_baselines(baseline_dir: str) -> dict[str, str]:
     """Collect query → final answer from golden baseline JSON files.
 
-    Tolerates both shapes on disk: a bare trace dict (``ciagent record``) and
-    a wrapper with a ``trace`` key (versioned ``ciagent save`` baselines).
+    Tolerates both shapes on disk: a bare trace dict (legacy/imported files)
+    and a versioned wrapper with a ``trace`` key (``ciagent record``).
+
+    The wrapper is the authority for the query: a runner that builds its own
+    Trace leaves the nested ``test_name`` empty, so reading only the nested
+    trace loses every baseline such a runner recorded.
     """
     import glob
     import json
@@ -400,17 +404,24 @@ def load_answers_from_baselines(baseline_dir: str) -> dict[str, str]:
                 data = json.load(fh)
         except (OSError, json.JSONDecodeError):
             continue
+        if not isinstance(data, dict):
+            continue
         trace_dict = data.get("trace") if isinstance(data.get("trace"), dict) else data
-        if not isinstance(trace_dict, dict) or "spans" not in trace_dict:
+        if "spans" not in trace_dict:
             continue
         query = (
-            trace_dict.get("query")
+            data.get("query")
+            or trace_dict.get("query")
             or trace_dict.get("test_name")
             or (trace_dict.get("metadata") or {}).get("query")
+            or (data.get("metadata") or {}).get("query")
         )
         if not query:
             continue
-        answer = (trace_dict.get("metadata") or {}).get("final_output")
+        answer = (
+            (trace_dict.get("metadata") or {}).get("final_output")
+            or (data.get("metadata") or {}).get("final_output")
+        )
         if not answer:
             spans = trace_dict.get("spans") or []
             for span in reversed(spans):
